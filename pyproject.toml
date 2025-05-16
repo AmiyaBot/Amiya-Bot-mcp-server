@@ -1,0 +1,7 @@
+[project]
+name = "amiya-bot-mcp-server"
+version = "0.1.0"
+description = "AmiyaBot MCP Server"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
