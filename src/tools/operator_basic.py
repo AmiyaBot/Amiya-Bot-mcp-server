@@ -3,7 +3,8 @@ import re
 from typing import Annotated
 from pydantic import Field
 from src.server import mcp
-from src.assets import JsonData, html_tag_format
+from src.assets import JsonData
+from src.assets.convert import html_tag_format
 from src.assets.gameData import GameData
 
 

@@ -1,4 +1,5 @@
-from src.assets import JsonData, parse_template, integer
+from src.assets import JsonData
+from src.assets.convert import parse_template, integer
 
 
 class Operator:
