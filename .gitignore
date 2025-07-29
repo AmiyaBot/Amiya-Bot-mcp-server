@@ -10,4 +10,5 @@ wheels/
 # Virtual environments
 .venv
 
+# 忽略测试用代码
 test*.*
