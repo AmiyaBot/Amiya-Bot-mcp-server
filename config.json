@@ -1,3 +1,4 @@
 {
-    "GameDataPath": "E:\\Production\\amiya-bot\\ArknightsGameData\\zh_CN"
+    "GameDataPath": "E:\\Production\\amiya-bot\\ArknightsGameData\\zh_CN",
+    "GameDataRepo": "https://gitee.com/amiya-bot/amiya-bot-assets.git"
 }
