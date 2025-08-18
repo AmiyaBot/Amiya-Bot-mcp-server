@@ -10,6 +10,7 @@ app = FastAPI()
 #   "url": "http://localhost:9000/mcp/sse"
 # }
 mcp = FastMCP("明日方舟知识库")
+mcp.settings.mount_path = "/mcp"
 app.mount("/mcp", mcp.sse_app())
 
 # 定义一个简单的状态检查路由
