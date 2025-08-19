@@ -1,4 +1,5 @@
 import re
+import logging
 
 from typing import Annotated
 from pydantic import Field
@@ -6,7 +7,9 @@ from src.server import mcp
 from src.assets import JsonData
 from src.assets.convert import html_tag_format
 from src.assets.gameData import GameData
+from src.assets.glossary_data import GLOSSARY
 
+logger = logging.getLogger("mcp_tool")
 
 class GameDict:
     classes = {
@@ -81,7 +84,6 @@ class GameDict:
         'respawnTime': '秒',
     }
 
-
 @mcp.tool(
     description='获取干员的基础信息和属性',
 )
@@ -104,9 +106,6 @@ def get_operator_basic(
     classes = GameDict.classes[char['profession']]
     classes_sub = sub_classes[char['subProfessionId']]['subProfessionName']
 
-    if classes_sub == '驭械术师':
-        char_desc = '初始携带1个浮游单元，浮游单元初始造成相当于干员攻击力20%的法术伤害，每次对上次攻击的同一目标进行攻击时该数值增加15，上限110%（即通常情况下需叠加6次才能达到上限）。'
-
     group_id = char['groupId']
     group = team_table[group_id]['powerName'] if group_id in team_table else '无'
 
@@ -116,6 +115,12 @@ def get_operator_basic(
     content = f'{char_name}\n职业：{classes_sub}（{classes}），{char_desc}\n阵营：{group}\n' + '\n'.join(
         [f'{n}：{max_attr[k]}%s' % GameDict.attrs_unit.get(k, '') for k, n in GameDict.attrs.items()]
     )
+
+    # 处理classes_glossary
+    if classes in GLOSSARY:
+        content += f'\n\n{classes}:{GLOSSARY[classes]}'
+    if classes_sub in GLOSSARY:
+        content += f'\n\n{classes_sub}{GLOSSARY[classes_sub]}'
 
     talents = []
     if char['talents']:
@@ -133,5 +138,7 @@ def get_operator_basic(
                 talents.append(text)
 
     content += ('\n\n' + '\n'.join(talents)) if talents else ''
+
+    logger.info(content)
 
     return content

@@ -1,2 +1,2 @@
-from .logger import setup_logging
+from .logger import *
 from .config import Config

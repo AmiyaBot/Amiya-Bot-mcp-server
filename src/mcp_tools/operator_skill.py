@@ -1,7 +1,12 @@
+import logging
+
 from typing import Annotated
 from pydantic import Field
 from src.server import mcp
+from mcp.server.fastmcp import Context
 from src.assets.gameData import GameData
+
+logger = logging.getLogger("mcp_tool")
 
 
 SPType = {
@@ -31,13 +36,13 @@ SkillLevel = {
 
 
 @mcp.tool(
-    description='获取干员的技能数据，默认为第1个技能，等级10',
+    description='获取干员的技能数据，默认为第1个技能，等级10。如果需要计算具体数值，你可能还需要调用get_operator_basic来获取干员的基本信息。',
 )
 def get_operator_skill(
     operator_name: Annotated[str, Field(description='干员名')],
     operator_name_prefix: Annotated[str, Field(description='干员名的前缀，没有则为空')] = '',
     index: Annotated[int, Field(description='技能序号，默认为第1个')] = 1,
-    level: Annotated[int, Field(description='技能等级，可为 1~10，其中等级8~10也被称为专精一、专精二和专精三')] = 10,
+    level: Annotated[int, Field(description='技能等级，可为 1~10，其中等级8~10也被称为专精一、专精二和专精三')] = 10
 ) -> str:
     opt, operator_name = GameData.get_operator(operator_name, operator_name_prefix)
 
@@ -57,7 +62,7 @@ def get_operator_skill(
 
     res = skill_desc[level - 1]
 
-    return '\n'.join(
+    retVal = '\n'.join(
         [
             f'干员{operator_name}的技能"%s"' % skill['skill_name'],
             '等级：' + (SkillLevel[level] if level >= 8 else str(level)),
@@ -67,3 +72,7 @@ def get_operator_skill(
             '技能效果：' + res['description'],
         ]
     )
+
+    logger.info(retVal)
+
+    return retVal
