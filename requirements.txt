@@ -2,3 +2,4 @@ mcp[cli]~=1.8.1
 fastapi==0.116.1
 uvicorn==0.34.3
 pydantic==2.9.2
+concurrent_log_handler~=0.9.28
