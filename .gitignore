@@ -10,4 +10,8 @@ wheels/
 # Virtual environments
 .venv
 
+# amiyabot assets
+resources/
+
+# 忽略测试用代码
 test*.*
