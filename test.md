@@ -1,1 +1,2 @@
 # AmiyaBot MCP Server
+test
