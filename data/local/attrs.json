@@ -1,0 +1,11 @@
+{
+  "maxHp": "最大生命值",
+  "atk": "攻击力",
+  "def": "防御力",
+  "magicResistance": "魔法抗性",
+  "attackSpeed": "攻击速度",
+  "baseAttackTime": "攻击间隔",
+  "blockCnt": "阻挡数",
+  "cost": "部署费用",
+  "respawnTime": "再部署时间"
+}

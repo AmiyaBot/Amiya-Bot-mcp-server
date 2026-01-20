@@ -1,0 +1,31 @@
+{{ op.name }}
+职业：{{ op.classes_sub }}（{{ op.classes }}），{{ op.profile or "" }}
+阵营：{{ op.group or op.team or "未知" }}
+
+{%- set p = (op.phases[-1] if op.phases and op.phases|length > 0 else None) -%}
+{%- set f = (p.max_frame if p else None) -%}
+{%- set a = (f.data if f else None) -%}
+
+{%- if a %}
+生命：{{ a.max_hp }}
+攻击：{{ a.atk }}
+防御：{{ a.defense }}
+法抗：{{ a.magic_resistance }}
+部署费：{{ a.cost }}
+阻挡：{{ a.block_cnt }}
+再部署：{{ a.respawn_time }}秒
+{%- endif %}
+
+{%- set talents_list = op.talents() -%}
+{%- if talents_list and talents_list|length > 0 %}
+
+{%- for t in talents_list %}
+第{{ loop.index }}天赋：{{ t.get("talents_name","") }}，效果为{{ t.get("talents_desc","") }}。
+{%- endfor %}
+{%- endif %}
+
+{# glossary_used：你的 Operator 模型没有这个字段；可以用 tags 代替，或由渲染上下文额外提供 glossary_used #}
+{%- if op.tags and op.tags|length > 0 %}
+
+涉及术语：{{ op.tags | join("，") }}
+{%- endif %}

@@ -1,0 +1,10 @@
+{
+    "术师": "caster.png",
+    "医疗": "medic.png",
+    "先锋": "pioneer.png",
+    "狙击": "sniper.png",
+    "特种": "special.png",
+    "辅助": "support.png",
+    "重装": "tank.png",
+    "近卫": "warrior.png"
+}

@@ -1,10 +1,12 @@
 from __future__ import annotations
+import logging
+
+from src.helpers.bundle import get_table
 
 from src.app.context import AppContext
 from src.domain.models.operator import Operator
 from src.domain.types import QueryResult
 from src.helpers.glossary import mark_glossary_used_terms
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +47,8 @@ def get_operator_basic_core(
     group = opt.group
 
     # 属性名表与单位表
-    attrs_map: dict[str, str] = (tables.get("attrs") or {})
-    attrs_unit: dict[str, str] = (tables.get("attrs_unit") or {})
+    attrs_map: dict[str, str] = get_table(tables, "attrs", source="local", default={})
+    attrs_unit: dict[str, str] = get_table(tables, "attrs_unit", source="local", default={})
 
     # 组装属性列表（给模板渲染）
     attrs_list = []

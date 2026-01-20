@@ -37,6 +37,34 @@ class GitGameDataMaintainer:
             return None
         return "\n".join(out_lines)
 
+    def _is_dirty(self) -> bool:
+        """
+        assets_dir 工作区是否有改动（对浅克隆也适用）。
+        """
+        out = self._git_output(["status", "--porcelain"], cwd=self.assets_dir)
+        return bool(out and out.strip())
+
+    def get_version(self, short: bool = True, with_dirty: bool = True) -> str | None:
+        """
+        返回用于 bundle.version 的版本串：
+        - 默认：<short_head> 或 <short_head>-dirty
+        """
+        if not self._is_git_repo():
+            return None
+
+        args = ["rev-parse", "--short", "HEAD"] if short else ["rev-parse", "HEAD"]
+        out = self._git_output(args, cwd=self.assets_dir)
+        if not out:
+            return None
+
+        head = out.strip().splitlines()[-1].strip()  # 防御性：取最后一行
+        if not head:
+            return None
+
+        if with_dirty and self._is_dirty():
+            return f"{head}-dirty"
+        return head
+
     def _is_git_repo(self) -> bool:
         return self.assets_dir.exists() and (self.assets_dir / ".git").exists()
 

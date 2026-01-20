@@ -1,0 +1,16 @@
+干员：{{ op.name }}{% if op.en_name %}（{{ op.en_name }}）{% endif %}
+职业：{{ op.classes_sub }}（{{ op.classes }}）
+技能：第{{ skill.index }}个 · {{ skill.name }}
+等级：{{ meta.level_text }}
+技能范围：{{ meta.range }}
+技力类型：{{ meta.sp_type_text }}
+触发方式：{{ meta.skill_type_text }}
+{%- if meta.sp_cost %}
+技力：{{ meta.init_sp }}/{{ meta.sp_cost }}
+{%- endif %}
+{%- if meta.duration and meta.duration > 0 %}
+持续：{{ meta.duration }} 秒
+{%- endif %}
+
+技能效果：
+{{ meta.description }}

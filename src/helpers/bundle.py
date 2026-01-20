@@ -1,8 +1,13 @@
 import re
-from typing import Any, Optional
+import difflib
+from typing import Any, Optional, Mapping, Sequence
 
+# 该文件里放置了不需要领域模型的一些辅助函数
 
 _PUNCT_RE = re.compile(r"[^\w\u4e00-\u9fff]+")
+
+def get_table(tables: Mapping[str, Mapping[str, Any]], name: str, *, source="gamedata", default=None):
+    return tables.get(source, {}).get(name, default)
 
 def remove_punctuation(s: str) -> str:
     if not s:
@@ -28,6 +33,32 @@ def integer(v: Any) -> Optional[int]:
         return int(float(s))
     except Exception:
         return None
+
+def find_most_similar(text: str, text_list: Sequence[str]) -> Optional[str]:
+    res = find_similar_list(text, text_list)
+    if res:
+        return res[0]
+
+def find_longest(text: str, items: Sequence[str]) -> Optional[str]:
+    res = ''
+    for item in items:
+        if item in text and len(item) >= len(res):
+            res = item
+
+    return res
+
+def find_similar_list(text: str, text_list: Sequence[str]) -> list[str]:
+    result = {}
+    for item in text_list:
+        rate = float(difflib.SequenceMatcher(None, text, item).quick_ratio() * len([n for n in text if n in set(item)]))
+        if rate > 0:
+            if rate not in result:
+                result[rate] = []
+            result[rate].append(item)
+
+    if result:
+        return result[sorted(result.keys())[-1]]
+    return []
 
 def parse_template(blackboard: list, description: str) -> str:
     """

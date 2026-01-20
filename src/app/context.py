@@ -2,13 +2,12 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from src.config.model import Config
+from src.app.config import Config
 from src.data.repository.data_repository import DataRepository
-from src.app.renderers.types import Renderer
+from src.app.card_service import CardService
 
 @dataclass(slots=True)
 class AppContext:
     cfg: Config
-    data_repository: Optional[DataRepository] = None
-    text_renderer : Optional[Renderer] = None
-    json_renderer : Optional[Renderer] = None
+    data_repository: DataRepository
+    card_service: CardService

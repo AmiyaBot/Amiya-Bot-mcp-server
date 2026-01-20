@@ -1,0 +1,9 @@
+{
+  "INCREASE_WITH_TIME": "自动回复",
+  "INCREASE_WHEN_ATTACK": "攻击回复",
+  "INCREASE_WHEN_TAKEN_DAMAGE": "受击回复",
+  "1": "自动回复",
+  "2": "攻击回复",
+  "4": "受击回复",
+  "8": "被动"
+}

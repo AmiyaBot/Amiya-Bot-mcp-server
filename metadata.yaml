@@ -1,6 +1,0 @@
-name: astrbot_plugin_amiyabot_core # 插件唯一识别名，以 astrbot_plugin_ 前缀开头
-display_name: AmiyaBot # 用于展示的名字，可以是方便人类阅读的名字（需要版本 >= v4.5.0，低版本不会报错，请放心填写）
-desc: 这是一个AmiyaBot在Astrbot下的完整迁移，提供明日方舟的游戏数据查询。
-version: v0.1.0
-author: hsyhhssyy # 作者
-repo: https://github.com/AmiyaBot/Amiya-Bot-mcp-server # 插件的仓库地址

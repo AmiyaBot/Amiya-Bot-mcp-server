@@ -1,4 +1,5 @@
 {
-    "GameDataPath": "./resources/gamedata/",
-    "GameDataRepo": "https://gitee.com/amiya-bot/amiya-bot-assets.git"
+    "ResourcePath": "",
+    "GameDataRepo": "https://gitee.com/amiya-bot/amiya-bot-assets.git",
+    "BaseUrl": "https://amiyabot-mcp.hsyhhssyy.net/"
 }

@@ -6,12 +6,23 @@
     "configurations": [
 
         {
-            "name": "启动MCP服务器",
+            "name": "启动命令行模式",
             "type": "debugpy",
             "request": "launch",
             "program": "main.py",
-            "console": "integratedTerminal"
-        },
+            "console": "integratedTerminal",
+            "args": ["-C"],
+            "justMyCode": false
+            },
+
+        {
+            "name": "启动 MCP 服务器",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+            },
         {
             "name": "启动MCP客户端",
             "type": "debugpy",

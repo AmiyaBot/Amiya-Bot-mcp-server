@@ -6,9 +6,12 @@ import uvicorn
 import asyncio
 import logging
 
-from src.app.bootstrap import build_context_from_disk
+from fastapi.middleware.cors import CORSMiddleware
+from src.app.bootstrap_disk import build_context_from_disk
 from src.adapters.mcp.app import register_asgi
+from src.app.card_fileservier import register_cardserver_asgi
 from src.app.context import AppContext
+from src.app.config import load_from_disk
 
 log = logging.getLogger("asset")
 
@@ -32,9 +35,12 @@ async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
 
 
 def uvicorn_main():
+
+    cfg = load_from_disk()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        ctx = await build_context_from_disk()
+        ctx = await build_context_from_disk(cfg)
         app.state.ctx = ctx
 
         task = asyncio.create_task(_periodic_update_loop(app, interval_seconds=15 * 60))
@@ -50,6 +56,17 @@ def uvicorn_main():
 
     app = FastAPI(lifespan=lifespan)
 
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,  # 用 "*" 时必须 False
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["Content-Length", "Content-Type"],
+        max_age=86400,
+    )
+
+    register_cardserver_asgi(app, cfg=cfg)
     register_asgi(app)
 
     @app.get("/rest/status")

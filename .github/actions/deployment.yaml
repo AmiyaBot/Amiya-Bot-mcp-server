@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: amiyabot-mcp
+  namespace: amiyabot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: amiyabot-mcp
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  template:
+    metadata:
+      labels:
+        app: amiyabot-mcp
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      imagePullSecrets:
+        - name: docker.hsyhhssyy.net
+      containers:
+        - name: server
+          image: docker.hsyhhssyy.net/amiyabot/amiyabot-mcp-server:0.1.6
+          imagePullPolicy: Always
+          env:
+            - name: PORT
+              value: "9000"
+          ports:
+            - name: http
+              containerPort: 9000
+              protocol: TCP
+          volumeMounts:
+            - name: resources
+              mountPath: /app/resources
+      volumes:
+        - name: resources
+          nfs:
+            server: 192.168.31.26
+            path: /volume1/ChatBot/AmiyaBot/AmiyaBot-MCP/resources

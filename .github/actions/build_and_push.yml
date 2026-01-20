@@ -1,0 +1,39 @@
+name: Build & Push Docker Image (tags only)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build & Push (tagged release)
+        env:
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          IMAGE_NAME: amiyabot/amiyabot-mcp-server
+          DOCKERFILE_PATH: ./Dockerfile
+          CONTEXT_DIR: .
+        run: |
+          set -eu
+
+          chmod +x .github/actions/build_and_push.sh
+
+          # GITHUB_REF: refs/tags/v1.2.3
+          VERSION="${GITHUB_REF#refs/tags/v}"
+
+          export IMAGE_TAG="${VERSION}"
+          export PUSH_LATEST="true"
+
+          # 可选：同时推一个带 v 前缀的 tag（比如 v1.2.3）
+          export EXTRA_TAGS="v${VERSION}"
+
+          .github/actions/build_and_push.sh
