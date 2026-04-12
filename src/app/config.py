@@ -14,6 +14,7 @@ class Config:
     ResourcePath: Path
     GameDataRepo: Optional[str] = None
     BaseUrl: Optional[str] = None
+    CommandServiceUrl: Optional[str] = None
 
 def load_from_disk()-> Config:
 
@@ -21,6 +22,7 @@ def load_from_disk()-> Config:
     ResourcePath = None
     GameDataRepo = None
     BaseUrl = None
+    CommandServiceUrl = None
 
     # 按照以下路径顺序寻找config.json文件
     # 1. 当前工作目录
@@ -46,6 +48,7 @@ def load_from_disk()-> Config:
 
                 GameDataRepo = config.get('GameDataRepo', None)
                 BaseUrl = config.get('BaseUrl', None)
+                CommandServiceUrl = config.get('CommandServiceUrl', None)
 
                 break
 
@@ -57,7 +60,8 @@ def load_from_disk()-> Config:
         ProjectRoot=ProjectRoot,
         ResourcePath=ResourcePath,
         GameDataRepo=GameDataRepo,
-        BaseUrl=BaseUrl
+        BaseUrl=BaseUrl,
+        CommandServiceUrl=CommandServiceUrl,
     )
 
 

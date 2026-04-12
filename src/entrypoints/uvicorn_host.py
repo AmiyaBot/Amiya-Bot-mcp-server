@@ -1,5 +1,6 @@
 # src/entrypoints/uvicorn_host.py
 from fastapi import FastAPI
+from fastapi import HTTPException
 from contextlib import asynccontextmanager
 import uvicorn
 
@@ -7,13 +8,20 @@ import asyncio
 import logging
 
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from src.app.bootstrap_disk import build_context_from_disk
 from src.adapters.mcp.app import register_asgi
+from src.adapters.cmd.app import execute_registered_command
 from src.app.card_fileservier import register_cardserver_asgi
 from src.app.context import AppContext
 from src.app.config import load_from_disk
 
 log = logging.getLogger("asset")
+
+
+class CommandExecuteRequest(BaseModel):
+    command: str
+    args: str = ""
 
 
 async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
@@ -72,5 +80,14 @@ def uvicorn_main():
     @app.get("/rest/status")
     async def status():
         return {"status": "ok"}
+
+    @app.post("/rest/commands/execute")
+    async def execute_command(request: CommandExecuteRequest):
+        ctx = getattr(app.state, "ctx", None)
+        if request.command not in {"help", "exit"} and not isinstance(ctx, AppContext):
+            raise HTTPException(status_code=503, detail="应用上下文未就绪")
+
+        result = await execute_registered_command(ctx, request.command, request.args)
+        return result.to_response()
 
     uvicorn.run(app, host="0.0.0.0", port=9000)

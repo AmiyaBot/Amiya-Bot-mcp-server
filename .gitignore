@@ -16,3 +16,7 @@ resources/
 # 忽略测试用代码
 test*.*
 test/
+
+# CLI/Web 运行产物
+data/local/command-service.log
+.nfs*
