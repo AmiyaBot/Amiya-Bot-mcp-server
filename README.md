@@ -4,6 +4,29 @@
 
 ## 安装
 
+### 一键安装
+
+可以直接使用 GitHub 上的安装脚本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/master/install.sh | sh
+```
+
+这个脚本默认会：
+
+- 将程序安装到 `~/.local/share/amiyabot-cli/venv`
+- 在 `~/.local/bin/amiyabot-cli` 生成包装命令
+
+如果 `~/.local/bin` 还没在 PATH 中，脚本会提示你把它加入 shell 配置。
+
+如果你需要完整图片渲染能力，可以在安装时额外启用 Playwright 浏览器安装：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/master/install.sh | AMIYABOT_INSTALL_PLAYWRIGHT=1 sh
+```
+
+### 手动安装
+
 建议在项目根目录使用虚拟环境安装：
 
 ```bash
