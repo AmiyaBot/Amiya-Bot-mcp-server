@@ -1,4 +1,3 @@
-# src/config/model.py
 import json
 import os
 from pathlib import Path
@@ -7,6 +6,14 @@ from dataclasses import dataclass
 from typing import Optional
 
 FILE_PATH = Path(__file__).parent.parent.parent.resolve()
+GLOBAL_CONFIG_DIR_NAME = "amiyabot-cli"
+GLOBAL_CONFIG_FILE_NAME = "config.json"
+CONFIG_FIELDS = (
+    "ResourcePath",
+    "GameDataRepo",
+    "BaseUrl",
+    "CommandServiceUrl",
+)
 
 @dataclass
 class Config:
@@ -16,52 +23,123 @@ class Config:
     BaseUrl: Optional[str] = None
     CommandServiceUrl: Optional[str] = None
 
-def load_from_disk()-> Config:
 
-    ProjectRoot = FILE_PATH
-    ResourcePath = None
-    GameDataRepo = None
-    BaseUrl = None
-    CommandServiceUrl = None
+@dataclass(frozen=True)
+class ConfigLayer:
+    path: Path
+    payload: dict
 
-    # 按照以下路径顺序寻找config.json文件
-    # 1. 当前工作目录
-    # 2. resources子目录
-    # 3. data子目录
-    # 未发现则抛出异常
-    possible_paths = [
-        FILE_PATH / 'config.json',
-        FILE_PATH / 'resources' / 'config.json',
-        FILE_PATH / 'data' / 'config.json'
+
+@dataclass(frozen=True)
+class ConfigState:
+    config: Config
+    active_path: Path
+    layer_paths: tuple[Path, ...]
+    key_sources: dict[str, Path]
+
+
+def _resolve_global_config_path() -> Path:
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    config_home = Path(xdg_config_home).expanduser() if xdg_config_home else Path.home() / ".config"
+    return config_home / GLOBAL_CONFIG_DIR_NAME / GLOBAL_CONFIG_FILE_NAME
+
+
+def resolve_global_config_path() -> Path:
+    return _resolve_global_config_path()
+
+
+def _candidate_config_paths() -> list[Path]:
+    global_config_path = _resolve_global_config_path()
+    _ensure_global_config_exists(global_config_path)
+    return [
+        FILE_PATH / "data" / "config.json",
+        global_config_path,
+        FILE_PATH / "resources" / "config.json",
+        FILE_PATH / "config.json",
     ]
-    for path in possible_paths:
-        if path.exists():
-            with open(path, 'r') as f:
-                config = json.load(f)
-                
-                cfgResourcePath = config.get('ResourcePath', '')
-                if cfgResourcePath == '':
-                    # 如果配置文件中没有指定 ResourcePath，则使用默认路径
-                    ResourcePath = Path((FILE_PATH / 'resources').resolve())
-                else:
-                    ResourcePath = Path(cfgResourcePath)
 
-                GameDataRepo = config.get('GameDataRepo', None)
-                BaseUrl = config.get('BaseUrl', None)
-                CommandServiceUrl = config.get('CommandServiceUrl', None)
 
-                break
+def _ensure_global_config_exists(path: Path) -> None:
+    if path.exists():
+        return
 
-    if ResourcePath is None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _load_json_config(path: Path) -> dict:
+    with path.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+    return payload if isinstance(payload, dict) else {}
+
+
+def inspect_config_state() -> ConfigState:
+
+    project_root = FILE_PATH
+    resource_path = None
+
+    layers: list[ConfigLayer] = []
+    merged_config: dict = {}
+    key_sources: dict[str, Path] = {}
+    active_path: Path | None = None
+
+    for path in _candidate_config_paths():
+        if not path.exists():
+            continue
+
+        payload = _load_json_config(path)
+        layers.append(ConfigLayer(path=path, payload=payload))
+        merged_config.update(payload)
+
+        contributed = False
+        for key in CONFIG_FIELDS:
+            if key in payload:
+                key_sources[key] = path
+                contributed = True
+
+        if contributed:
+            active_path = path
+
+    if not layers:
         raise FileNotFoundError("Could not find config.json in expected locations.")
-    
 
-    return Config(
-        ProjectRoot=ProjectRoot,
-        ResourcePath=ResourcePath,
-        GameDataRepo=GameDataRepo,
-        BaseUrl=BaseUrl,
-        CommandServiceUrl=CommandServiceUrl,
+    cfg_resource_path = str(merged_config.get("ResourcePath", "")).strip()
+    if cfg_resource_path == "":
+        resource_path = Path((FILE_PATH / "resources").resolve())
+    else:
+        resource_path = Path(cfg_resource_path).expanduser()
+
+    if resource_path is None:
+        raise FileNotFoundError("Could not find config.json in expected locations.")
+
+    config = Config(
+        ProjectRoot=project_root,
+        ResourcePath=resource_path,
+        GameDataRepo=merged_config.get("GameDataRepo", None),
+        BaseUrl=merged_config.get("BaseUrl", None),
+        CommandServiceUrl=merged_config.get("CommandServiceUrl", None),
     )
+
+    return ConfigState(
+        config=config,
+        active_path=active_path or layers[-1].path,
+        layer_paths=tuple(layer.path for layer in layers),
+        key_sources=key_sources,
+    )
+
+
+def resolve_effective_config_path() -> Path:
+    return inspect_config_state().active_path
+
+
+def resolve_merged_config_paths() -> tuple[Path, ...]:
+    return inspect_config_state().layer_paths
+
+
+def load_from_disk() -> Config:
+    return inspect_config_state().config
 
 

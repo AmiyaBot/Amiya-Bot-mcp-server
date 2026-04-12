@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import subprocess
@@ -31,10 +32,11 @@ def is_local_service_url(base_url: str) -> bool:
     return hostname in LOCAL_SERVICE_HOSTS
 
 
-def execute_remote_command_once(
+async def execute_remote_command_once(
     cfg: Config,
     command_parts: list[str],
     explicit_url: str | None = None,
+    verbose: bool = False,
 ) -> int:
     command_line = " ".join(part for part in command_parts if part).strip()
     if not command_line:
@@ -42,7 +44,7 @@ def execute_remote_command_once(
 
     command, args = parse_command_line(command_line)
     base_url = resolve_command_service_url(cfg, explicit_url=explicit_url)
-    ensure_command_service_ready(cfg, base_url)
+    ensure_command_service_ready(cfg, base_url, verbose=verbose)
 
     payload = json.dumps({"command": command, "args": args}).encode("utf-8")
     request = Request(
@@ -63,21 +65,63 @@ def execute_remote_command_once(
         print(f"❌ 无法连接命令服务: {exc}")
         return 1
 
+    fallback_exit_code = await try_execute_locally_when_service_is_stale(
+        cfg=cfg,
+        base_url=base_url,
+        command=command,
+        args=args,
+        response_payload=response_payload,
+        verbose=verbose,
+    )
+    if fallback_exit_code is not None:
+        return fallback_exit_code
+
     output = response_payload.get("output", "")
     if output:
         print(output)
     return 0 if response_payload.get("ok", False) else 1
 
 
-def ensure_command_service_ready(cfg: Config, base_url: str) -> None:
+async def try_execute_locally_when_service_is_stale(
+    cfg: Config,
+    base_url: str,
+    command: str,
+    args: str,
+    response_payload: dict,
+    verbose: bool = False,
+) -> int | None:
+    if not is_local_service_url(base_url):
+        return None
+    if response_payload.get("ok", False):
+        return None
+
+    output = str(response_payload.get("output", ""))
+    if not output.startswith("❌ 未知命令:"):
+        return None
+
+    emit_verbose(f"本地命令服务未识别命令 {command}，回退到当前进程执行", verbose)
+
+    from src.adapters.cmd.app import execute_registered_command
+    from src.app.bootstrap_disk import build_context_from_disk
+
+    ctx = await build_context_from_disk(cfg)
+    result = await execute_registered_command(ctx, command, args)
+    if result.output:
+        print(result.output)
+    return 0 if result.ok else 1
+
+
+def ensure_command_service_ready(cfg: Config, base_url: str, verbose: bool = False) -> None:
     if service_is_healthy(base_url):
         return
 
     if not is_local_service_url(base_url):
         raise RuntimeError(f"目标命令服务不可用: {base_url}")
 
+    emit_verbose(f"本地命令服务不可用，正在后台启动: {base_url}", verbose)
     launch_detached_web_service(cfg)
     wait_for_service_ready(base_url, timeout_seconds=30.0)
+    emit_verbose(f"本地命令服务已就绪: {base_url}", verbose)
 
 
 def service_is_healthy(base_url: str) -> bool:
@@ -123,3 +167,8 @@ def resolve_service_python(project_root: Path) -> Path:
     if venv_python.exists():
         return venv_python
     return Path(sys.executable)
+
+
+def emit_verbose(message: str, verbose: bool) -> None:
+    if verbose:
+        print(message, file=sys.stderr)

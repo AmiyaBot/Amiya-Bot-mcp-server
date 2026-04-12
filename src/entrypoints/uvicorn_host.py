@@ -1,6 +1,8 @@
 # src/entrypoints/uvicorn_host.py
+from dataclasses import replace
 from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi import Request
 from contextlib import asynccontextmanager
 import uvicorn
 
@@ -17,6 +19,7 @@ from src.app.context import AppContext
 from src.app.config import load_from_disk
 
 log = logging.getLogger("asset")
+LOCAL_REQUEST_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 
 class CommandExecuteRequest(BaseModel):
@@ -82,12 +85,19 @@ def uvicorn_main():
         return {"status": "ok"}
 
     @app.post("/rest/commands/execute")
-    async def execute_command(request: CommandExecuteRequest):
+    async def execute_command(request: Request, payload: CommandExecuteRequest):
         ctx = getattr(app.state, "ctx", None)
-        if request.command not in {"help", "exit"} and not isinstance(ctx, AppContext):
+        if payload.command not in {"help", "exit", "config-path"} and not isinstance(ctx, AppContext):
             raise HTTPException(status_code=503, detail="应用上下文未就绪")
 
-        result = await execute_registered_command(ctx, request.command, request.args)
+        request_ctx = ctx
+        if isinstance(ctx, AppContext):
+            request_ctx = replace(
+                ctx,
+                prefer_local_artifact_path=(request.client is not None and request.client.host in LOCAL_REQUEST_HOSTS),
+            )
+
+        result = await execute_registered_command(request_ctx, payload.command, payload.args)
         return result.to_response()
 
     uvicorn.run(app, host="0.0.0.0", port=9000)

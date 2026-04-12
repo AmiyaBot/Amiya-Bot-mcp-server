@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+from pathlib import Path
 
 from src.app.context import AppContext
 from src.domain.models.operator import Operator
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 class QueryExecutionResult:
     data: str | None = None
     image_url: str | None = None
+    image_path: str | None = None
     message: str | None = None
     candidates: list[str] | None = None
 
@@ -26,6 +28,8 @@ class QueryExecutionResult:
             response["data"] = self.data
         if self.image_url is not None:
             response["image_url"] = self.image_url
+        if self.image_path is not None:
+            response["image_path"] = self.image_path
         if self.message is not None:
             response["message"] = self.message
         if self.candidates:
@@ -35,6 +39,21 @@ class QueryExecutionResult:
 
 def _dedupe_names(matches) -> list[str]:
     return list(dict.fromkeys(match.matched_text for match in matches))
+
+
+def _resolve_safe_local_artifact_path(context: AppContext, artifact_path: Path) -> str | None:
+    if not context.prefer_local_artifact_path:
+        return None
+
+    try:
+        resolved_artifact = artifact_path.resolve()
+        resolved_cache_root = context.card_service.cache_root.resolve()
+        if not resolved_artifact.is_relative_to(resolved_cache_root):
+            return None
+        return str(resolved_artifact)
+    except Exception:
+        logger.warning("解析本地图片缓存路径失败", exc_info=True)
+        return None
 
 
 def _resolve_operator(
@@ -91,24 +110,31 @@ async def query_operator_basic(
             params=None,
         )
 
-        await context.card_service.get(
-            template="operator_info",
-            payload_key=payload_key,
-            payload=result,
-            format="png",
-            params=None,
-        )
+        image_url = None
+        image_path = None
+        try:
+            image_artifact = await context.card_service.get(
+                template="operator_info",
+                payload_key=payload_key,
+                payload=result,
+                format="png",
+                params=None,
+            )
 
-        image_url = build_card_url(
-            cfg=context.cfg,
-            template="operator_info",
-            payload_key=payload_key,
-            format="png",
-        )
+            image_url = build_card_url(
+                cfg=context.cfg,
+                template="operator_info",
+                payload_key=payload_key,
+                format="png",
+            )
+            image_path = _resolve_safe_local_artifact_path(context, image_artifact.path)
+        except Exception as exc:
+            logger.info("生成干员信息图片失败，已降级为文本结果: %s", exc)
 
         return QueryExecutionResult(
             data=text_artifact.read_text(),
             image_url=image_url,
+            image_path=image_path,
         )
     except Exception:
         logger.exception("查询干员基础信息失败")

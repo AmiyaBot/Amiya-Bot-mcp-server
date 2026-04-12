@@ -59,6 +59,11 @@ class DataRepository:
             raise DataNotReadyError("Game data bundle is not ready. Call startup_prepare()/ensure_ready() first.")
         return self._bundle
 
+    def get_bundle_version_date(self) -> str | None:
+        if self._maintainer is None:
+            return None
+        return self._maintainer.get_version_date()
+
     async def startup_prepare(self, force_update_on_first_run: bool = True) -> DataBundle:
         if self._maintainer is None:
             raise RuntimeError("No maintainer configured; cannot perform startup_prepare.")

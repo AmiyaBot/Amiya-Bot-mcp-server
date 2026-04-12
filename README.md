@@ -65,6 +65,30 @@ amiyabot-cli --help
 ./.venv/bin/playwright install chromium
 ```
 
+## 全局配置
+
+CLI 现在支持读取全局 JSON 配置。
+
+- Linux 下默认位置遵循 XDG 规范：`$XDG_CONFIG_HOME/amiyabot-cli/config.json`
+- 如果没有设置 `XDG_CONFIG_HOME`，默认位置就是 `~/.config/amiyabot-cli/config.json`
+- 程序首次读取配置时，如果这个文件不存在，会自动创建一个空内容的 `{}`
+
+配置优先级从低到高依次是：
+
+- 安装包内置的 `data/config.json`
+- 全局配置文件
+- 项目内的 `resources/config.json`
+- 项目根目录的 `config.json`
+
+如果你只想给全局安装的 CLI 指定远端 URL，可以在全局配置里只写需要覆盖的字段，例如：
+
+```json
+{
+	"BaseUrl": "https://your-public-host.example.com/",
+	"CommandServiceUrl": "https://your-command-service.example.com/"
+}
+```
+
 ## 使用
 
 常用方式：
@@ -72,6 +96,9 @@ amiyabot-cli --help
 - 启动 Web 服务：amiyabot-cli web
 - 进入交互式 CLI：amiyabot-cli
 - 执行单次 CLI 指令：amiyabot-cli glossary 攻击力
+- 查看执行流程：amiyabot-cli --verbose glossary 攻击力
+- 查看所有参与合并的配置路径：amiyabot-cli config-path
+- 查询当前资源版本：amiyabot-cli resource-version
 - 指定命令服务地址：amiyabot-cli --url http://127.0.0.1:9000 glossary 攻击力
 
 安装当前仓库后，amiyabot-cli 会进入环境的 PATH，可直接调用。

@@ -10,7 +10,7 @@ from src.adapters.cmd.cmd_tools.operator import *
 
 logger = logging.getLogger(__name__)
 
-BUILTIN_COMMANDS = {"help", "exit"}
+BUILTIN_COMMANDS = {"help", "exit", "config-path"}
 
 
 @dataclass(slots=True)

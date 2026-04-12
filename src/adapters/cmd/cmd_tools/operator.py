@@ -1,12 +1,37 @@
 
 import logging
 
+from src.app.config import resolve_merged_config_paths
 from src.app.context import AppContext
 from src.app.services.glossary_queries import query_glossary
 from src.app.services.operator_queries import query_operator_basic, query_operator_skill
 from src.adapters.cmd.registery import register_command
 
 logger = logging.getLogger(__name__)
+
+
+@register_command("config-path")
+async def cmd_config_path(ctx: AppContext, args: str) -> str:
+    """
+    输出所有参与合并的配置文件路径
+    用法: config-path
+    """
+    return "\n".join(str(path) for path in resolve_merged_config_paths())
+
+
+@register_command("resource-version")
+async def cmd_resource_version(ctx: AppContext, args: str) -> str:
+    """
+    查询当前资源版本
+    用法: resource-version
+    """
+    if ctx is None or ctx.data_repository is None:
+        return "❌ 数据仓库未初始化"
+
+    bundle = ctx.data_repository.get_bundle()
+    version = getattr(bundle, "version", None) or "unknown"
+    version_date = ctx.data_repository.get_bundle_version_date() or "unknown"
+    return f"✅ 当前资源版本: {version}\n提交日期: {version_date}"
 
 
 @register_command("op")
@@ -33,7 +58,13 @@ async def cmd_operator(ctx: AppContext, args: str) -> str:
         return f"❌ {result.message}: {', '.join(result.candidates)}，请提供更精确的名称。"
     if result.message:
         return f"❌ {result.message}"
-    return f"✅ 查询成功！\n\n{result.data}\n\n图片链接: {result.image_url}"
+
+    output = f"✅ 查询成功！\n\n{result.data}"
+    if result.image_path:
+        output += f"\n\n图片路径: {result.image_path}"
+    elif result.image_url:
+        output += f"\n\n图片链接: {result.image_url}"
+    return output
 
 @register_command("skill")
 async def cmd_operator_skill(ctx: AppContext, args: str) -> str:

@@ -5,14 +5,16 @@ import logging
 from src.app.bootstrap_disk import build_context_from_disk
 from src.app.config import load_from_disk
 
-from src.adapters.cmd.app import CommandLineInterface, run_preflight_command_once
-from src.adapters.cmd.web_client import execute_remote_command_once
+from src.adapters.cmd.app import CommandLineInterface, parse_command_line, run_preflight_command_once
+from src.adapters.cmd.web_client import execute_remote_command_once, is_local_service_url, resolve_command_service_url
 
 logger = logging.getLogger(__name__)
+LOCAL_CONTEXT_COMMANDS = {"resource-version"}
 
 async def cmd_main(
     command_parts: list[str] | None = None,
     command_service_url: str | None = None,
+    verbose: bool = False,
 ) -> int:
     """主函数：初始化上下文并启动 CLI。"""
     try:
@@ -23,10 +25,18 @@ async def cmd_main(
             if builtin_exit_code is not None:
                 return builtin_exit_code
 
-            return execute_remote_command_once(
+            command, _ = parse_command_line(" ".join(part for part in command_parts if part).strip())
+            base_url = resolve_command_service_url(cfg, explicit_url=command_service_url)
+            if command in LOCAL_CONTEXT_COMMANDS and is_local_service_url(base_url):
+                ctx = await build_context_from_disk(cfg)
+                cli = CommandLineInterface(ctx)
+                return await cli.run_once(command_parts)
+
+            return await execute_remote_command_once(
                 cfg,
                 command_parts=command_parts,
                 explicit_url=command_service_url,
+                verbose=verbose,
             )
 
         logger.info("正在初始化应用上下文...")

@@ -65,6 +65,20 @@ class GitGameDataMaintainer:
             return f"{head}-dirty"
         return head
 
+    def get_version_date(self) -> str | None:
+        """
+        返回当前 HEAD 提交日期（YYYY-MM-DD）。
+        """
+        if not self._is_git_repo():
+            return None
+
+        out = self._git_output(["show", "-s", "--format=%cs", "HEAD"], cwd=self.assets_dir)
+        if not out:
+            return None
+
+        commit_date = out.strip().splitlines()[-1].strip()
+        return commit_date or None
+
     def _is_git_repo(self) -> bool:
         return self.assets_dir.exists() and (self.assets_dir / ".git").exists()
 
