@@ -5,7 +5,23 @@ APP_NAME="amiyabot-cli"
 INSTALL_DIR="${AMIYABOT_INSTALL_DIR:-$HOME/.local/share/amiyabot-cli}"
 BIN_DIR="${AMIYABOT_BIN_DIR:-$HOME/.local/bin}"
 PIP_SOURCE="${AMIYABOT_PIP_SOURCE:-git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@master}"
-INSTALL_PLAYWRIGHT="${AMIYABOT_INSTALL_PLAYWRIGHT:-0}"
+INSTALL_PLAYWRIGHT="${AMIYABOT_INSTALL_PLAYWRIGHT:-1}"
+
+print_usage() {
+        cat <<EOF
+用法:
+    sh install.sh [--no-playwright]
+
+选项:
+    --no-playwright  跳过 Playwright 浏览器安装
+    -h, --help       显示本帮助信息
+
+环境变量:
+    AMIYABOT_INSTALL_DIR   安装目录，默认: $INSTALL_DIR
+    AMIYABOT_BIN_DIR       命令包装目录，默认: $BIN_DIR
+    AMIYABOT_PIP_SOURCE    pip 安装源，默认: $PIP_SOURCE
+EOF
+}
 
 need_cmd() {
     if ! command -v "$1" >/dev/null 2>&1; then
@@ -46,6 +62,24 @@ print_path_hint() {
     esac
 }
 
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --no-playwright)
+            INSTALL_PLAYWRIGHT="0"
+            ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        *)
+            echo "未知参数: $1" >&2
+            print_usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
 need_cmd python3
 
 case "$PIP_SOURCE" in
@@ -61,9 +95,12 @@ ensure_venv
 "$INSTALL_DIR/venv/bin/pip" install --upgrade "$PIP_SOURCE"
 
 if [ "$INSTALL_PLAYWRIGHT" = "1" ]; then
+    echo "正在安装 Playwright 浏览器..."
     "$INSTALL_DIR/venv/bin/playwright" install chromium || {
         echo "Playwright 浏览器安装失败，请稍后手动执行: $INSTALL_DIR/venv/bin/playwright install chromium" >&2
     }
+else
+    echo "已按要求跳过 Playwright 浏览器安装。"
 fi
 
 write_wrapper

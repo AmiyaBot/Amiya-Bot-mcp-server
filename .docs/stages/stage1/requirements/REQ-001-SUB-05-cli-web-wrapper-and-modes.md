@@ -60,6 +60,7 @@
 3. 单次执行模式成功后输出到 stdout 并退出。
 4. CLI 的可安装命令名固定为 amiyabot-cli，并作为默认调用入口写入文档和交付说明。
 5. 应提供位于 GitHub 仓库中的 install.sh，支持用户通过 curl | sh 一键安装 amiyabot-cli。
+6. install.sh 默认安装 Playwright 浏览器；只有显式传入 --no-playwright 时才跳过。
 
 ## 当前状态视图
 
@@ -78,6 +79,7 @@
 3. 新增带参数单次执行模式。
 4. 校准帮助信息、错误输出与退出行为。
 5. 提供可复用的一键安装脚本与安装文档。
+6. 固定一键安装脚本对 Playwright 的默认安装策略。
 
 ## 验收标准
 
@@ -86,6 +88,7 @@
 3. 单次执行结果输出到 stdout 后退出，并具有明确退出码语义。
 4. 安装后应生成 amiyabot-cli 命令，并作为默认 CLI 入口。
 5. GitHub 仓库中提供 install.sh，用户可通过 curl | sh 安装 amiyabot-cli。
+6. install.sh 默认安装 Playwright 浏览器，并支持通过 --no-playwright 跳过。
 
 ## 测试记录
 
@@ -140,6 +143,7 @@
 1. 用户明确要求 CLI 的可安装命令名固定为 amiyabot-cli。
 2. 本子需求需同时覆盖命令安装入口与文档口径同步。
 3. 用户补充要求：GitHub 仓库需提供 install.sh，以支持 curl | sh 一键安装 amiyabot-cli。
+4. 用户补充要求：install.sh 默认安装 Playwright，仅在传入 --no-playwright 时跳过。
 
 ## 待确认问题
 
@@ -150,3 +154,4 @@
 - 2026-04-11：建立子需求文档。
 - 2026-04-12：补充 amiyabot-cli 作为固定可安装命令名的约束。
 - 2026-04-12：补充 install.sh 一键安装脚本与 README 安装说明要求。
+- 2026-04-12：补充 install.sh 默认安装 Playwright、--no-playwright 才跳过的规则。
