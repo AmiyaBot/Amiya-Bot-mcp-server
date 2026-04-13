@@ -43,10 +43,12 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
         ("character_table", "excel"),
         ("uniequip_table", "excel"),
         ("handbook_team_table", "excel"),
+        ("handbook_info_table", "excel"),
         ("item_table", "excel"),
         ("range_table", "excel"),
         ("skill_table", "excel"),
         ("skin_table", "excel"),
+        ("building_data", "excel"),
         ("charword_table", "excel"),
         ("char_meta_table", "excel"),
     ]:

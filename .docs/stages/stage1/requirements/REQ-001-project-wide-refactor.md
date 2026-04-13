@@ -50,8 +50,8 @@
 - 需求编号：`STAGE1-RQ-001`
 - 名称：父需求：执行面重构
 - 优先级：`P0`
-- 状态：`todo`
-- 所属里程碑：`M1`
+- 状态：`done`
+- 所属里程碑：`M3`
 - 关联总表：[requirements-index.md](../requirements-index.md)
 
 ## 背景与目标
@@ -73,24 +73,23 @@
 
 ## 当前状态视图
 
-- 当前状态：`todo`
-- 当前目标：把执行面重构拆成可执行子需求，并冻结首轮实施顺序与依赖关系。
-- 当前已知进展：已建立 stage1 文档、需求索引与本需求入口；已明确 Astrbot 必须完全移除，CLI 必须升级为 Web 包装型一等能力；已完成首轮子需求拆分；尚未开始具体实现。
+- 当前状态：`done`
+- 当前目标：执行面重构主线已完成，当前仅保留结果回写与后续需求边界维护。
+- 当前已知进展：已完成 Astrbot 资产清退、共享执行服务收敛、Web 执行接口补齐、CLI 双模式 Web 包装化、本地探活与自启动；`install.sh`、README、全局配置与 `amiyabot-cli` 命令口径已经同步。
 - 下一步动作：
-  1. 先推进 `SUB-01`，冻结命令契约、默认 URL 口径和本地判定规则。
-  2. 在 `SUB-01` 基础上并行推进 `SUB-02` 与 `SUB-03`。
-  3. 按顺序完成 `SUB-04`、`SUB-05`、`SUB-06`，并补齐回归验证与文档收尾。
+  1. 若继续新增非执行面功能，先建立新的需求文档与状态跟踪。
+  2. 保持现有 CLI/Web 执行面稳定，不再把增量范围回写到本父需求。
 
 ## 功能拆解 / 实施拆解
 
 | 子需求编号 | 名称 | 目标 | 边界 | 依赖 | 状态 | 文档 |
 | --- | --- | --- | --- | --- | --- | --- |
-| STAGE1-RQ-001-SUB-01 | 统一命令契约与迁移基线 | 冻结 CLI 与 Web 共享的命令契约、输出语义、默认 URL 口径与探活基线 | 只定义契约与基线，不切换 transport，不做自启动 | 无 | todo | [SUB-01](REQ-001-SUB-01-command-contract-and-baseline.md) |
-| STAGE1-RQ-001-SUB-02 | Astrbot 资产清退 | 清点并移除 Astrbot 相关入口、依赖、文档、配置与专用设施 | 只处理 Astrbot 相关资产，不顺带扩大到无关重构 | SUB-01 后可做 | todo | [SUB-02](REQ-001-SUB-02-remove-astrbot-assets.md) |
-| STAGE1-RQ-001-SUB-03 | 共享执行服务收敛 | 将 CLI 与 MCP 的重复执行逻辑收敛到共享服务层 | 只做服务层与返回模型收敛，不改 CLI transport | SUB-01 | todo | [SUB-03](REQ-001-SUB-03-unify-execution-service.md) |
-| STAGE1-RQ-001-SUB-04 | Web 执行入口补齐 | 在 FastAPI 侧补出 CLI 可调用的执行接口，并保留探活入口 | 只处理 Web adapter、请求映射与应用装配 | SUB-01, SUB-03 | todo | [SUB-04](REQ-001-SUB-04-add-web-execution-endpoints.md) |
-| STAGE1-RQ-001-SUB-05 | CLI Web 包装化与双模式入口 | 让交互式模式与单次执行模式都通过 Web 请求完成 | 只处理 CLI 参数、输出与 URL 读取，不做本地自启动 | SUB-01, SUB-04 | todo | [SUB-05](REQ-001-SUB-05-cli-web-wrapper-and-modes.md) |
-| STAGE1-RQ-001-SUB-06 | 本地探活、自启动与收尾验证 | 补齐本地探活、自启动、就绪等待、回归验证与文档收尾 | 只处理运行时探活、自启动、默认 URL 与收尾验证 | SUB-02, SUB-04, SUB-05 | todo | [SUB-06](REQ-001-SUB-06-local-autostart-and-verification.md) |
+| STAGE1-RQ-001-SUB-01 | 统一命令契约与迁移基线 | 冻结 CLI 与 Web 共享的命令契约、输出语义、默认 URL 口径与探活基线 | 只定义契约与基线，不切换 transport，不做自启动 | 无 | done | [SUB-01](REQ-001-SUB-01-command-contract-and-baseline.md) |
+| STAGE1-RQ-001-SUB-02 | Astrbot 资产清退 | 清点并移除 Astrbot 相关入口、依赖、文档、配置与专用设施 | 只处理 Astrbot 相关资产，不顺带扩大到无关重构 | SUB-01 后可做 | done | [SUB-02](REQ-001-SUB-02-remove-astrbot-assets.md) |
+| STAGE1-RQ-001-SUB-03 | 共享执行服务收敛 | 将 CLI 与 MCP 的重复执行逻辑收敛到共享服务层 | 只做服务层与返回模型收敛，不改 CLI transport | SUB-01 | done | [SUB-03](REQ-001-SUB-03-unify-execution-service.md) |
+| STAGE1-RQ-001-SUB-04 | Web 执行入口补齐 | 在 FastAPI 侧补出 CLI 可调用的执行接口，并保留探活入口 | 只处理 Web adapter、请求映射与应用装配 | SUB-01, SUB-03 | done | [SUB-04](REQ-001-SUB-04-add-web-execution-endpoints.md) |
+| STAGE1-RQ-001-SUB-05 | CLI Web 包装化与双模式入口 | 让交互式模式与单次执行模式都通过 Web 请求完成 | 只处理 CLI 参数、输出与 URL 读取，不做本地自启动 | SUB-01, SUB-04 | done | [SUB-05](REQ-001-SUB-05-cli-web-wrapper-and-modes.md) |
+| STAGE1-RQ-001-SUB-06 | 本地探活、自启动与收尾验证 | 补齐本地探活、自启动、就绪等待、回归验证与文档收尾 | 只处理运行时探活、自启动、默认 URL 与收尾验证 | SUB-02, SUB-04, SUB-05 | done | [SUB-06](REQ-001-SUB-06-local-autostart-and-verification.md) |
 
 执行顺序：
 
@@ -111,7 +110,33 @@
 
 ## 测试记录
 
-> 当前为空。后续按条目追加。
+- 时间：2026-04-12
+- 场景：CLI 模式分流
+- 操作步骤：验证 `parse_args([])`、`parse_args(["web"])`、`parse_args(["help"])`、`parse_args(["op", "阿米娅"])` 的分流结果。
+- 预期结果：分别进入 `interactive`、`web`、`help`、`command`。
+- 实际结果：符合预期。
+- 证据：仓库内已回写验证结论，CLI 入口实现与 README 使用说明一致。
+
+- 时间：2026-04-12
+- 场景：单次 CLI 指令前置快路径
+- 操作步骤：执行 `.venv/bin/python main.py help` 与 `.venv/bin/python main.py does-not-exist`。
+- 预期结果：`help` 直接输出命令列表；未知命令直接以退出码 `1` 返回，不触发数据上下文初始化。
+- 实际结果：符合预期。
+- 证据：已记录到仓库记忆与 README 口径。
+
+- 时间：2026-04-12
+- 场景：本地命令服务探活与自启动
+- 操作步骤：执行 `.venv/bin/python main.py --url http://127.0.0.1:9000 glossary 攻击力`，随后访问 `/rest/status`。
+- 预期结果：本地服务未运行时自动拉起；本次执行成功；CLI 退出后服务仍保持可探活。
+- 实际结果：符合预期，`/rest/status` 返回 `{"status":"ok"}`。
+- 证据：已记录到仓库记忆。
+
+- 时间：2026-04-12
+- 场景：可安装 CLI 命令
+- 操作步骤：执行 `.venv/bin/pip install -e .`，随后执行 `.venv/bin/amiyabot-cli --help`。
+- 预期结果：生成 `amiyabot-cli` 命令并输出帮助信息。
+- 实际结果：符合预期。
+- 证据：README 安装说明与 `pyproject.toml` 的 `project.scripts` 已对齐。
 
 ### 测试记录模板
 
@@ -169,10 +194,7 @@
 
 ## 待确认问题
 
-1. Web 执行接口形态需要在 `SUB-01` 中冻结，例如采用单一通用执行接口还是类型化 REST 接口。
-2. 默认本地 URL 的具体字面值需要在 `SUB-01` 中写成明文，并与最终服务默认监听地址保持一致。
-3. “本地 URL”的判定范围需要在 `SUB-01` 中写成明文，例如是否包括 `localhost`、`127.0.0.1`、`::1`。
-4. 本地自启动方式需要在 `SUB-06` 中冻结，例如以何种子进程方式拉起本地 Web 服务。
+1. 暂无。原待确认项均已冻结到代码与子需求文档中。
 
 ## 状态更新
 
@@ -180,3 +202,4 @@
 - 2026-04-11：补充 Astrbot 完整移除、CLI 一等能力化与 CLI/Web 统一执行链路的明确约束。
 - 2026-04-11：将父需求拆分为 6 个可执行子需求，并确定依赖顺序。
 - 2026-04-12：补充 amiyabot-cli 作为固定可安装命令名的交付约束。
+- 2026-04-13：根据已落地代码回写父需求状态；确认 6 个子需求均已完成，父需求进入 `done`。

@@ -44,7 +44,7 @@
 - 需求编号：`STAGE1-RQ-001-SUB-05`
 - 名称：CLI Web 包装化与双模式入口
 - 优先级：`P0`
-- 状态：`todo`
+- 状态：`done`
 - 所属里程碑：`M2`
 - 父需求：[REQ-001-project-wide-refactor.md](REQ-001-project-wide-refactor.md)
 
@@ -64,13 +64,11 @@
 
 ## 当前状态视图
 
-- 当前状态：`todo`
-- 当前目标：完成 CLI 的参数模式设计和 Web 包装化改造。
-- 当前已知进展：现有 CLI 已具备交互式与单次执行路径，并已补上本地 URL 自启动能力；当前还需要固定可安装命令名为 amiyabot-cli。
+- 当前状态：`done`
+- 当前目标：CLI 已完成 Web 包装化与双模式入口收敛。
+- 当前已知进展：`web` 模式、交互式模式与单次命令模式均已落地；可安装命令名已固定为 `amiyabot-cli`；`install.sh` 已提供一键安装与 Playwright 默认安装逻辑。
 - 下一步动作：
-  1. 设计交互模式与单次执行模式的统一入口。
-  2. 将命令执行改为请求 Web 执行接口。
-  3. 校准 stdout/stderr、退出码行为与命令安装入口。
+  1. 无。后续仅在新增命令或入口参数时做增量演进。
 
 ## 功能拆解 / 实施拆解
 
@@ -92,7 +90,12 @@
 
 ## 测试记录
 
-> 当前为空。后续按条目追加。
+- 时间：2026-04-12
+- 场景：CLI 模式分流与安装入口验证
+- 操作步骤：验证 `parse_args` 的 `interactive`、`web`、`help`、`command` 分流结果；执行 `.venv/bin/pip install -e .` 后再执行 `.venv/bin/amiyabot-cli --help`。
+- 预期结果：CLI 正确区分三种入口模式，并生成 `amiyabot-cli` 命令。
+- 实际结果：符合预期。
+- 证据：README、`pyproject.toml` 与仓库记忆已同步对应验证结论。
 
 ### 测试记录模板
 
@@ -155,3 +158,4 @@
 - 2026-04-12：补充 amiyabot-cli 作为固定可安装命令名的约束。
 - 2026-04-12：补充 install.sh 一键安装脚本与 README 安装说明要求。
 - 2026-04-12：补充 install.sh 默认安装 Playwright、--no-playwright 才跳过的规则。
+- 2026-04-13：回写完成状态；CLI 双模式入口、Web 包装化与安装脚本口径已全部落地。

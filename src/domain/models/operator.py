@@ -117,6 +117,9 @@ class Operator(ABC):
         self.modules: List[OperatorModule] = []
         """模组信息（结构化）"""
 
+        self.favorKeyFrames: List[Dict[str, Any]] = []
+        """信赖属性帧（沿用原始字段结构，供模板侧读取加成）"""
+
     # ========== 对外稳定接口 ==========
 
     @abstractmethod

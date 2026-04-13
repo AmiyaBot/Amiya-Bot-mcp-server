@@ -1,9 +1,10 @@
 from __future__ import annotations
 import logging
+import re
 
 from src.helpers.gamedata.search import build_sources, search_source_spec
 
-from src.helpers.bundle import get_table
+from src.helpers.bundle import get_table, html_tag_format
 
 from src.app.context import AppContext
 from src.domain.models.operator import Operator
@@ -14,6 +15,55 @@ logger = logging.getLogger(__name__)
 
 class OperatorNotFoundError(ValueError):
     pass
+
+
+def build_potential_list(op, tables) -> list[dict]:
+    character_table = get_table(tables, "character_table", source="gamedata", default={})
+    raw_list = (character_table.get(op.id) or {}).get("potentialRanks") or []
+    result = []
+    for index, item in enumerate(raw_list):
+        description = str(item.get("description") or "").strip()
+        if not description:
+            continue
+        result.append(
+            {
+                "potential_rank": index,
+                "potential_desc": description,
+            }
+        )
+    return result
+
+
+def build_building_skills(op, tables) -> list[dict]:
+    building_data = get_table(tables, "building_data", source="gamedata", default={})
+    char_entry = (building_data.get("chars") or {}).get(op.id) or {}
+    buff_table = building_data.get("buffs") or {}
+
+    result = []
+    for buff_group in char_entry.get("buffChar") or []:
+        for buff in buff_group.get("buffData") or []:
+            buff_id = buff.get("buffId")
+            detail = buff_table.get(buff_id) or {}
+            name = str(detail.get("buffName") or "").strip()
+            desc = html_tag_format(str(detail.get("description") or "")).replace("\\n", "\n").strip()
+            if not name and not desc:
+                continue
+
+            cond = buff.get("cond") or {}
+            phase_raw = str(cond.get("phase") or "")
+            match = re.search(r"(\d+)$", phase_raw)
+            phase_num = int(match.group(1)) if match else 0
+
+            result.append(
+                {
+                    "bs_unlocked": phase_num,
+                    "bs_name": name,
+                    "bs_desc": desc,
+                    "bs_icon": str(detail.get("skillIcon") or ""),
+                    "bs_room_type": str(detail.get("roomType") or ""),
+                }
+            )
+    return result
 
 def build_base_attr(op) -> dict:
     """
@@ -103,8 +153,8 @@ def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
             "sp_type_name": SP_TYPE_NAME,
             "skill_type_name": SKILL_TYPE_NAME,
             "talents_list": op.talents(),
-            "building_skills": [],
-            "potential_list": [],
+            "building_skills": build_building_skills(op, bundle.tables),
+            "potential_list": build_potential_list(op, bundle.tables),
         }
     )
     return result

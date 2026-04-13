@@ -20,3 +20,5 @@ test/
 # CLI/Web 运行产物
 data/local/command-service.log
 .nfs*
+
+.temp/

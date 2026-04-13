@@ -1,4 +1,5 @@
 # src/data/models/_operator_impl.py
+import re
 from typing import Dict, Any, List
 from src.domain.models.operator import Operator,OperatorPhase, Skill, SkillLevel, SkillSpData, OperatorModule, STR_DICT, LIST_STR_DICT
 from src.domain.models.generic import Cost, MaterialCost, parse_cost
@@ -83,10 +84,13 @@ class OperatorImpl(Operator):
         self.is_recruit = is_recruit
         self.is_classic = bool(data.get("classicPotentialItemId"))
         self.is_sp = bool(data.get("isSpChar"))
+        self.favorKeyFrames = list(data.get("favorKeyFrames") or [])
 
         self._init_phases(data)
         self._init_tags(data, tables)
         self._init_range(data, tables)
+        self._init_handbook_profile(tables)
+        self._init_drawer(tables)
         self.cv = {}
         self._init_cv(tables)
         self._init_origin(character_table, data, tables)
@@ -126,12 +130,75 @@ class OperatorImpl(Operator):
         if vdict and vtype:
             self.cv = {vtype.get(k, {}).get("name", k): v.get("cvName", "") for k, v in vdict.items()}
 
+    def _iter_handbook_story_blocks(self, tables):
+        handbook = get_table(tables, "handbook_info_table", source="gamedata", default={})
+        entry = (handbook.get("handbookDict") or {}).get(self.id) or {}
+        for group in entry.get("storyTextAudio") or []:
+            title = str(group.get("storyTitle") or "")
+            for item in group.get("stories") or []:
+                text = str(item.get("storyText") or "")
+                if text:
+                    yield title, text
+
+    def _init_handbook_profile(self, tables):
+        archive_text = ""
+        for title, text in self._iter_handbook_story_blocks(tables):
+            if "基础档案" in title:
+                archive_text = text
+                break
+
+        if archive_text:
+            profile_map = {}
+            for raw_line in archive_text.splitlines():
+                line = raw_line.strip()
+                match = re.match(r"^【([^】]+)】(.*)$", line)
+                if not match:
+                    continue
+                profile_map[match.group(1).strip()] = match.group(2).strip()
+
+            self.sex = profile_map.get("性别") or self.sex
+            self.birthday = profile_map.get("生日") or self.birthday
+            self.race = profile_map.get("种族") or self.race
+
+    def _init_drawer(self, tables):
+        skin_table = get_table(tables, "skin_table", source="gamedata", default={})
+        evolve_map = (skin_table.get("buildinEvolveMap") or {}).get(self.id) or {}
+        char_skins = skin_table.get("charSkins") or {}
+
+        skin_id = evolve_map.get("0") or evolve_map.get("1") or evolve_map.get("2")
+        if not skin_id:
+            for key in char_skins.keys():
+                if str(key).startswith(f"{self.id}#"):
+                    skin_id = key
+                    break
+
+        display_skin = (char_skins.get(skin_id) or {}).get("displaySkin") or {}
+        drawer_list = [item for item in (display_skin.get("drawerList") or []) if item]
+        if drawer_list:
+            self.drawer = "、".join(drawer_list)
+
     def _init_origin(self, character_table: dict, data, tables):
-        sp_char_groups = get_table(tables, "char_meta_table", source="local", default={}).get("spCharGroups") or {}
+        sp_char_groups = get_table(tables, "char_meta_table", source="gamedata", default={}).get("spCharGroups") or {}
         for oid, group in sp_char_groups.items():
-            if self.id in (group or []):
+            if oid != self.id and self.id in (group or []):
                 self.origin_name = character_table.get(oid, {}).get("name", "未知")
                 return
+
+        handbook_text = "\n".join(text for _, text in self._iter_handbook_story_blocks(tables))
+        name_candidates = []
+        patterns = [
+            r"全名(?P<name>[一-龥·\.]{2,30})",
+            fr"(?P<name>[一-龥·\.]{{2,30}})[——\-\s]*也就是.*?{re.escape(self.name)}",
+        ]
+        for pattern in patterns:
+            for match in re.finditer(pattern, handbook_text, re.S):
+                candidate = match.group("name").replace(".", "·").strip(" ，。；：\n\t")
+                if candidate and candidate != self.name:
+                    name_candidates.append(candidate)
+
+        unique_names = list(dict.fromkeys(name_candidates))
+        if len(unique_names) == 1:
+            self.origin_name = unique_names[0]
 
     # ------------------ domain 接口实现（先做可用版，复杂聚合可逐步补齐） ------------------
 
