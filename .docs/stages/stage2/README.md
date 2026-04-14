@@ -53,7 +53,7 @@
 
 1. 完成干员详情展示层的重构，提升详情卡片的信息组织和呈现效果。
 2. 补齐干员详情所需的数据链路，覆盖当前已出现的关键资料字段与衍生信息。
-3. 明确展示与数据补全的验收边界，避免本阶段范围继续漂移。
+3. 在干员查询链路上建立统一的结构化结果契约，使 CLI 与 MCP 共享同一份语义化结果数据。
 
 ## 范围与非目标
 
@@ -73,15 +73,15 @@
 
 ### 当前优先级
 
-1. 对当前未提交改动补齐多样本回归验证，确认详情卡片与数据链路在不同干员上稳定可用。
-2. 明确图片卡片链路与文本摘要链路各自的当前完成度，不把未验证部分误写为已完成。
-3. 在验证结果稳定后回写需求状态、测试记录与剩余后续项。
+1. 对 STAGE2-RQ-001 补齐多样本回归验证，确认详情卡片与数据链路在不同干员上稳定可用。
+2. 对已落地的 STAGE2-RQ-002 做必要的多样本抽查，确认结构化 payload 在不同资料完整度下保持稳定。
+3. 继续收敛图片卡片链路与结构化输出链路的验证记录，避免阶段结项时口径分裂。
 
 ### 当前里程碑视图
 
 - M1：已完成。完成 stage2 初始化、首个需求登记与验收口径确认。
-- M2：进行中。当前代码已落下详情卡片重构与数据补全主干，并完成银灰样例验证。
-- M3：待开始。待补齐回归验证、文档回写与阶段收口。
+- M2：进行中。当前代码已落下详情卡片重构与数据补全主干，并完成银灰样例验证；STAGE2-RQ-002 的统一输出契约也已完成第一轮实现。
+- M3：待开始。剩余重点是多样本回归验证与阶段收口，而不是继续扩展输出契约范围。
 
 详细状态见 [requirements-index.md](requirements-index.md)。
 
@@ -101,6 +101,8 @@
    - 单需求文档模板；实际使用时复制并改名。
 6. [requirements/REQ-001-operator-detail-enhancement.md](requirements/REQ-001-operator-detail-enhancement.md)
    - 当前阶段的首个需求：干员详情展示重构与档案数据补全。
+7. [requirements/REQ-002-operator-query-output-contract.md](requirements/REQ-002-operator-query-output-contract.md)
+   - 当前阶段的第二个需求：干员查询结构化结果契约与 CLI JSON / Markdown 输出。
 
 ### 单需求文档的职责
 
@@ -149,6 +151,7 @@
 - 高频规则：[faq.md](faq.md)
 - 全局 bug：[bugs.md](bugs.md)
 - 当前需求：[requirements/REQ-001-operator-detail-enhancement.md](requirements/REQ-001-operator-detail-enhancement.md)
+- 跟进需求：[requirements/REQ-002-operator-query-output-contract.md](requirements/REQ-002-operator-query-output-contract.md)
 - 需求模板：[requirements/REQ-template.md](requirements/REQ-template.md)
 
 ### 当前阶段观察
@@ -157,8 +160,9 @@
 - stage1 的执行面结论全部继续有效：Astrbot 不再保留、Web 仍是统一执行核心、CLI 仍是 Web 包装层、对外命令名保持 `amiyabot-cli`。
 - 用户已确认 stage2 正式聚焦“干员详情展示重构与档案数据补全”，并将当前未提交改动整体收口到该主题下。
 - 用户已确认首个需求先按整合需求推进，当前验收必需覆盖基础档案、画师、真名、潜能列表、基建技能与 `favorKeyFrames`。
-- 当前实现已在银灰样例上跑通端到端链路：命令成功返回文本摘要，并生成新的详情卡片图片，卡片中可见潜能、真名、CV、基建技能与技能面板等内容。
-- 当前验证显示图片卡片链路已经具备可用结果，但文本摘要 `artifact.txt` 仍沿用旧版概要输出，尚未同步扩展为新的详情字段展示。
+- 当前实现已在银灰样例上跑通端到端链路：命令可以输出结构化 JSON 与 Markdown，并生成新的详情卡片图片，卡片中可见潜能、真名、CV、基建技能与技能面板等内容。
+- `artifact.txt` 仍保留旧版模板产物，但 CLI 主输出已不再依赖该文件；统一输出契约已由 STAGE2-RQ-002 接管并落地。
+- STAGE2-RQ-002 已完成第一轮实现：`op` 命令支持 `--json`，MCP `get_operator_basic` 与 CLI JSON 共享同一份语义化 payload。
 
 ### 当前执行原则
 
@@ -168,3 +172,4 @@
 4. 当前未提交改动必须先登记到需求文档，再继续扩展实现范围。
 5. STAGE2-RQ-001 先以整合需求推进；若后续出现明确边界或验收冲突，再考虑拆分子需求。
 6. 图片卡片链路与文本摘要链路的验证状态必须分开记录；当前只将已验证的图片卡片结果计入已落地进展。
+7. 结构化 JSON 结果不复用现有 PNG 渲染配置模板；语义结果契约应落在 service / presenter 层，而不是继续耦合到 card template 体系。

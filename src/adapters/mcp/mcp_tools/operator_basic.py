@@ -17,7 +17,7 @@ Args:
     operator_name_prefix (str): 干员名的前缀，没有则为空，如干员假日威龙陈的前缀为“假日威龙”
 
 Returns:
-    str: 一个Json对象，文本可读的干员信息包含在data字段中，图片的URL包含在image_url字段中。
+    str: 一个Json对象，语义化的结构化干员信息包含在data字段中，图片的URL包含在image_url字段中。
     请尽可能向用户展示这张图片，无论用户是否明确需要图片资料。
 """
 

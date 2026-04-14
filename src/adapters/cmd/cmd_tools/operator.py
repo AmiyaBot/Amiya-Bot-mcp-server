@@ -1,4 +1,5 @@
 
+import json
 import logging
 
 from src.app.config import resolve_merged_config_paths
@@ -54,17 +55,18 @@ async def cmd_operator(ctx: AppContext, args: str) -> str:
         operator_name=operator_name,
         operator_name_prefix=operator_name_prefix,
     )
+    output_format = getattr(ctx, "output_format", "markdown") if ctx is not None else "markdown"
+    if output_format == "json":
+        return json.dumps(result.to_response(), ensure_ascii=False, indent=2)
+
     if result.candidates:
         return f"❌ {result.message}: {', '.join(result.candidates)}，请提供更精确的名称。"
     if result.message:
         return f"❌ {result.message}"
 
-    output = f"✅ 查询成功！\n\n{result.data}"
-    if result.image_path:
-        output += f"\n\n图片路径: {result.image_path}"
-    elif result.image_url:
-        output += f"\n\n图片链接: {result.image_url}"
-    return output
+    if result.markdown:
+        return result.markdown
+    return str(result.data or "")
 
 @register_command("skill")
 async def cmd_operator_skill(ctx: AppContext, args: str) -> str:

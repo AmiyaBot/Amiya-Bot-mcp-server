@@ -1,5 +1,6 @@
 # src/entrypoints/uvicorn_host.py
 from dataclasses import replace
+from typing import Literal
 from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi import Request
@@ -12,6 +13,7 @@ import logging
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from src.app.bootstrap_disk import build_context_from_disk
+from src.adapters.cmd.web_client import compute_service_code_revision
 from src.adapters.mcp.app import register_asgi
 from src.adapters.cmd.app import execute_registered_command
 from src.app.card_fileservier import register_cardserver_asgi
@@ -25,6 +27,7 @@ LOCAL_REQUEST_HOSTS = {"127.0.0.1", "::1", "localhost"}
 class CommandExecuteRequest(BaseModel):
     command: str
     args: str = ""
+    output_format: Literal["markdown", "json"] = "markdown"
 
 
 async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
@@ -53,6 +56,7 @@ def uvicorn_main():
     async def lifespan(app: FastAPI):
         ctx = await build_context_from_disk(cfg)
         app.state.ctx = ctx
+        app.state.code_revision = compute_service_code_revision(cfg.ProjectRoot)
 
         task = asyncio.create_task(_periodic_update_loop(app, interval_seconds=15 * 60))
 
@@ -82,7 +86,10 @@ def uvicorn_main():
 
     @app.get("/rest/status")
     async def status():
-        return {"status": "ok"}
+        return {
+            "status": "ok",
+            "code_revision": getattr(app.state, "code_revision", "unknown"),
+        }
 
     @app.post("/rest/commands/execute")
     async def execute_command(request: Request, payload: CommandExecuteRequest):
@@ -95,6 +102,7 @@ def uvicorn_main():
             request_ctx = replace(
                 ctx,
                 prefer_local_artifact_path=(request.client is not None and request.client.host in LOCAL_REQUEST_HOSTS),
+                output_format=payload.output_format,
             )
 
         result = await execute_registered_command(request_ctx, payload.command, payload.args)

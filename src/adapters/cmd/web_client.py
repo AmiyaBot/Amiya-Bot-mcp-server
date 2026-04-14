@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
@@ -32,11 +34,31 @@ def is_local_service_url(base_url: str) -> bool:
     return hostname in LOCAL_SERVICE_HOSTS
 
 
+def compute_service_code_revision(project_root: Path) -> str:
+    hasher = hashlib.sha1()
+    candidates = [project_root / "main.py"]
+    src_root = project_root / "src"
+    if src_root.exists():
+        candidates.extend(sorted(src_root.rglob("*.py")))
+
+    for path in candidates:
+        try:
+            stat = path.stat()
+            relative_path = path.relative_to(project_root).as_posix()
+        except OSError:
+            continue
+        hasher.update(relative_path.encode("utf-8"))
+        hasher.update(str(stat.st_mtime_ns).encode("utf-8"))
+        hasher.update(str(stat.st_size).encode("utf-8"))
+    return hasher.hexdigest()[:12]
+
+
 async def execute_remote_command_once(
     cfg: Config,
     command_parts: list[str],
     explicit_url: str | None = None,
     verbose: bool = False,
+    output_format: str = "markdown",
 ) -> int:
     command_line = " ".join(part for part in command_parts if part).strip()
     if not command_line:
@@ -46,7 +68,17 @@ async def execute_remote_command_once(
     base_url = resolve_command_service_url(cfg, explicit_url=explicit_url)
     ensure_command_service_ready(cfg, base_url, verbose=verbose)
 
-    payload = json.dumps({"command": command, "args": args}).encode("utf-8")
+    if should_execute_locally_for_current_runtime(cfg, base_url):
+        emit_verbose("检测到本地命令服务版本落后，回退到当前进程执行", verbose)
+        return await execute_local_command(
+            cfg=cfg,
+            command=command,
+            args=args,
+            output_format=output_format,
+            prefer_local_artifact_path=True,
+        )
+
+    payload = json.dumps({"command": command, "args": args, "output_format": output_format}).encode("utf-8")
     request = Request(
         urljoin(base_url, EXECUTE_PATH.lstrip("/")),
         data=payload,
@@ -72,6 +104,7 @@ async def execute_remote_command_once(
         args=args,
         response_payload=response_payload,
         verbose=verbose,
+        output_format=output_format,
     )
     if fallback_exit_code is not None:
         return fallback_exit_code
@@ -89,6 +122,7 @@ async def try_execute_locally_when_service_is_stale(
     args: str,
     response_payload: dict,
     verbose: bool = False,
+    output_format: str = "markdown",
 ) -> int | None:
     if not is_local_service_url(base_url):
         return None
@@ -101,10 +135,31 @@ async def try_execute_locally_when_service_is_stale(
 
     emit_verbose(f"本地命令服务未识别命令 {command}，回退到当前进程执行", verbose)
 
+    return await execute_local_command(
+        cfg=cfg,
+        command=command,
+        args=args,
+        output_format=output_format,
+        prefer_local_artifact_path=True,
+    )
+
+
+async def execute_local_command(
+    cfg: Config,
+    command: str,
+    args: str,
+    output_format: str,
+    prefer_local_artifact_path: bool,
+) -> int:
     from src.adapters.cmd.app import execute_registered_command
     from src.app.bootstrap_disk import build_context_from_disk
 
     ctx = await build_context_from_disk(cfg)
+    ctx = replace(
+        ctx,
+        prefer_local_artifact_path=prefer_local_artifact_path,
+        output_format=output_format,
+    )
     result = await execute_registered_command(ctx, command, args)
     if result.output:
         print(result.output)
@@ -125,13 +180,30 @@ def ensure_command_service_ready(cfg: Config, base_url: str, verbose: bool = Fal
 
 
 def service_is_healthy(base_url: str) -> bool:
+    payload = fetch_service_status(base_url)
+    return bool(payload and payload.get("status") == "ok")
+
+
+def fetch_service_status(base_url: str) -> dict | None:
     request = Request(urljoin(base_url, STATUS_PATH.lstrip("/")), method="GET")
     try:
         with urlopen(request, timeout=1.5) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-            return payload.get("status") == "ok"
+            return json.loads(response.read().decode("utf-8"))
     except (URLError, HTTPError, json.JSONDecodeError, TimeoutError, ValueError):
+        return None
+
+
+def should_execute_locally_for_current_runtime(cfg: Config, base_url: str) -> bool:
+    if not is_local_service_url(base_url):
         return False
+
+    payload = fetch_service_status(base_url)
+    if not payload or payload.get("status") != "ok":
+        return False
+
+    expected_revision = compute_service_code_revision(cfg.ProjectRoot)
+    running_revision = payload.get("code_revision")
+    return running_revision != expected_revision
 
 
 def wait_for_service_ready(base_url: str, timeout_seconds: float) -> None:

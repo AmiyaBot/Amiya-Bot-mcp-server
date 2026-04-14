@@ -1,5 +1,6 @@
 # 该代码执行命令行交互，从disk构造ctx后，用户输入一个命令后跟参数，程序执行并输出结果，命令在cmd adapter下注册
 
+from dataclasses import replace
 import logging
 
 from src.app.bootstrap_disk import build_context_from_disk
@@ -15,6 +16,7 @@ async def cmd_main(
     command_parts: list[str] | None = None,
     command_service_url: str | None = None,
     verbose: bool = False,
+    output_format: str = "markdown",
 ) -> int:
     """主函数：初始化上下文并启动 CLI。"""
     try:
@@ -29,6 +31,7 @@ async def cmd_main(
             base_url = resolve_command_service_url(cfg, explicit_url=command_service_url)
             if command in LOCAL_CONTEXT_COMMANDS and is_local_service_url(base_url):
                 ctx = await build_context_from_disk(cfg)
+                ctx = replace(ctx, output_format=output_format)
                 cli = CommandLineInterface(ctx)
                 return await cli.run_once(command_parts)
 
@@ -37,10 +40,12 @@ async def cmd_main(
                 command_parts=command_parts,
                 explicit_url=command_service_url,
                 verbose=verbose,
+                output_format=output_format,
             )
 
         logger.info("正在初始化应用上下文...")
         ctx = await build_context_from_disk(cfg)
+        ctx = replace(ctx, output_format=output_format)
         logger.info("✅ 上下文初始化完成")
 
         cli = CommandLineInterface(ctx)

@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from src.app.context import AppContext
+from src.app.services.operator_output import build_operator_payload, render_operator_markdown
 from src.domain.models.operator import Operator
 from src.domain.services.operator import search_operator_by_name
 from src.helpers.bundle import get_table
@@ -16,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class QueryExecutionResult:
-    data: str | None = None
+    data: str | dict | None = None
+    markdown: str | None = None
     image_url: str | None = None
     image_path: str | None = None
     message: str | None = None
@@ -97,18 +99,11 @@ async def query_operator_basic(
             return resolved
 
         result = search_operator_by_name(context, resolved.name)
+        structured_payload = build_operator_payload(result)
 
         bundle = context.data_repository.get_bundle()
         bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
         payload_key = f"operator:{resolved.name}:{bundle_version}"
-
-        text_artifact = await context.card_service.get(
-            template="operator_info",
-            payload_key=payload_key,
-            payload=result,
-            format="txt",
-            params=None,
-        )
 
         image_url = None
         image_path = None
@@ -132,7 +127,12 @@ async def query_operator_basic(
             logger.info("生成干员信息图片失败，已降级为文本结果: %s", exc)
 
         return QueryExecutionResult(
-            data=text_artifact.read_text(),
+            data=structured_payload,
+            markdown=render_operator_markdown(
+                structured_payload,
+                image_url=image_url,
+                image_path=image_path,
+            ),
             image_url=image_url,
             image_path=image_path,
         )

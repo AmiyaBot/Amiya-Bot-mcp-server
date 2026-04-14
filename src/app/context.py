@@ -12,3 +12,4 @@ class AppContext:
     data_repository: DataRepository
     card_service: CardService
     prefer_local_artifact_path: bool = False
+    output_format: str = "markdown"
