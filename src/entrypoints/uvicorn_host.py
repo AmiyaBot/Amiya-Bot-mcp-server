@@ -19,6 +19,7 @@ from src.adapters.cmd.app import execute_registered_command
 from src.app.card_fileservier import register_cardserver_asgi
 from src.app.context import AppContext
 from src.app.config import load_from_disk
+from src.app.services.resource_update import read_resource_update_status
 
 log = logging.getLogger("asset")
 LOCAL_REQUEST_HOSTS = {"127.0.0.1", "::1", "localhost"}
@@ -86,9 +87,20 @@ def uvicorn_main():
 
     @app.get("/rest/status")
     async def status():
+        update_status = read_resource_update_status(cfg)
         return {
             "status": "ok",
             "code_revision": getattr(app.state, "code_revision", "unknown"),
+            "resource_initialized": bool(getattr(getattr(app.state, "ctx", None), "data_repository", None) and app.state.ctx.data_repository.has_local_resources()),
+            "update_status": {
+                "current_state": update_status.current_state,
+                "last_result": update_status.last_result,
+                "last_started_at": update_status.last_started_at,
+                "last_finished_at": update_status.last_finished_at,
+                "message": update_status.message,
+                "version": update_status.version,
+                "version_date": update_status.version_date,
+            },
         }
 
     @app.post("/rest/commands/execute")

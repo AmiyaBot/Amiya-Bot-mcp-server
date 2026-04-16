@@ -2,6 +2,12 @@
 import json
 import logging
 
+from src.app.services.resource_update import (
+    format_resource_update_status,
+    launch_resource_update_worker,
+    read_resource_update_status,
+)
+from src.app.config import load_from_disk
 from src.app.config import resolve_merged_config_paths
 from src.app.context import AppContext
 from src.app.services.glossary_queries import query_glossary
@@ -33,6 +39,36 @@ async def cmd_resource_version(ctx: AppContext, args: str) -> str:
     version = getattr(bundle, "version", None) or "unknown"
     version_date = ctx.data_repository.get_bundle_version_date() or "unknown"
     return f"✅ 当前资源版本: {version}\n提交日期: {version_date}"
+
+
+@register_command("resource-update-status")
+async def cmd_resource_update_status(ctx: AppContext, args: str) -> str:
+    """
+    查询最近一次资源更新时间和结果
+    用法: resource-update-status
+    """
+    if args.strip():
+        return "❌ 用法: resource-update-status"
+
+    cfg = ctx.cfg if ctx is not None else load_from_disk()
+    status = read_resource_update_status(cfg)
+    return format_resource_update_status(cfg, status)
+
+
+@register_command("resource-update")
+async def cmd_resource_update(ctx: AppContext, args: str) -> str:
+    """
+    手动触发一次后台资源更新
+    用法: resource-update
+    """
+    if args.strip():
+        return "❌ 用法: resource-update"
+
+    cfg = ctx.cfg if ctx is not None else load_from_disk()
+    result = launch_resource_update_worker(cfg)
+    if not result.ok:
+        raise RuntimeError(result.message)
+    return f"✅ {result.message}"
 
 
 @register_command("op")
@@ -107,7 +143,7 @@ async def cmd_glossary(ctx: AppContext, args: str) -> str:
         return "❌ 请提供术语名称\n用法: glossary <术语名>"
 
     try:
-        if not ctx.data_repository:
+        if not ctx or not ctx.data_repository:
             return "❌ 数据仓库未初始化"
 
         query_term = args.strip()

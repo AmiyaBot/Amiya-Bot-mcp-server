@@ -99,7 +99,11 @@ CLI 现在支持读取全局 JSON 配置。
 - 查看执行流程：amiyabot-cli --verbose glossary 攻击力
 - 查看所有参与合并的配置路径：amiyabot-cli config-path
 - 查询当前资源版本：amiyabot-cli resource-version
+- 查询最近一次资源更新时间和结果：amiyabot-cli resource-update-status
+- 手动触发一次后台资源更新：amiyabot-cli resource-update
 - 指定命令服务地址：amiyabot-cli --url http://127.0.0.1:9000 glossary 攻击力
+
+如果本地还没有任何资源数据，`op`、`skill`、`glossary` 和 `resource-version` 会立即提示先执行 `resource-update`，不会再等待首次初始化完成。
 
 安装当前仓库后，amiyabot-cli 会进入环境的 PATH，可直接调用。
 

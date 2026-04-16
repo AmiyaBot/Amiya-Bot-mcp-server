@@ -54,6 +54,11 @@ class DataRepository:
     def is_ready(self) -> bool:
         return self._bundle is not None
 
+    def has_local_resources(self) -> bool:
+        if self._maintainer is None:
+            return False
+        return self._maintainer.is_initialized()
+
     def get_bundle(self) -> DataBundle:
         if self._bundle is None:
             raise DataNotReadyError("Game data bundle is not ready. Call startup_prepare()/ensure_ready() first.")
@@ -69,10 +74,12 @@ class DataRepository:
             raise RuntimeError("No maintainer configured; cannot perform startup_prepare.")
 
         if force_update_on_first_run and not self._maintainer.is_initialized():
+            from src.app.services.resource_update import perform_resource_update
+
             log.info("No local gamedata found. Performing first-time git update...")
-            ok = await asyncio.to_thread(self._maintainer.update)
-            if not ok:
-                raise RuntimeError("First-time gamedata update failed.")
+            result = await asyncio.to_thread(perform_resource_update, self.cfg, "startup")
+            if not result.ok:
+                raise RuntimeError(result.message or "First-time gamedata update failed.")
             log.info("First-time gamedata update done.")
 
         return await self.refresh_from_disk()
@@ -99,23 +106,42 @@ class DataRepository:
             log.info("Game data bundle refreshed. version=%s", getattr(bundle, "version", ""))
             return bundle
 
+    async def ensure_bundle_fresh_from_disk(self) -> DataBundle | None:
+        if self._maintainer is None:
+            return self._bundle
+        if not self._maintainer.is_initialized():
+            return self._bundle
+
+        disk_version = self._maintainer.get_version(short=True, with_dirty=True)
+        if self._bundle is None:
+            return await self.refresh_from_disk()
+
+        bundle_version = getattr(self._bundle, "version", None)
+        if bundle_version != disk_version:
+            return await self.refresh_from_disk()
+
+        if not getattr(self._bundle, "operators", None):
+            return await self.refresh_from_disk()
+
+        return self._bundle
+
     async def update_and_refresh(self) -> bool:
         if self._maintainer is None:
             log.warning("No maintainer configured; skip update.")
             return False
 
-        async with self._update_lock:
-            log.info("Updating gamedata on disk (git+zip)...")
-            ok = await asyncio.to_thread(self._maintainer.update)
-            if not ok:
-                log.warning("Update gamedata on disk failed.")
-                return False
+        from src.app.services.resource_update import perform_resource_update
 
-            log.info("Update ok. Reloading bundle into memory...")
-            bundle = await asyncio.to_thread(self._load_bundle)
-            self._bundle = bundle
-            log.info("Bundle reloaded after update. version=%s", getattr(bundle, "version", ""))
-            return True
+        result = await asyncio.to_thread(perform_resource_update, self.cfg, "periodic")
+        if not result.ok:
+            log.warning("Update gamedata on disk failed: %s", result.message)
+            return False
+
+        log.info("Update ok. Reloading bundle into memory...")
+        bundle = await asyncio.to_thread(self._load_bundle)
+        self._bundle = bundle
+        log.info("Bundle reloaded after update. version=%s", getattr(bundle, "version", ""))
+        return True
 
     # ---------- internal ----------
 

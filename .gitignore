@@ -19,6 +19,9 @@ test/
 
 # CLI/Web 运行产物
 data/local/command-service.log
+data/local/resource-update-status.json
+data/local/resource-update.log
+data/local/resource-update.lock
 .nfs*
 
 .temp/

@@ -15,7 +15,7 @@ async def build_context_from_disk(cfg) -> AppContext:
     data_repo = DataRepository(
         cfg=cfg,
     )
-    await data_repo.startup_prepare(True)
+    await data_repo.startup_prepare(False)
 
     card_service = CardService(cfg)
 

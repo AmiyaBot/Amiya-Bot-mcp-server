@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 
 from src.app.context import AppContext
+from src.app.services.resource_update import RESOURCE_NOT_READY_MESSAGE
 
 from src.adapters.cmd.registery import register_command, command_registry
 
@@ -10,7 +11,8 @@ from src.adapters.cmd.cmd_tools.operator import *
 
 logger = logging.getLogger(__name__)
 
-BUILTIN_COMMANDS = {"help", "exit", "config-path"}
+BUILTIN_COMMANDS = {"help", "exit", "config-path", "resource-update-status", "resource-update"}
+DATA_REQUIRED_COMMANDS = {"resource-version", "op", "skill", "glossary"}
 
 
 @dataclass(slots=True)
@@ -64,6 +66,11 @@ async def execute_registered_command(ctx: AppContext | None, command: str, args:
             ok=False,
             output=f"❌ 未知命令: {normalized_command}\n输入 'help' 查看可用命令",
         )
+
+    if normalized_command in DATA_REQUIRED_COMMANDS:
+        if ctx is None or ctx.data_repository is None or not ctx.data_repository.has_local_resources():
+            return CommandExecutionResult(ok=False, output=RESOURCE_NOT_READY_MESSAGE)
+        await ctx.data_repository.ensure_bundle_fresh_from_disk()
 
     handler = command_registry[normalized_command]
     try:

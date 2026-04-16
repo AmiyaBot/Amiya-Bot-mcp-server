@@ -6,8 +6,15 @@ import logging
 from src.app.bootstrap_disk import build_context_from_disk
 from src.app.config import load_from_disk
 
-from src.adapters.cmd.app import CommandLineInterface, parse_command_line, run_preflight_command_once
+from src.adapters.cmd.app import (
+    CommandLineInterface,
+    DATA_REQUIRED_COMMANDS,
+    RESOURCE_NOT_READY_MESSAGE,
+    parse_command_line,
+    run_preflight_command_once,
+)
 from src.adapters.cmd.web_client import execute_remote_command_once, is_local_service_url, resolve_command_service_url
+from src.app.services.resource_update import is_resource_initialized
 
 logger = logging.getLogger(__name__)
 LOCAL_CONTEXT_COMMANDS = {"resource-version"}
@@ -23,11 +30,15 @@ async def cmd_main(
         cfg = load_from_disk()
 
         if command_parts:
+            command, _ = parse_command_line(" ".join(part for part in command_parts if part).strip())
+            if command in DATA_REQUIRED_COMMANDS and not is_resource_initialized(cfg):
+                print(RESOURCE_NOT_READY_MESSAGE)
+                return 1
+
             builtin_exit_code = await run_preflight_command_once(command_parts)
             if builtin_exit_code is not None:
                 return builtin_exit_code
 
-            command, _ = parse_command_line(" ".join(part for part in command_parts if part).strip())
             base_url = resolve_command_service_url(cfg, explicit_url=command_service_url)
             if command in LOCAL_CONTEXT_COMMANDS and is_local_service_url(base_url):
                 ctx = await build_context_from_disk(cfg)

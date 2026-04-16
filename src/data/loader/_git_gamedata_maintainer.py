@@ -1,7 +1,18 @@
-import shutil, subprocess, zipfile, logging
+import logging
+import shutil
+import subprocess
+import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 
 log = logging.getLogger("asset")
+
+
+@dataclass(frozen=True, slots=True)
+class GameDataUpdateResult:
+    ok: bool
+    result: str
+    message: str
 
 class GitGameDataMaintainer:
     def __init__(self, repo_url: str, base_dir: Path):
@@ -133,7 +144,7 @@ class GitGameDataMaintainer:
             log.exception("解压失败")
             return False
 
-    def update(self) -> bool:
+    def update(self) -> GameDataUpdateResult:
         """
         先比较远端 hash，确定是否需要 pull：
         - 本地没初始化：clone + 解压
@@ -142,12 +153,16 @@ class GitGameDataMaintainer:
         """
         if not self.repo_url:
             log.warning("未配置 GameDataRepo，跳过更新")
-            return False
+            return GameDataUpdateResult(ok=False, result="failed", message="未配置 GameDataRepo，无法更新资源")
 
         # 1) 如果还没 clone（或目录不是 git repo），走原逻辑：clone/pull + 解压
         if not self._is_git_repo():
             ok = self.sync_repo()
-            return ok and self.extract_zip()
+            if not ok:
+                return GameDataUpdateResult(ok=False, result="failed", message="首次拉取资源仓库失败")
+            if not self.extract_zip():
+                return GameDataUpdateResult(ok=False, result="failed", message="首次解压资源包失败")
+            return GameDataUpdateResult(ok=True, result="updated", message="首次资源初始化完成")
 
         # 2) 已有仓库：先对比 hash
         remote_hash = self._remote_head_hash()
@@ -156,13 +171,17 @@ class GitGameDataMaintainer:
         if not remote_hash or not local_hash:
             # 无法获取 hash（网络/权限/仓库损坏等），保守起见走 sync_repo
             log.warning("无法获取 hash（remote=%s local=%s），无法同步", remote_hash, local_hash)
-            return False
+            return GameDataUpdateResult(ok=False, result="failed", message="无法获取资源仓库版本信息")
 
         if remote_hash == local_hash:
             log.info("GameDataRepo 无更新（HEAD=%s），跳过 pull/extract", local_hash)
-            return True  # “不需要则不做事” -> 成功返回
+            return GameDataUpdateResult(ok=True, result="up_to_date", message="资源已是最新版本")
 
         # 3) 有更新才 pull + 解压
         log.info("检测到远端更新：local=%s remote=%s，开始 pull", local_hash, remote_hash)
         ok = self._run_git(["pull"], cwd=self.assets_dir) == 0
-        return ok and self.extract_zip()
+        if not ok:
+            return GameDataUpdateResult(ok=False, result="failed", message="拉取资源仓库更新失败")
+        if not self.extract_zip():
+            return GameDataUpdateResult(ok=False, result="failed", message="解压最新资源包失败")
+        return GameDataUpdateResult(ok=True, result="updated", message="资源更新完成")
