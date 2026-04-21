@@ -28,6 +28,8 @@ class Operator(ABC):
         """干员索引名称（无标点）"""
         self.origin_name: str = ""
         """干员真名（如果有）"""
+        self.origin_names: List[str] = []
+        """干员真名列表（兼容多真名场景）"""
 
         # ---- ??? ----
         self.number: str = ""

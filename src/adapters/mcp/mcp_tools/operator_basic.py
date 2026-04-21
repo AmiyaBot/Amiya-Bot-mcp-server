@@ -9,7 +9,7 @@ from src.app.services.operator_queries import query_operator_basic
 
 logger = logging.getLogger(__name__)
 
-tool_description = """获取干员的基础信息和属性。同时还附加一张包含干员信息和立绘的图片。
+tool_description = """获取干员的基础信息和属性。同时还附加一张干员立绘图片。
 如果可以，请使用中文名称进行查询。
 
 Args:

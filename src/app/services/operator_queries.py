@@ -6,6 +6,7 @@ from pathlib import Path
 
 from src.app.context import AppContext
 from src.app.services.operator_output import build_operator_payload, render_operator_markdown
+from src.app.services.operator_skin_assets import SKIN_CACHE_PATH, resolve_operator_skin_artifact
 from src.domain.models.operator import Operator
 from src.domain.services.operator import search_operator_by_name
 from src.helpers.bundle import get_table
@@ -13,6 +14,7 @@ from src.helpers.card_urls import build_card_url
 from src.helpers.gamedata.search import build_sources, search_source_spec
 
 logger = logging.getLogger(__name__)
+OPERATOR_INFO_CARD_REVISION = "card-v15"
 
 
 @dataclass(slots=True)
@@ -43,13 +45,17 @@ def _dedupe_names(matches) -> list[str]:
     return list(dict.fromkeys(match.matched_text for match in matches))
 
 
-def _resolve_safe_local_artifact_path(context: AppContext, artifact_path: Path) -> str | None:
+def _resolve_safe_local_artifact_path(
+    context: AppContext,
+    artifact_path: Path,
+    cache_root: Path,
+) -> str | None:
     if not context.prefer_local_artifact_path:
         return None
 
     try:
         resolved_artifact = artifact_path.resolve()
-        resolved_cache_root = context.card_service.cache_root.resolve()
+        resolved_cache_root = cache_root.resolve()
         if not resolved_artifact.is_relative_to(resolved_cache_root):
             return None
         return str(resolved_artifact)
@@ -103,12 +109,21 @@ async def query_operator_basic(
 
         bundle = context.data_repository.get_bundle()
         bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
-        payload_key = f"operator:{resolved.name}:{bundle_version}"
+        payload_key = f"operator:{resolved.name}:{bundle_version}:{OPERATOR_INFO_CARD_REVISION}"
 
         image_url = None
         image_path = None
         try:
-            image_artifact = await context.card_service.get(
+            skin_artifact = await resolve_operator_skin_artifact(
+                context,
+                resolved,
+                bundle.tables,
+            )
+            if skin_artifact is not None:
+                result.data["skin_url"] = skin_artifact.to_data_uri()
+                result.data["skin_public_url"] = skin_artifact.url or ""
+
+            card_artifact = await context.card_service.get(
                 template="operator_info",
                 payload_key=payload_key,
                 payload=result,
@@ -122,9 +137,28 @@ async def query_operator_basic(
                 payload_key=payload_key,
                 format="png",
             )
-            image_path = _resolve_safe_local_artifact_path(context, image_artifact.path)
+            image_path = _resolve_safe_local_artifact_path(
+                context,
+                card_artifact.path,
+                context.card_service.cache_root,
+            )
         except Exception as exc:
-            logger.info("生成干员信息图片失败，已降级为文本结果: %s", exc)
+            logger.info("准备干员角色卡失败，已降级为立绘直链或文本结果: %s", exc)
+            try:
+                skin_artifact = await resolve_operator_skin_artifact(
+                    context,
+                    resolved,
+                    bundle.tables,
+                )
+                if skin_artifact is not None:
+                    image_url = skin_artifact.url
+                    image_path = _resolve_safe_local_artifact_path(
+                        context,
+                        skin_artifact.path,
+                        context.cfg.ResourcePath / SKIN_CACHE_PATH,
+                    )
+            except Exception:
+                logger.info("准备干员立绘回退结果失败", exc_info=True)
 
         return QueryExecutionResult(
             data=structured_payload,

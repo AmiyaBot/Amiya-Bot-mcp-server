@@ -7,8 +7,17 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from src.app.card_service import CardService
 from src.app.config import Config
+from src.helpers.card_urls import CHAR_SKIN_MOUNT_PATH, DEFAULT_MOUNT_PATH
+
+
+def _mount_static_dir(app: FastAPI, *, mount_path: str, root: Path, name: str) -> None:
+  root.mkdir(parents=True, exist_ok=True)
+  app.mount(
+    mount_path,
+    StaticFiles(directory=str(root), html=False),
+    name=name,
+  )
 
 
 def register_cardserver_asgi(app: FastAPI, *, cfg: Config) -> None:
@@ -18,13 +27,8 @@ def register_cardserver_asgi(app: FastAPI, *, cfg: Config) -> None:
       GET {mount_path}/{template}/{payload_key}/artifact.html
       ...
     """
-    mount_path = "/cards"
+    card_cache_root: Path = cfg.ResourcePath / "cache" / "cards"
+    skin_cache_root: Path = cfg.ResourcePath / "cache" / "char_skin"
 
-    cache_root: Path = cfg.ResourcePath / "cache" / "cards"
-    cache_root.mkdir(parents=True, exist_ok=True)
-
-    app.mount(
-        mount_path,
-        StaticFiles(directory=str(cache_root), html=False),
-        name="cards",
-    )
+    _mount_static_dir(app, mount_path=DEFAULT_MOUNT_PATH, root=card_cache_root, name="cards")
+    _mount_static_dir(app, mount_path=CHAR_SKIN_MOUNT_PATH, root=skin_cache_root, name="char-skins")

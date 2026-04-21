@@ -9,6 +9,7 @@ from src.app.config import Config
 
 
 DEFAULT_MOUNT_PATH = "/cards"
+CHAR_SKIN_MOUNT_PATH = "/char-skins"
 
 
 def build_card_url(
@@ -33,6 +34,20 @@ def build_card_url(
         base.rstrip("/")
         + f"{mount_path}/{template}/{payload_key_url}/artifact.{format}"
     )
+
+
+def build_static_url(
+    *,
+    cfg: Config,
+    relative_path: str,
+    mount_path: str,
+) -> str:
+    base = getattr(cfg, "BaseUrl", None)
+    if not base:
+        raise RuntimeError("Config.BaseUrl is required to build static asset URL")
+
+    relative_url = quote(relative_path.strip("/"), safe="/")
+    return base.rstrip("/") + f"{mount_path}/{relative_url}"
 
 
 def build_card_url_from_request(

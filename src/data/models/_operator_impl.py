@@ -47,6 +47,7 @@ class OperatorImpl(Operator):
         self.wiki_name = self.name
         self.index_name = remove_punctuation(self.name)
         self.origin_name = "未知"
+        self.origin_names = []
 
         # classes
         prof = data.get("profession")
@@ -178,26 +179,35 @@ class OperatorImpl(Operator):
             self.drawer = "、".join(drawer_list)
 
     def _init_origin(self, character_table: dict, data, tables):
+        candidates = []
+
+        def add_candidate(raw_name):
+            candidate = str(raw_name or "").replace(".", "·").strip(" ，。；：\n\t")
+            if not candidate or candidate in {"未知", self.name}:
+                return
+            candidates.append(candidate)
+
         sp_char_groups = get_table(tables, "char_meta_table", source="gamedata", default={}).get("spCharGroups") or {}
         for oid, group in sp_char_groups.items():
             if oid != self.id and self.id in (group or []):
-                self.origin_name = character_table.get(oid, {}).get("name", "未知")
-                return
+                add_candidate(character_table.get(oid, {}).get("name", "未知"))
 
         handbook_text = "\n".join(text for _, text in self._iter_handbook_story_blocks(tables))
-        name_candidates = []
         patterns = [
-            r"全名(?P<name>[一-龥·\.]{2,30})",
-            fr"(?P<name>[一-龥·\.]{{2,30}})[——\-\s]*也就是.*?{re.escape(self.name)}",
+            (r"全名(?P<name>[一-龥·\.]{2,30})", 2),
+            (fr"(?P<name>[一-龥·\.]{{2,30}})[——\-\s]*也就是.*?{re.escape(self.name)}", 3),
         ]
-        for pattern in patterns:
+        for pattern, minimum_name_length in patterns:
             for match in re.finditer(pattern, handbook_text, re.S):
-                candidate = match.group("name").replace(".", "·").strip(" ，。；：\n\t")
-                if candidate and candidate != self.name:
-                    name_candidates.append(candidate)
+                candidate = str(match.group("name") or "").replace(".", "·").strip(" ，。；：\n\t")
+                candidate_length = len(candidate.replace("·", ""))
+                if candidate_length < minimum_name_length:
+                    continue
+                add_candidate(candidate)
 
-        unique_names = list(dict.fromkeys(name_candidates))
-        if len(unique_names) == 1:
+        unique_names = list(dict.fromkeys(candidates))
+        self.origin_names = unique_names
+        if unique_names:
             self.origin_name = unique_names[0]
 
     # ------------------ domain 接口实现（先做可用版，复杂聚合可逐步补齐） ------------------

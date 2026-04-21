@@ -1,5 +1,7 @@
 from __future__ import annotations
+import base64
 import logging
+from pathlib import Path
 import re
 
 from src.helpers.gamedata.search import build_sources, search_source_spec
@@ -12,6 +14,20 @@ from src.domain.types import QueryResult
 from src.helpers.glossary import mark_glossary_used_terms
 
 logger = logging.getLogger(__name__)
+SKILL_ASSET_PATH = Path("assets") / "skill"
+BUILDING_SKILL_ASSET_PATH = Path("assets") / "building_skill"
+MODULE_ATTR_KEY_MAP = {
+    "max_hp": "maxHp",
+    "atk": "atk",
+    "def": "def",
+    "defense": "def",
+    "magic_resistance": "magicResistance",
+    "attack_speed": "attackSpeed",
+    "base_attack_time": "baseAttackTime",
+    "block_cnt": "blockCnt",
+    "cost": "cost",
+    "respawn_time": "respawnTime",
+}
 
 class OperatorNotFoundError(ValueError):
     pass
@@ -113,6 +129,110 @@ def build_trust_attr(op) -> dict:
     }
 
 
+def _normalize_attr_value(value: object) -> int | float | object:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return value
+
+    if number.is_integer():
+        return int(number)
+    return number
+
+
+def build_module_attr(op) -> dict:
+    modules = getattr(op, "modules", None) or []
+    for module in reversed(modules):
+        phases = (getattr(module, "battle_detail", {}) or {}).get("phases") or []
+        if not phases:
+            continue
+
+        attr_board = (phases[-1] or {}).get("attributeBlackboard") or []
+        result: dict[str, int | float | object] = {}
+        for item in attr_board:
+            raw_key = str(item.get("key") or "").strip()
+            target_key = MODULE_ATTR_KEY_MAP.get(raw_key)
+            if not target_key:
+                continue
+
+            value = _normalize_attr_value(item.get("value"))
+            if value in (None, ""):
+                continue
+
+            existing = result.get(target_key)
+            if isinstance(existing, (int, float)) and isinstance(value, (int, float)):
+                result[target_key] = _normalize_attr_value(existing + value)
+            else:
+                result[target_key] = value
+
+        if result:
+            return result
+
+    return {}
+
+
+def _build_image_data_uri(path: Path) -> str | None:
+    suffix = path.suffix.lower()
+    if suffix == ".png":
+        mime = "image/png"
+    elif suffix == ".webp":
+        mime = "image/webp"
+    elif suffix in {".jpg", ".jpeg"}:
+        mime = "image/jpeg"
+    else:
+        return None
+
+    try:
+        payload = base64.b64encode(path.read_bytes()).decode("ascii")
+    except OSError:
+        return None
+    return f"data:{mime};base64,{payload}"
+
+
+def build_skill_icon_data(op, resource_root: Path) -> dict[str, str]:
+    asset_root = resource_root / SKILL_ASSET_PATH
+    result: dict[str, str] = {}
+
+    for skill in op.skills or []:
+        icon_name = str(getattr(skill, "icon", "") or "").strip()
+        if not icon_name or icon_name in result:
+            continue
+
+        asset_path = asset_root / icon_name
+        if not asset_path.suffix:
+            asset_path = asset_path.with_suffix(".png")
+        if not asset_path.exists():
+            continue
+
+        data_uri = _build_image_data_uri(asset_path)
+        if data_uri:
+            result[icon_name] = data_uri
+
+    return result
+
+
+def build_building_skill_icon_data(items: list[dict], resource_root: Path) -> dict[str, str]:
+    asset_root = resource_root / BUILDING_SKILL_ASSET_PATH
+    result: dict[str, str] = {}
+
+    for item in items:
+        icon_name = str(item.get("bs_icon") or "").strip()
+        if not icon_name or icon_name in result:
+            continue
+
+        asset_path = asset_root / icon_name
+        if not asset_path.suffix:
+            asset_path = asset_path.with_suffix(".png")
+        if not asset_path.exists():
+            continue
+
+        data_uri = _build_image_data_uri(asset_path)
+        if data_uri:
+            result[icon_name] = data_uri
+
+    return result
+
+
 def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
 
     search_sources = build_sources(ctx.data_repository.get_bundle(), source_key=["name"])
@@ -137,6 +257,7 @@ def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
     CLASSICON = get_table(bundle.tables, "classes_icons", source="local")
     SP_TYPE_NAME = get_table(bundle.tables, "sp_type", source="local")
     SKILL_TYPE_NAME = get_table(bundle.tables, "skill_type", source="local")
+    building_skills = build_building_skills(op, bundle.tables)
     result = QueryResult(
         type="operator_profile",
         key=op.name,
@@ -146,14 +267,16 @@ def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
             "skin_url": "",  # 你自己拼
             "base_attr": build_base_attr(op),
             "trust_attr": build_trust_attr(op),
-            "module_attr": {},  # 先空
+            "module_attr": build_module_attr(op),
             "op_range_html": None,  # 后面补
             "skill_range_html": {},
+            "skill_icon_data": build_skill_icon_data(op, ctx.cfg.ResourcePath),
+            "building_skill_icon_data": build_building_skill_icon_data(building_skills, ctx.cfg.ResourcePath),
             "classes_icons": CLASSICON,
             "sp_type_name": SP_TYPE_NAME,
             "skill_type_name": SKILL_TYPE_NAME,
             "talents_list": op.talents(),
-            "building_skills": build_building_skills(op, bundle.tables),
+            "building_skills": building_skills,
             "potential_list": build_potential_list(op, bundle.tables),
         }
     )

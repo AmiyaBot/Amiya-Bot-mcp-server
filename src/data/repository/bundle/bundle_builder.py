@@ -42,6 +42,7 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
     for name, folder in [
         ("character_table", "excel"),
         ("uniequip_table", "excel"),
+        ("battle_equip_table", "excel"),
         ("handbook_team_table", "excel"),
         ("handbook_info_table", "excel"),
         ("item_table", "excel"),

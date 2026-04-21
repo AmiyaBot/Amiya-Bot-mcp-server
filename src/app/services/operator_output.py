@@ -30,7 +30,7 @@ def build_operator_payload(result: QueryResult) -> dict[str, Any]:
             "中文名": op.name,
             "英文名": op.en_name,
             "编号": op.number,
-            "真名": op.origin_name,
+            "真名": _build_origin_name_payload(op),
         },
         "分类": {
             "稀有度": {
@@ -52,6 +52,7 @@ def build_operator_payload(result: QueryResult) -> dict[str, Any]:
         "属性": _build_attribute_payload(
             base_attr=data.get("base_attr") or {},
             trust_attr=data.get("trust_attr") or {},
+            module_attr=data.get("module_attr") or {},
         ),
         "基础档案": {
             "性别": op.sex,
@@ -121,8 +122,9 @@ def render_operator_markdown(
         summary_items.append(("状态标记", status_flags))
 
     for label, value in summary_items:
-        if value is not None and value != "":
-            lines.append(f"- {label}：{value}")
+        rendered = _render_display_value(value)
+        if rendered is not None and rendered != "":
+            lines.append(f"- {label}：{rendered}")
 
     attack_range = category.get("攻击范围")
     if attack_range:
@@ -134,21 +136,42 @@ def render_operator_markdown(
         lines.append("```")
 
     if attributes:
+        has_module_column = any("模组加成" in item for item in attributes.values())
         lines.append("")
         lines.append("## 属性")
         lines.append("")
-        lines.append("| 项目 | 精英满级 | 满信赖加成 | 满信赖面板 |")
-        lines.append("| --- | ---: | ---: | ---: |")
-        for label, item in attributes.items():
-            unit = item.get("单位")
-            lines.append(
-                "| {label} | {base} | {trust} | {final} |".format(
-                    label=label,
-                    base=_format_metric(item.get("精英满级"), unit),
-                    trust=_format_metric(item.get("满信赖加成"), unit),
-                    final=_format_metric(item.get("满信赖面板"), unit),
+        if has_module_column:
+            lines.append("| 项目 | 精英满级 | 满信赖加成 | 模组加成 | 最终面板 |")
+            lines.append("| --- | ---: | ---: | ---: | ---: |")
+            for label, item in attributes.items():
+                unit = item.get("单位")
+                final_value = item.get("最终面板")
+                if final_value is None:
+                    final_value = item.get("满信赖面板")
+                if final_value is None:
+                    final_value = item.get("精英满级")
+                lines.append(
+                    "| {label} | {base} | {trust} | {module} | {final} |".format(
+                        label=label,
+                        base=_format_metric(item.get("精英满级"), unit),
+                        trust=_format_metric(item.get("满信赖加成"), unit),
+                        module=_format_metric(item.get("模组加成"), unit),
+                        final=_format_metric(final_value, unit),
+                    )
                 )
-            )
+        else:
+            lines.append("| 项目 | 精英满级 | 满信赖加成 | 满信赖面板 |")
+            lines.append("| --- | ---: | ---: | ---: |")
+            for label, item in attributes.items():
+                unit = item.get("单位")
+                lines.append(
+                    "| {label} | {base} | {trust} | {final} |".format(
+                        label=label,
+                        base=_format_metric(item.get("精英满级"), unit),
+                        trust=_format_metric(item.get("满信赖加成"), unit),
+                        final=_format_metric(item.get("满信赖面板"), unit),
+                    )
+                )
 
     cv_payload = archive.get("声优") or {}
     if cv_payload:
@@ -246,7 +269,11 @@ def render_operator_markdown(
     return "\n".join(lines).strip()
 
 
-def _build_attribute_payload(base_attr: dict[str, Any], trust_attr: dict[str, Any]) -> dict[str, Any]:
+def _build_attribute_payload(
+    base_attr: dict[str, Any],
+    trust_attr: dict[str, Any],
+    module_attr: dict[str, Any],
+) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for raw_key, label, unit in ATTRIBUTE_SPECS:
         base_value = base_attr.get(raw_key)
@@ -256,12 +283,33 @@ def _build_attribute_payload(base_attr: dict[str, Any], trust_attr: dict[str, An
         item: dict[str, Any] = {"精英满级": base_value}
         if unit:
             item["单位"] = unit
+        trust_value = trust_attr.get(raw_key, 0) if raw_key in TRUST_ATTRIBUTE_KEYS else None
         if raw_key in TRUST_ATTRIBUTE_KEYS:
-            trust_value = trust_attr.get(raw_key, 0)
             item["满信赖加成"] = trust_value
             item["满信赖面板"] = (base_value or 0) + (trust_value or 0)
+        module_value = module_attr.get(raw_key, 0)
+        if module_value:
+            item["模组加成"] = module_value
+            item["最终面板"] = (base_value or 0) + (trust_value or 0) + (module_value or 0)
         result[label] = item
     return result
+
+
+def _build_origin_name_payload(op: Any) -> str | list[str] | None:
+    names = [
+        str(item).strip()
+        for item in (getattr(op, "origin_names", None) or [])
+        if str(item).strip() and str(item).strip() != "未知"
+    ]
+    if len(names) > 1:
+        return names
+    if names:
+        return names[0]
+
+    origin_name = str(getattr(op, "origin_name", "") or "").strip()
+    if origin_name and origin_name != "未知":
+        return origin_name
+    return None
 
 
 def _build_cv_payload(cv: dict[str, Any] | None) -> dict[str, list[str]]:
@@ -411,6 +459,18 @@ def _join_values(*values: Any, separator: str = " ") -> str | None:
     if not items:
         return None
     return separator.join(items)
+
+
+def _render_display_value(value: Any) -> str | None:
+    if isinstance(value, list):
+        items = [str(item).strip() for item in value if str(item).strip()]
+        if not items:
+            return None
+        return "、".join(items)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _dedupe_text(value: Any, baseline: Any) -> str | None:
