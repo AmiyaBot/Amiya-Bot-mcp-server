@@ -14,7 +14,7 @@ from src.helpers.card_urls import build_card_url
 from src.helpers.gamedata.search import build_sources, search_source_spec
 
 logger = logging.getLogger(__name__)
-OPERATOR_INFO_CARD_REVISION = "card-v15"
+OPERATOR_INFO_CARD_REVISION = "card-v19"
 
 
 @dataclass(slots=True)

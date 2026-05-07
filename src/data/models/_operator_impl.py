@@ -106,7 +106,7 @@ class OperatorImpl(Operator):
 
     def _init_tags(self, data, tables):
         tags = [self.classes, self.type]
-        hs = get_table(tables, "rarity_tags", source="local", default={})
+        hs = get_table(tables, "high_star", source="local", default={})
         if str(self.rarity) in hs:
             tags.append(hs[str(self.rarity)])
         self.tags = (data.get("tagList") or []) + tags

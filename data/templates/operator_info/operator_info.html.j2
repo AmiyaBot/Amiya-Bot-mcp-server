@@ -8,300 +8,200 @@
     @font-face {
       font-family: "Harmony";
       src: url("file:///home/coder/AmiyabotMCPServer/.temp/example/template/HarmonyOS_Sans_SC.ttf") format("truetype");
+      font-weight: normal;
+      font-style: normal;
       font-display: swap;
     }
 
-    :root {
-      --panel-bg: rgba(255, 255, 255, 0.56);
-      --dark-panel: rgba(47, 47, 47, 0.84);
-      --dark-label: #050505;
-      --text-main: #111;
-      --text-light: #f7f7f7;
-      --accent-blue: #0f8fff;
-      --accent-orange: #ff7b1f;
-      --accent-green: #98c043;
-      --accent-red: #ec7e4c;
-    }
-
     * {
+      font-size: 18px;
       box-sizing: border-box;
       font-family: "Harmony", serif !important;
     }
 
-    html,
     body {
       margin: 0;
-      padding: 0;
-      background: #d9d9d9;
-      color: var(--text-main);
-    }
-
-    body {
-      min-width: 1600px;
     }
 
     #template {
       width: 1600px;
       height: 895px;
+      background: {% if template_bg_data %}url("{{ template_bg_data }}"){% else %}url("file:///home/coder/AmiyabotMCPServer/.temp/example/template/img/operator_bg.png"){% endif %} center / cover no-repeat;
       overflow: hidden;
       position: relative;
-      background:
-        linear-gradient(146deg, rgba(255,255,255,0.92) 0 37%, transparent 37% 100%),
-        linear-gradient(160deg, transparent 0 45%, rgba(58,58,58,0.16) 45% 62%, transparent 62% 100%),
-        linear-gradient(192deg, transparent 0 26%, rgba(72,72,72,0.18) 26% 42%, transparent 42% 100%),
-        linear-gradient(120deg, transparent 0 56%, rgba(255,255,255,0.72) 56% 66%, transparent 66% 100%),
-        linear-gradient(0deg, #d7d7d7, #ededed 44%, #e6e6e6 100%);
     }
 
-    #template::before,
-    #template::after {
-      content: "";
-      position: absolute;
-      pointer-events: none;
-    }
-
-    #template::before {
-      width: 740px;
-      height: 740px;
-      left: 345px;
-      top: 116px;
-      background:
-        linear-gradient(115deg, rgba(0,0,0,0.02), rgba(255,255,255,0.2)),
-        radial-gradient(circle at 50% 30%, rgba(255,255,255,0.24), transparent 58%);
-      border-radius: 18px;
-      transform: skewX(-10deg);
-      opacity: 0.7;
-    }
-
-    #template::after {
-      width: 410px;
-      height: 20px;
-      left: 420px;
-      bottom: 122px;
-      background: rgba(255, 255, 255, 0.38);
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
-    }
-
-    .page {
-      position: relative;
-      z-index: 1;
-      display: grid;
-      grid-template-columns: 1fr 0.9fr;
-      gap: 26px;
-      height: 895px;
+    .background {
+      width: 100%;
       padding: 10px;
-      overflow: hidden;
-    }
-
-    .left,
-    .right {
+      background: rgb(255 255 255 / 30%) bottom 25px left 25% / auto calc(100% - 200px) no-repeat;
       display: flex;
-      flex-direction: column;
       justify-content: space-between;
-      height: 100%;
-      min-height: 0;
     }
 
     .left {
-      min-height: 0;
+      width: 50%;
+      min-height: 800px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .right {
+      width: 47%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
 
     .operator-attr {
       display: flex;
       flex-wrap: wrap;
-      gap: 5px 0;
-      margin-bottom: 4px;
-      font-size: 18px;
+      font-size: 20px;
     }
 
     .operator-attr .attr {
       width: calc(100% / 3);
-      min-height: 34px;
-      padding-right: 6px;
-      background: rgba(236, 236, 236, 0.78);
+      margin-bottom: 5px;
+      background: rgb(236 236 236 / 80%);
       display: flex;
       align-items: center;
+    }
+
+    .operator-attr .attr > div {
+      width: calc(100% - 110px);
+    }
+
+    .operator-attr .attr span.a {
+      color: #0069ff;
+    }
+
+    .operator-attr .attr span.b {
+      color: #ff641e;
     }
 
     .operator-attr .attr::before {
       content: attr(title);
-      width: 102px;
-      min-height: 34px;
+      width: 100px;
       padding: 2px 10px;
       margin-right: 10px;
-      display: inline-flex;
-      align-items: center;
-      background: var(--dark-label);
-      color: var(--text-light);
-      line-height: 1.2;
+      display: inline-block;
+      background: #000;
+      color: #fff;
     }
 
-    .operator-attr .attr > div {
-      width: calc(100% - 112px);
-      line-height: 1.2;
-      word-break: break-all;
-    }
-
-    .operator-attr span.a {
-      color: var(--accent-blue);
-    }
-
-    .operator-attr span.b {
-      color: var(--accent-orange);
-    }
-
-    .section-title {
-      display: inline-flex;
-      align-items: center;
-      min-height: 24px;
-      padding: 2px 12px;
-      margin-bottom: 3px;
-      background: var(--dark-label);
-      color: var(--text-light);
-      font-size: 17px;
-      line-height: 1.2;
-    }
-
-    .title-wide {
-      min-width: 120px;
-    }
-
-    .detail-panel {
-      padding: 3px 10px;
-      background: var(--panel-bg);
-      line-height: 1.28;
-    }
-
-    .detail-panel + .detail-panel {
-      margin-top: 2px;
-    }
-
-    .cv-table {
-      border-collapse: collapse;
-      width: 100%;
-      background: transparent;
-    }
-
-    .cv-table td {
-      padding: 0 10px 0 0;
-      vertical-align: top;
-    }
-
-    .cv-table td:first-child {
-      width: 132px;
-      white-space: nowrap;
-    }
-
-    .plain-info {
-      padding: 0;
-      background: transparent;
-      line-height: 1.28;
-    }
-
-    .potential-list {
+    .operator-name {
+      margin-top: 30px;
       display: flex;
       flex-direction: column;
-      gap: 2px;
     }
 
-    .potential {
+    .operator-name .name {
+      border-radius: 2px;
+      background: rgb(255 255 255 / 50%);
+      padding: 0 10px;
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 0;
-      background: transparent;
+      line-height: 1;
     }
 
-    .potential-badge {
-      width: 24px;
-      height: 24px;
-      border: 2px solid rgba(0,0,0,0.8);
-      display: inline-flex;
+    .operator-name .name > span {
+      color: #fff;
+      background: #000;
+      padding: 5px 10px;
+      border-radius: 4px;
+      margin-right: 10px;
+    }
+
+    .class-info {
+      display: flex;
+      height: 60px;
+    }
+
+    .class-icon-box {
+      width: 60px;
+      padding: 5px;
+      background: #000;
+      display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
-      font-weight: 700;
-      flex: none;
-    }
-
-    .identity {
-      position: relative;
-      margin-top: 8px;
-      min-height: 352px;
-    }
-
-    .identity::before {
-      content: "";
-      position: absolute;
-      inset: 36px 44px 54px 92px;
-      border-left: 1px solid rgba(0,0,0,0.06);
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.22)),
-        radial-gradient(circle at 50% 10%, rgba(255,255,255,0.32), transparent 58%);
-      border-radius: 12px;
-      transform: skewX(-7deg);
-      opacity: 0.95;
-    }
-
-    .identity::after {
-      content: "{{ op.en_name or op.name or '' }}";
-      position: absolute;
-      left: 110px;
-      right: 90px;
-      top: 112px;
+      color: #fff;
       text-align: center;
-      font-size: 72px;
-      letter-spacing: 0.08em;
-      color: rgba(0,0,0,0.055);
-      font-style: italic;
-      text-transform: uppercase;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      line-height: 1.1;
+      font-size: 14px;
     }
 
-    .operator-portrait {
-      position: absolute;
-      left: 140px;
-      bottom: 10px;
-      height: 760px;
-      width: auto;
-      max-width: 700px;
+    .class-icon-box img {
+      width: 100%;
+      height: 100%;
       object-fit: contain;
-      object-position: center bottom;
-      filter: drop-shadow(0 28px 40px rgba(0, 0, 0, 0.24));
-      opacity: 0.98;
-      z-index: 0;
-      pointer-events: none;
+      display: block;
     }
 
-    .range-panel {
-      display: flex;
-      align-items: flex-end;
-      gap: 20px;
-      position: relative;
-      z-index: 1;
-      margin-bottom: 8px;
-      min-height: 58px;
-    }
-
-    .range-grid {
+    .rarity {
       display: flex;
       flex-direction: column;
-      gap: 2px;
-      margin: 0;
-      padding: 0;
+      justify-content: center;
+      padding-left: 10px;
+      background: rgb(255 255 255 / 50%);
+    }
+
+    .tags {
+      margin: 10px 0;
+    }
+
+    .tags span {
+      padding: 5px 10px;
+      margin-right: 5px;
+      background: #000;
+      color: #fff;
+      border-radius: 4px;
+    }
+
+    .trait {
+      font-size: 16px;
+      padding: 10px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      background: rgb(255 255 255 / 50%);
+    }
+
+    .skill-item {
+      border-radius: 2px;
+      padding: 15px 5px;
+      background: rgb(48 48 48 / 75%);
+      display: flex;
+      color: #fff;
+    }
+
+    .skill-item:not(:last-child) {
+      margin-bottom: 5px;
+    }
+
+    .skill-range {
+      width: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .skill-desc {
+      font-size: 16px !important;
+    }
+
+    .mark {
+      color: #00b3ff;
     }
 
     .block-group {
       display: flex;
-      gap: 2px;
-      min-height: 16px;
     }
 
     .block {
-      width: 16px;
-      height: 16px;
+      width: 15px;
+      height: 15px;
+      margin: 1px;
     }
 
     .block.r {
@@ -313,351 +213,96 @@
       background: #000;
     }
 
-    .range-panel .block {
-      width: 16px;
-      height: 16px;
+    .range .block.r {
+      border: 2px solid #000;
     }
 
-    .range-panel .block.r {
-      border-width: 2px;
+    .title {
+      color: #fff;
+      background: #000;
+      padding: 2px 10px;
+      margin-bottom: 5px;
     }
 
-    .class-block {
+    .exInfo {
       display: flex;
-      align-items: stretch;
-      gap: 10px;
-      margin-bottom: 6px;
-      position: relative;
-      z-index: 1;
+      align-items: flex-start;
+      padding: 2px 10px;
+      background: rgb(255 255 255 / 50%);
     }
 
-    .class-mark {
-      width: 74px;
-      height: 74px;
-      padding: 6px;
-      border: 5px solid #000;
+    .exInfo.bs > div {
+      padding-top: 5px;
+    }
+
+    .exInfo:last-child {
+      margin-bottom: 10px;
+    }
+
+    .potential {
       display: flex;
       align-items: center;
-      justify-content: center;
-      background: rgba(255,255,255,0.88);
-      color: #111;
-      font-size: 20px;
-      font-weight: 700;
-      line-height: 1.15;
-      text-align: center;
-      flex: none;
     }
 
-    .class-meta {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 4px;
-      min-width: 0;
-    }
-
-    .rarity-stars {
-      display: flex;
-      gap: 1px;
-      font-size: 26px;
-      line-height: 1;
-    }
-
-    .rarity-stars i {
-      font-style: normal;
-    }
-
-    .class-line {
-      font-size: 17px;
-      line-height: 1.2;
-    }
-
-    .tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin: 2px 0 6px 0;
-      position: relative;
-      z-index: 1;
-    }
-
-    .tags span {
-      padding: 4px 10px;
-      border-radius: 4px;
-      background: #000;
+    .potential-icon {
+      width: 25px;
+      height: 25px;
+      margin-right: 10px;
+      background: #111;
       color: #fff;
-      font-size: 15px;
-      line-height: 1;
-      white-space: nowrap;
-    }
-
-    .trait {
-      position: relative;
-      z-index: 1;
-      padding: 8px 10px;
-      margin-bottom: 6px;
-      background: rgba(255,255,255,0.58);
-      font-size: 15px;
-      line-height: 1.35;
-    }
-
-    .operator-name {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      align-items: flex-start;
-    }
-
-    .operator-name .name-main,
-    .operator-name .name-sub {
       display: inline-flex;
       align-items: center;
-      min-height: 48px;
-      padding: 0 14px;
-      background: rgba(255,255,255,0.62);
-      backdrop-filter: blur(1px);
-    }
-
-    .operator-name .name-main {
-      font-size: 50px;
+      justify-content: center;
+      font-size: 15px;
       line-height: 1;
-    }
-
-    .operator-name .name-sub {
-      min-height: 42px;
-      font-size: 26px;
-      line-height: 1;
-    }
-
-    .operator-name .name-sub span {
-      padding: 4px 10px;
-      margin-right: 10px;
-      border-radius: 4px;
-      background: #000;
-      color: #fff;
-      font-size: 20px;
-    }
-
-    .right-top {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .impression-text {
-      display: block;
-      margin-top: 0;
-      font-style: italic;
-    }
-
-    .talent-row,
-    .building-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 2px 8px;
-      background: rgba(255,255,255,0.5);
-      font-size: 14px;
-    }
-
-    .talent-row + .talent-row,
-    .building-row + .building-row {
-      margin-top: 1px;
-    }
-
-    .talent-name {
-      width: 110px;
-      flex: none;
-      line-height: 1.3;
-    }
-
-    .talent-desc,
-    .building-desc {
-      flex: 1;
-      line-height: 1.3;
-    }
-
-    .building-meta {
-      width: 136px;
-      flex: none;
-      line-height: 1.3;
-    }
-
-    .building-icon-frame {
-      width: 44px;
-      height: 44px;
-      border-radius: 8px;
-      overflow: hidden;
-      background:
-        linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0.05)),
-        linear-gradient(135deg, rgba(76,84,99,0.96), rgba(34,38,48,0.98));
-      box-shadow:
-        inset 0 0 0 1px rgba(255,255,255,0.16),
-        0 6px 14px rgba(0,0,0,0.18);
-      display: flex;
-      align-items: center;
-      justify-content: center;
       flex: none;
     }
 
-    .building-icon-frame img {
-      width: 100%;
-      height: 100%;
-      display: block;
-      object-fit: cover;
-    }
-
-    .building-icon-fallback {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.2);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
-      display: block;
-    }
-
-    .skills {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      margin-top: 4px;
-    }
-
-    .skill-item {
-      display: grid;
-      grid-template-columns: 104px 1fr 110px;
-      gap: 8px;
-      align-items: stretch;
-      padding: 7px 6px;
-      background: var(--dark-panel);
-      color: var(--text-light);
-      border-radius: 2px;
-    }
-
-    .skill-side {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      text-align: center;
-    }
-
-    .skill-icon-frame {
-      width: 64px;
-      height: 64px;
-      border-radius: 8px;
-      overflow: hidden;
-      background:
-        linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04)),
-        linear-gradient(135deg, rgba(255,86,86,0.92), rgba(193,22,22,0.96));
-      box-shadow:
-        inset 0 0 0 2px rgba(255,255,255,0.14),
-        0 10px 22px rgba(0,0,0,0.24);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .bs-icon {
+      width: 30px;
+      height: 30px;
+      margin: 0 5px;
+      background: center / 100% no-repeat;
       flex: none;
     }
 
-    .skill-icon-frame img {
-      width: 100%;
-      height: 100%;
-      display: block;
-      object-fit: cover;
+    .cv-table {
+      border-collapse: collapse;
     }
 
-    .skill-icon-fallback {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.18);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14);
-      display: block;
-    }
-
-    .skill-name {
-      font-size: 14px;
-      line-height: 1.2;
-    }
-
-    .skill-main {
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
+    .cv-table td {
+      vertical-align: top;
+      padding: 0 8px 0 0;
     }
 
     .skill-type {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
       margin-bottom: 5px;
-      font-size: 13px;
+      flex-wrap: wrap;
     }
 
     .skill-type > div {
-      padding: 2px 6px;
-      border-radius: 4px;
+      margin-right: 5px;
       background: #737373;
-      line-height: 1;
+      padding: 3px 8px;
+      border-radius: 4px;
     }
 
     .skill-type > .tINCREASE_WITH_TIME,
     .skill-type > .t1 {
-      background: var(--accent-green) !important;
+      background: #98c043 !important;
     }
 
     .skill-type > .tINCREASE_WHEN_ATTACK,
     .skill-type > .tINCREASE_WHEN_TAKEN_DAMAGE,
     .skill-type > .t2,
     .skill-type > .t4 {
-      background: var(--accent-red) !important;
-    }
-
-    .skill-desc {
-      font-size: 13px;
-      line-height: 1.26;
-      color: rgba(255,255,255,0.98);
-    }
-
-    .skill-range {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      padding-right: 4px;
-    }
-
-    .skill-range .range-grid {
-      align-items: flex-end;
-    }
-
-    .skill-range .block {
-      width: 11px;
-      height: 11px;
-    }
-
-    .skill-range .block.r {
-      border-color: rgba(255, 255, 255, 0.9);
-      background: rgba(255, 255, 255, 0.94);
-    }
-
-    .skill-range .block.s {
-      background: rgba(255, 255, 255, 0.94);
-    }
-
-    .mark {
-      color: #1db1ff;
+      background: #ec7e4c !important;
     }
   </style>
 </head>
 <body>
 <div id="template">
-  {% if skin_url %}
-    <img class="operator-portrait" src="{{ skin_url }}" alt="{{ op.name }}立绘">
-  {% endif %}
-
   {% macro render_attr(key, suffix="") -%}
     {% set base = base_attr.get(key, 0) %}
     {% set trust = trust_attr.get(key, 0) %}
@@ -669,24 +314,23 @@
   {%- endmacro %}
 
   {% macro render_range_blocks(text) -%}
-    <div class="range-grid">
-      {% for line in (text or "").splitlines() %}
-        <div class="block-group">
-          {% for char in line %}
-            {% if char == "□" %}
-              <div class="block r"></div>
-            {% elif char == "■" %}
-              <div class="block s"></div>
-            {% else %}
-              <div class="block"></div>
-            {% endif %}
-          {% endfor %}
-        </div>
-      {% endfor %}
-    </div>
+    {% for line in (text or "").splitlines() %}
+      <div class="block-group">
+        {% for char in line %}
+          {% if char == "□" %}
+            <div class="block r"></div>
+          {% elif char == "■" %}
+            <div class="block s"></div>
+          {% else %}
+            <div class="block"></div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endfor %}
   {%- endmacro %}
 
-  <div class="page">
+  {% set real_names = op.origin_names if op.origin_names else ([op.origin_name] if op.origin_name and op.origin_name != "未知" else []) %}
+  <div class="background"{% if skin_url %} style="background-image: url('{{ skin_url }}');"{% endif %}>
     <div class="left">
       <div>
         <div class="operator-attr">
@@ -706,37 +350,31 @@
           <div class="attr" title="画师"><div>{{ op.drawer or "未知" }}</div></div>
           <div class="attr" title="生日"><div>{{ op.birthday or "未知" }}</div></div>
         </div>
-
-        {% if potential_list %}
-          <div>
-            <div class="section-title title-wide">潜能提升</div>
-            <div class="potential-list">
-              {% for item in potential_list %}
-                <div class="potential">
-                  <span class="potential-badge">P{{ item.potential_rank + 1 }}</span>
-                  <span>{{ item.potential_desc }}</span>
-                </div>
-              {% endfor %}
+        <div>
+          <div class="title" style="width: 120px">潜能提升</div>
+          {% for item in potential_list %}
+            <div class="potential">
+              {% if potential_icon_data %}
+                <img class="potential-icon" src="{{ potential_icon_data }}" alt="potential">
+              {% else %}
+                <span class="potential-icon">✦</span>
+              {% endif %}
+              {{ item.potential_desc }}
             </div>
-          </div>
-        {% endif %}
-
-        <div>
-          <div class="section-title title-wide">真名</div>
-          <div class="plain-info">
-            {% set real_names = op.origin_names if op.origin_names else ([op.origin_name] if op.origin_name and op.origin_name != "未知" else []) %}
-            {% if real_names %}
-              {% for name in real_names %}
-                <div>{{ name }}</div>
-              {% endfor %}
-            {% else %}
-              未知
-            {% endif %}
-          </div>
+          {% endfor %}
         </div>
-
         <div>
-          <div class="section-title title-wide">CV</div>
+          <div class="title" style="width: 120px;margin-top: 5px">真名</div>
+          {% if real_names %}
+            {% for name in real_names %}
+              <div>{{ name }}</div>
+            {% endfor %}
+          {% else %}
+            <div>未知</div>
+          {% endif %}
+        </div>
+        <div>
+          <div class="title" style="width: 120px;margin-top: 5px">CV</div>
           {% if op.cv and op.cv|length %}
             <table class="cv-table">
               {% for lang, names in op.cv.items() %}
@@ -747,120 +385,102 @@
               {% endfor %}
             </table>
           {% else %}
-            <div class="plain-info">未知</div>
+            <div>未知</div>
           {% endif %}
         </div>
       </div>
-
-      <div class="identity">
-        <div class="range-panel">
-          {{ render_range_blocks(op.range or "") }}
-        </div>
-
-        <div class="class-block">
-          <div class="class-mark">{{ op.classes or "职业" }}</div>
-          <div class="class-meta">
-            <div class="rarity-stars">{% for _ in range(op.rarity or 0) %}<i>★</i>{% endfor %}</div>
-            <div class="class-line">{{ op.type or "未知" }} · {{ op.classes_sub or "未知" }}</div>
+      <div class="operator-name" style="margin-bottom: 6px">
+        <div class="range" style="margin: 15px 0">{{ render_range_blocks(op.range or "") }}</div>
+        <div class="class-info">
+          <div class="class-icon-box">
+            {% if class_icon_data %}
+              <img src="{{ class_icon_data }}" alt="{{ op.classes or '职业' }}图标">
+            {% else %}
+              {{ op.classes or "职业" }}
+            {% endif %}
+          </div>
+          <div class="rarity">
+            <div style="font-size: 30px;display: flex">{% for _ in range(op.rarity or 0) %}<i style="font-style: normal">★</i>{% endfor %}</div>
+            <div>{{ op.classes or "未知" }} - {{ op.classes_sub or "未知" }}</div>
           </div>
         </div>
-
         <div class="tags">
-          {% if op.is_sp %}<span style="background:#9c27b0;">异格干员</span>{% endif %}
-          {% for t in (op.tags or []) %}<span>{{ t }}</span>{% endfor %}
+          {% if op.is_sp %}<span style="background: #9c27b0">异格干员</span>{% endif %}
+          {% for tag in (op.tags or []) %}<span>{{ tag }}</span>{% endfor %}
         </div>
-
         <div class="trait">{{ (op.operator_trait or "") | safe }}</div>
-
-        <div class="operator-name">
-          <div class="name-main">{{ op.name }}</div>
-          <div class="name-sub"><span>{{ op.number or "-" }}</span>{{ op.en_name or "" }}</div>
+        <div class="name" style="padding-top: 10px; font-size: 50px">{{ op.name }}</div>
+        <div class="name" style="padding-bottom: 10px; font-size: 30px">
+          <span>{{ op.number or "-" }}</span>
+          {{ op.en_name or "" }}
         </div>
       </div>
     </div>
-
     <div class="right">
-      <div class="right-top">
+      <div>
         <div>
-          <div class="section-title">干员印象</div>
-          <div class="detail-panel">{{ op.profile or "无" }}</div>
-          <div class="detail-panel impression-text">「{{ op.impression or "无" }}」</div>
+          <div class="title">干员印象</div>
+          <div class="exInfo">{{ op.profile or "无" }}</div>
+          <i class="exInfo">「{{ op.impression or "无" }}」</i>
         </div>
-
         {% if op.potential_item %}
           <div>
-            <div class="section-title">信物</div>
-            <div class="detail-panel">{{ op.potential_item }}</div>
+            <div class="title">信物</div>
+            <div class="exInfo">{{ op.potential_item }}</div>
           </div>
         {% endif %}
-
-        {% if talents_list %}
-          <div>
-            <div class="section-title">天赋</div>
-            {% for item in talents_list %}
-              <div class="talent-row">
-                <div class="talent-name">{{ item.get("talents_name", "") }}</div>
-                <div class="talent-desc">{{ (item.get("talents_desc", "") or "") | safe }}</div>
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-
-        {% if building_skills %}
-          <div>
-            <div class="section-title">基建技能</div>
-            {% for item in building_skills %}
-              <div class="building-row">
-                <div class="building-meta">精英{{ item.bs_unlocked }} · {{ item.bs_name }}</div>
-                <div class="building-icon-frame">
-                  {% set building_icon = (building_skill_icon_data.get(item.bs_icon or "") if building_skill_icon_data else "") %}
-                  {% if building_icon %}
-                    <img src="{{ building_icon }}" alt="{{ item.bs_name }}图标">
-                  {% else %}
-                    <span class="building-icon-fallback" aria-hidden="true"></span>
-                  {% endif %}
-                </div>
-                <div class="building-desc">{{ item.bs_desc }}</div>
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      </div>
-
-      {% if op.skills and op.skills|length %}
-        <div class="skills">
-          {% for sk in op.skills %}
-            {% set last = (sk.levels[-1] if sk.levels else None) %}
-            {% set skill_icon = (skill_icon_data.get(sk.icon or "") if skill_icon_data else "") %}
-            <div class="skill-item">
-              <div class="skill-side">
-                <div class="skill-icon-frame">
-                  {% if skill_icon %}
-                    <img src="{{ skill_icon }}" alt="{{ sk.name or '' }}图标">
-                  {% else %}
-                    <span class="skill-icon-fallback" aria-hidden="true"></span>
-                  {% endif %}
-                </div>
-                <div class="skill-name">{{ sk.name or "" }}</div>
-              </div>
-
-              <div class="skill-main">
-                {% if last %}
-                  <div class="skill-type">
-                    <div class="t{{ last.sp.sp_type }}">{{ sp_type_name.get(last.sp.sp_type, last.sp.sp_type) }}</div>
-                    <div>{{ skill_type_name.get(last.skill_type, last.skill_type) }}</div>
-                    {% if last.sp.sp_cost %}<div>技力 {{ last.sp.init_sp }}/{{ last.sp.sp_cost }}</div>{% endif %}
-                    {% if last.duration and last.duration > 0 %}<div>持续 {{ last.duration }} 秒</div>{% endif %}
-                  </div>
-                  <div class="skill-desc">{{ (last.description or "") | safe }}</div>
-                {% endif %}
-              </div>
-
-              <div class="skill-range">{% if last %}{{ render_range_blocks(last.range or "") }}{% endif %}</div>
+        <div>
+          <div class="title">天赋</div>
+          {% for item in talents_list %}
+            <div class="exInfo">
+              <div style="width: 120px">{{ item.get("talents_name", "") }}</div>
+              <div style="width: calc(100% - 120px);padding-left: 10px">{{ (item.get("talents_desc", "") or "") | safe }}</div>
             </div>
           {% endfor %}
         </div>
-      {% endif %}
+        <div>
+          <div class="title">基建技能</div>
+          {% for item in building_skills %}
+            {% set building_icon = (building_skill_icon_data.get(item.bs_icon or "") if building_skill_icon_data else "") %}
+            <div class="exInfo bs">
+              <div style="width: 60px">精英{{ item.bs_unlocked }}</div>
+              <div class="bs-icon"{% if building_icon %} style="background-image: url('{{ building_icon }}')"{% endif %}></div>
+              <div style="width: 100px">{{ item.bs_name }}</div>
+              <div style="width: calc(100% - 160px);padding-left: 10px">{{ item.bs_desc }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="skills">
+        {% for sk in op.skills %}
+          {% set last = (sk.levels[-1] if sk.levels else None) %}
+          {% set skill_icon = (skill_icon_data.get(sk.icon or "") if skill_icon_data else "") %}
+          <div class="skill-item">
+            <div style="width: 120px;text-align: center">
+              <div>
+                {% if skill_icon %}
+                  <img style="width: 80px" src="{{ skill_icon }}" alt="{{ sk.name or '' }}图标">
+                {% else %}
+                  <div style="width: 80px;height: 80px;background: #555;margin: 0 auto"></div>
+                {% endif %}
+              </div>
+              <div>{{ sk.name or "" }}</div>
+            </div>
+            <div style="width: calc(100% - 240px);padding: 0 10px">
+              {% if last %}
+                <div class="skill-type">
+                  <div class="t{{ last.sp.sp_type }}">{{ sp_type_name.get(last.sp.sp_type, last.sp.sp_type) }}</div>
+                  <div>{{ skill_type_name.get(last.skill_type, last.skill_type) }}</div>
+                  <div>技力 {{ last.sp.init_sp }}/{{ last.sp.sp_cost }}</div>
+                  {% if last.duration and last.duration > 0 %}<div>持续 {{ last.duration }} 秒</div>{% endif %}
+                </div>
+                <div class="skill-desc">{{ (last.description or "") | safe }}</div>
+              {% endif %}
+            </div>
+            <div class="skill-range">{% if last %}<div>{{ render_range_blocks(last.range or "") }}</div>{% endif %}</div>
+          </div>
+        {% endfor %}
+      </div>
     </div>
   </div>
 </div>

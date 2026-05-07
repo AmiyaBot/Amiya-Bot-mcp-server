@@ -16,6 +16,8 @@ from src.helpers.glossary import mark_glossary_used_terms
 logger = logging.getLogger(__name__)
 SKILL_ASSET_PATH = Path("assets") / "skill"
 BUILDING_SKILL_ASSET_PATH = Path("assets") / "building_skill"
+EXAMPLE_OPERATOR_BG_PATH = Path(".temp") / "example" / "template" / "img" / "operator_bg.png"
+ITEM_ASSET_PATH = Path("assets") / "item"
 MODULE_ATTR_KEY_MAP = {
     "max_hp": "maxHp",
     "atk": "atk",
@@ -27,6 +29,16 @@ MODULE_ATTR_KEY_MAP = {
     "block_cnt": "blockCnt",
     "cost": "cost",
     "respawn_time": "respawnTime",
+}
+CLASS_ICON_ASSET_MAP = {
+    "近卫": "tier6_guard.png",
+    "先锋": "tier6_pioneer.png",
+    "狙击": "tier6_sniper.png",
+    "重装": "tier6_tank.png",
+    "医疗": "tier6_medic.png",
+    "术师": "tier6_caster.png",
+    "辅助": "tier6_supporter.png",
+    "特种": "tier6_special.png",
 }
 
 class OperatorNotFoundError(ValueError):
@@ -233,6 +245,37 @@ def build_building_skill_icon_data(items: list[dict], resource_root: Path) -> di
     return result
 
 
+def build_operator_template_bg_data(project_root: Path) -> str | None:
+    return _build_image_data_uri(project_root / EXAMPLE_OPERATOR_BG_PATH)
+
+
+def build_operator_class_icon_data(op, resource_root: Path) -> str | None:
+        asset_name = CLASS_ICON_ASSET_MAP.get(getattr(op, "classes", "") or "")
+        if not asset_name:
+                return None
+        asset_path = resource_root / ITEM_ASSET_PATH / asset_name
+        if not asset_path.exists():
+                return None
+        return _build_image_data_uri(asset_path)
+
+
+def build_potential_icon_data() -> str:
+        svg = """
+<svg xmlns='http://www.w3.org/2000/svg' width='25' height='25' viewBox='0 0 25 25'>
+    <defs>
+        <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#edf7ff'/>
+            <stop offset='100%' stop-color='#7db7ff'/>
+        </linearGradient>
+    </defs>
+    <path d='M12.5 1.5l2.2 6 6.3.5-4.8 4.1 1.5 6.2-5.2-3.3-5.2 3.3 1.5-6.2-4.8-4.1 6.3-.5z' fill='url(#g)' stroke='#ffffff' stroke-width='1'/>
+    <path d='M12.5 4.8l1.1 3.1 3.3.2-2.5 2.1.8 3.3-2.7-1.7-2.7 1.7.8-3.3-2.5-2.1 3.3-.2z' fill='#0f4e95'/>
+</svg>
+""".strip()
+        payload = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+        return f"data:image/svg+xml;base64,{payload}"
+
+
 def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
 
     search_sources = build_sources(ctx.data_repository.get_bundle(), source_key=["name"])
@@ -272,6 +315,9 @@ def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
             "skill_range_html": {},
             "skill_icon_data": build_skill_icon_data(op, ctx.cfg.ResourcePath),
             "building_skill_icon_data": build_building_skill_icon_data(building_skills, ctx.cfg.ResourcePath),
+            "template_bg_data": build_operator_template_bg_data(ctx.cfg.ProjectRoot),
+            "class_icon_data": build_operator_class_icon_data(op, ctx.cfg.ResourcePath),
+            "potential_icon_data": build_potential_icon_data(),
             "classes_icons": CLASSICON,
             "sp_type_name": SP_TYPE_NAME,
             "skill_type_name": SKILL_TYPE_NAME,
