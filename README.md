@@ -65,9 +65,33 @@ amiyabot-cli --help
 ./.venv/bin/playwright install chromium
 ```
 
+### Docker 运行
+
+
+```bash
+mkdir -p ./amiyabot-resources
+
+docker run -d \
+	--name amiyabot-mcp \
+	-p 9000:9000 \
+	-v "$(pwd)/amiyabot-resources:/app/resources" \
+	-v "$(pwd)/config.json:/app/config.json:ro" \
+	hsyhhssyy/amiyabot-mcp:latest
+```
+
+说明：
+
+- `./amiyabot-resources:/app/resources` 会把资源目录映射到宿主机，资源更新、缓存和日志都会持久化到这里
+- 如果挂载的是一个空目录，容器首次启动时会先自动拉取资源，再启动 Web 服务EPOSITORY` 中配置的值
+
+启动后可通过以下地址验证：
+
+- 健康检查：`http://127.0.0.1:9000/rest/status`
+- MCP SSE：`http://127.0.0.1:9000/mcp/sse`
+
 ## 全局配置
 
-CLI 现在支持读取全局 JSON 配置。
+现在支持读取全局 JSON 配置。
 
 - Linux 下默认位置遵循 XDG 规范：`$XDG_CONFIG_HOME/amiyabot-cli/config.json`
 - 如果没有设置 `XDG_CONFIG_HOME`，默认位置就是 `~/.config/amiyabot-cli/config.json`

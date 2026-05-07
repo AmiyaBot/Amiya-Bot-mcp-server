@@ -10,7 +10,7 @@ RUN apt-get update \
 # 创建用户 & 目录
 RUN useradd -m amiya
 WORKDIR /app
-RUN mkdir -p /app/resources
+RUN mkdir -p /app/resources /app/data/local /app/resources/logs
 
 # 固定 Playwright 浏览器路径（避免 /root/.cache 问题）
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
@@ -26,6 +26,10 @@ RUN python -m playwright install --with-deps \
 
 # 拷贝代码（利用 Docker 缓存）
 COPY . /app
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+ && chown -R amiya:amiya /app /ms-playwright
 
 # 测试 Playwright 是否可用
 RUN python - <<'PY'
@@ -39,5 +43,7 @@ print("playwright build-test ok")
 PY
 
 # 切换用户 & 启动应用
+EXPOSE 9000
 USER amiya
-CMD ["python", "main.py"]
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["python", "main.py", "web"]
