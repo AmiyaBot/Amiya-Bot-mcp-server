@@ -1,0 +1,13 @@
+{{- $config := dict "ResourcePath" "/app/resources" "GameDataRepo" (default "https://gitee.com/amiya-bot/amiya-bot-assets.git" .Values.config.gameDataRepo) "BaseUrl" (include "amiyabot-mcp.baseUrl" .) -}}
+{{- if .Values.config.commandServiceUrl }}
+{{- $_ := set $config "CommandServiceUrl" .Values.config.commandServiceUrl -}}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "amiyabot-mcp.fullname" . }}-config
+  labels:
+    {{- include "amiyabot-mcp.labels" . | nindent 4 }}
+data:
+  config.json: |
+{{ toPrettyJson $config | nindent 4 }}

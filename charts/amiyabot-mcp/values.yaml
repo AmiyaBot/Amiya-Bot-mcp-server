@@ -1,0 +1,51 @@
+replicaCount: 1
+
+image:
+  repository: hsyhhssyy/amiyabot-mcp
+  pullPolicy: IfNotPresent
+  tag: latest
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 9000
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  pathType: Prefix
+  tls:
+    enabled: false
+    secretName: ""
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 20Gi
+
+config:
+  baseUrl: "https://amiyabot.example.com/"
+  gameDataRepo: "https://gitee.com/amiya-bot/amiya-bot-assets.git"
+  commandServiceUrl: ""
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

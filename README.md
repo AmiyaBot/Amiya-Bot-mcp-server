@@ -67,6 +67,8 @@ amiyabot-cli --help
 
 ### Docker 运行
 
+项目 release 发布后，会由 GitHub Actions 自动构建 Docker 镜像并推送到 Docker Hub。
+同时会自动更新 `latest` 标签。
 
 ```bash
 mkdir -p ./amiyabot-resources
@@ -75,19 +77,79 @@ docker run -d \
 	--name amiyabot-mcp \
 	-p 9000:9000 \
 	-v "$(pwd)/amiyabot-resources:/app/resources" \
-	-v "$(pwd)/config.json:/app/config.json:ro" \
 	hsyhhssyy/amiyabot-mcp:latest
 ```
 
 说明：
 
 - `./amiyabot-resources:/app/resources` 会把资源目录映射到宿主机，资源更新、缓存和日志都会持久化到这里
-- 如果挂载的是一个空目录，容器首次启动时会先自动拉取资源，再启动 Web 服务EPOSITORY` 中配置的值
+- 如果挂载的是一个空目录，容器首次启动时会先自动拉取资源，再启动 Web 服务
+- 资源仓库默认使用程序内置配置：`https://gitee.com/amiya-bot/amiya-bot-assets.git`
+- 日常使用直接拉 `latest` 即可
+
+如果你需要把对外访问地址改成自己的域名或反向代理地址，再额外挂载一个只覆盖 `BaseUrl` 的配置文件：
+
+```json
+{
+	"BaseUrl": "https://amiyabot.example.com/"
+}
+```
+
+```bash
+docker run -d \
+	--name amiyabot-mcp \
+	-p 9000:9000 \
+	-v "$(pwd)/amiyabot-resources:/app/resources" \
+	-v "$(pwd)/config.json:/app/config.json:ro" \
+	hsyhhssyy/amiyabot-mcp:latest
+```
 
 启动后可通过以下地址验证：
 
 - 健康检查：`http://127.0.0.1:9000/rest/status`
 - MCP SSE：`http://127.0.0.1:9000/mcp/sse`
+
+### Helm 部署
+
+仓库内置了 Helm chart：`charts/amiyabot-mcp`。
+
+这个 chart 支持：
+
+- 在 `values.yaml` 里配置对外 `BaseUrl`
+- 根据 `BaseUrl` 自动生成 Ingress 的 host 和 path
+- 通过 `persistence.storageClass` 选择 PVC 使用的 StorageClass
+- 只创建 PVC，不创建 PV
+- 默认镜像标签使用 `latest`
+- 默认资源仓库使用程序内置配置，无需额外填写
+
+最小化的 values 示例：
+
+```yaml
+config:
+  baseUrl: https://amiyabot.example.com/
+
+persistence:
+  storageClass: nfs-client
+  size: 20Gi
+
+ingress:
+  enabled: true
+  className: nginx
+```
+
+安装方式：
+
+```bash
+helm upgrade --install amiyabot-mcp ./charts/amiyabot-mcp -f your-values.yaml
+```
+
+说明：
+
+- chart 会把资源目录挂载到 `/app/resources`
+- chart 默认创建 PVC；如果你已经有现成的 claim，可以设置 `persistence.existingClaim`
+- `config.baseUrl` 建议直接写最终对外访问地址，例如 `https://amiyabot.example.com/`
+- 如果 `config.baseUrl` 包含路径前缀，chart 会按该路径生成 Ingress，但具体是否需要重写路径，取决于你的 Ingress Controller 配置
+- 如果你需要固定某个版本，再显式设置 `image.tag`
 
 ## 全局配置
 

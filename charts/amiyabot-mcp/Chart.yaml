@@ -1,0 +1,6 @@
+apiVersion: v2
+name: amiyabot-mcp
+description: Helm chart for deploying AmiyaBot MCP Server
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

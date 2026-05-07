@@ -1,0 +1,10 @@
+1. 当前服务地址:
+   {{ include "amiyabot-mcp.baseUrl" . }}
+
+2. 健康检查:
+   {{ trimSuffix "/" (include "amiyabot-mcp.baseUrl" .) }}/rest/status
+
+3. MCP SSE:
+   {{ trimSuffix "/" (include "amiyabot-mcp.baseUrl" .) }}/mcp/sse
+
+4. 如果 values.config.baseUrl 带路径前缀，请确认你的 Ingress Controller 支持该路径转发策略。
