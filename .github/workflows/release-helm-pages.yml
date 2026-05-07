@@ -1,0 +1,57 @@
+name: Release Helm Repo
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - charts/**
+      - .github/workflows/release-helm-pages.yml
+  workflow_dispatch:
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Ensure gh-pages branch exists
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            echo "gh-pages already exists"
+            exit 0
+          fi
+
+          git checkout --orphan gh-pages
+          git rm -rf . >/dev/null 2>&1 || true
+          touch .nojekyll
+          printf "# Helm repository\n" > README.md
+          git add .nojekyll README.md
+          git commit -m "Initialize gh-pages"
+          git push origin gh-pages
+          git checkout --force "$GITHUB_SHA"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Release charts to GitHub Pages
+        uses: helm/chart-releaser-action@v1.7.0
+        with:
+          charts_dir: charts
+          pages_branch: gh-pages
+          skip_existing: true
+          packages_with_index: true
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

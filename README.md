@@ -67,9 +67,6 @@ amiyabot-cli --help
 
 ### Docker 运行
 
-项目 release 发布后，会由 GitHub Actions 自动构建 Docker 镜像并推送到 Docker Hub。
-同时会自动更新 `latest` 标签。
-
 ```bash
 mkdir -p ./amiyabot-resources
 
@@ -111,16 +108,7 @@ docker run -d \
 
 ### Helm 部署
 
-仓库内置了 Helm chart：`charts/amiyabot-mcp`。
-
-这个 chart 支持：
-
-- 在 `values.yaml` 里配置对外 `BaseUrl`
-- 根据 `BaseUrl` 自动生成 Ingress 的 host 和 path
-- 通过 `persistence.storageClass` 选择 PVC 使用的 StorageClass
-- 只创建 PVC，不创建 PV
-- 默认镜像标签使用 `latest`
-- 默认资源仓库使用程序内置配置，无需额外填写
+可直接通过 Helm 安装，默认镜像标签使用 `latest`，资源仓库也使用程序内置默认值，无需额外填写。
 
 最小化的 values 示例：
 
@@ -140,7 +128,9 @@ ingress:
 安装方式：
 
 ```bash
-helm upgrade --install amiyabot-mcp ./charts/amiyabot-mcp -f your-values.yaml
+helm repo add amiyabot https://AmiyaBot.github.io/Amiya-Bot-mcp-server
+helm repo update
+helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp -f your-values.yaml
 ```
 
 说明：
