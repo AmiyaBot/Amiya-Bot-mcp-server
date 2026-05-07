@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  amiyabot-mcp:
+  - apiVersion: v2
+    appVersion: 0.1.0
+    created: "2026-05-07T10:23:35.075297574Z"
+    description: Helm chart for deploying AmiyaBot MCP Server
+    digest: ef2b453f91346dea0afa9a97ba1c5affae960e77acee415ad8e0f69ced2c1fff
+    name: amiyabot-mcp
+    type: application
+    urls:
+    - amiyabot-mcp-0.1.0.tgz
+    version: 0.1.0
+generated: "2026-05-07T10:23:35.07530084Z"
