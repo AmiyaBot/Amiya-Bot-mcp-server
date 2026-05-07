@@ -80,12 +80,15 @@ CLI 现在支持读取全局 JSON 配置。
 - 项目内的 `resources/config.json`
 - 项目根目录的 `config.json`
 
-如果你只想给全局安装的 CLI 指定远端 URL，可以在全局配置里只写需要覆盖的字段，例如：
+其中 `BaseUrl` 会作为 MCP 服务器生成图片和静态资源链接的地址前缀。
+请确保 MCP 的使用方能够通过这个地址访问到当前服务；如果 MCP 客户端不在同一台机器上，就不要使用 `127.0.0.1`。
+
+如果你只想给全局安装的 CLI 指定需要覆盖的 URL，可以在全局配置里只写相关字段，例如：
 
 ```json
 {
-	"BaseUrl": "https://your-public-host.example.com/",
-	"CommandServiceUrl": "https://your-command-service.example.com/"
+	"BaseUrl": "http://127.0.0.1:9000/",
+	"CommandServiceUrl": "http://127.0.0.1:9000/"
 }
 ```
 
