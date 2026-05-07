@@ -83,7 +83,7 @@ def uvicorn_main():
     )
 
     register_cardserver_asgi(app, cfg=cfg)
-    register_asgi(app)
+    register_asgi(app, cfg=cfg)
 
     @app.get("/rest/status")
     async def status():

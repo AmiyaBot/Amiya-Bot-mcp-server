@@ -137,7 +137,7 @@ helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp -f your-values.yaml
 
 - chart 会把资源目录挂载到 `/app/resources`
 - chart 默认创建 PVC；如果你已经有现成的 claim，可以设置 `persistence.existingClaim`
-- `config.baseUrl` 建议直接写最终对外访问地址，例如 `https://amiyabot.example.com/`
+- `config.baseUrl` 必须写最终对外访问地址，例如 `https://amiyabot.example.com/`；MCP SSE 会按这个地址校验 Host，若与实际访问域名不一致会返回 `421 Invalid Host header`
 - 如果 `config.baseUrl` 包含路径前缀，chart 会按该路径生成 Ingress，但具体是否需要重写路径，取决于你的 Ingress Controller 配置
 - 如果你需要固定某个版本，再显式设置 `image.tag`
 
