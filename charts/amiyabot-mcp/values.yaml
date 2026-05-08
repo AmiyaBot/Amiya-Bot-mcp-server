@@ -3,7 +3,8 @@ replicaCount: 1
 image:
   repository: hsyhhssyy/amiyabot-mcp
   pullPolicy: IfNotPresent
-  tag: latest
+  tag: ""
+  gitSha: ""
 
 imagePullSecrets: []
 nameOverride: ""
@@ -41,6 +42,7 @@ config:
   baseUrl: "https://amiyabot.example.com/"
   gameDataRepo: "https://gitee.com/amiya-bot/amiya-bot-assets.git"
   commandServiceUrl: ""
+  mcpDnsRebindingProtectionEnabled: false
 
 resources: {}
 

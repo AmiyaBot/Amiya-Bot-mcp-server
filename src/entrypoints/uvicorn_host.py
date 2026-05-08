@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from src.app.bootstrap_disk import build_context_from_disk
 from src.adapters.cmd.web_client import compute_service_code_revision
+from src.adapters.cmd.web_client import resolve_service_git_sha
 from src.adapters.mcp.app import register_asgi
 from src.adapters.cmd.app import execute_registered_command
 from src.app.card_fileservier import register_cardserver_asgi
@@ -58,6 +59,7 @@ def uvicorn_main():
         ctx = await build_context_from_disk(cfg)
         app.state.ctx = ctx
         app.state.code_revision = compute_service_code_revision(cfg.ProjectRoot)
+        app.state.git_sha = resolve_service_git_sha(cfg.ProjectRoot)
 
         task = asyncio.create_task(_periodic_update_loop(app, interval_seconds=15 * 60))
 
@@ -91,6 +93,7 @@ def uvicorn_main():
         return {
             "status": "ok",
             "code_revision": getattr(app.state, "code_revision", "unknown"),
+            "git_sha": getattr(app.state, "git_sha", "unknown"),
             "resource_initialized": bool(getattr(getattr(app.state, "ctx", None), "data_repository", None) and app.state.ctx.data_repository.has_local_resources()),
             "update_status": {
                 "current_state": update_status.current_state,

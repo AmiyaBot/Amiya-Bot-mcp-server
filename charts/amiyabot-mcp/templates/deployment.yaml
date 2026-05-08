@@ -30,6 +30,11 @@ spec:
         - name: {{ include "amiyabot-mcp.name" . }}
           image: {{ include "amiyabot-mcp.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.image.gitSha }}
+          env:
+            - name: AMIYA_GIT_SHA
+              value: {{ .Values.image.gitSha | quote }}
+          {{- end }}
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}

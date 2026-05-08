@@ -22,7 +22,10 @@ def _format_host(hostname: str) -> str:
     return hostname
 
 
-def _build_transport_security(base_url: str | None) -> TransportSecuritySettings:
+def _build_transport_security(base_url: str | None, enabled: bool) -> TransportSecuritySettings:
+    if not enabled:
+        return TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
     allowed_hosts = {
         "127.0.0.1",
         "127.0.0.1:80",
@@ -77,7 +80,10 @@ def register_asgi(app: FastAPI, cfg: Config):
     mcp = FastMCP(
         "明日方舟知识库",
         instructions=server_instructions,
-        transport_security=_build_transport_security(cfg.BaseUrl),
+        transport_security=_build_transport_security(
+            cfg.BaseUrl,
+            cfg.McpDnsRebindingProtectionEnabled,
+        ),
     )
 
     register_glossary_tool(mcp,app)

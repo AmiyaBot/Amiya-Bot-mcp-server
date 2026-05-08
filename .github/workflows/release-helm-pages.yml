@@ -1,14 +1,9 @@
 name: Release Helm Repo
 
 on:
-  push:
-    branches:
-      - master
-      - main
-    paths:
-      - charts/**
-      - .github/workflows/release-helm-pages.yml
-  workflow_dispatch:
+  release:
+    types:
+      - published
 
 jobs:
   release:
@@ -20,6 +15,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
 
       - name: Configure Git
@@ -45,6 +41,33 @@ jobs:
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
+
+      - name: Align chart metadata with release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          export CHART_VERSION="${RELEASE_TAG#v}"
+
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          release_tag = os.environ["RELEASE_TAG"]
+          chart_version = os.environ["CHART_VERSION"]
+
+          if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", chart_version):
+              raise SystemExit(f"Release tag {release_tag!r} cannot be converted to a valid Helm chart version")
+
+          chart_path = Path("charts/amiyabot-mcp/Chart.yaml")
+          chart_text = chart_path.read_text(encoding="utf-8")
+          chart_text = re.sub(r"^version: .*?$", f"version: {chart_version}", chart_text, count=1, flags=re.MULTILINE)
+          chart_text = re.sub(r'^appVersion: .*?$', f'appVersion: "{release_tag}"', chart_text, count=1, flags=re.MULTILINE)
+          chart_path.write_text(chart_text, encoding="utf-8")
+          PY
+
+          sed -n '1,20p' charts/amiyabot-mcp/Chart.yaml
+          sed -n '20,48p' charts/amiyabot-mcp/templates/_helpers.tpl
 
       - name: Release charts to GitHub Pages
         uses: helm/chart-releaser-action@v1.7.0

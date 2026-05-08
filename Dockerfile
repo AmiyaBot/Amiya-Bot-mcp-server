@@ -1,5 +1,7 @@
 FROM python:3.12-slim
 
+ARG GIT_SHA=unknown
+
 # 系统依赖（合并到一个 RUN，且清理 apt 缓存）
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -14,6 +16,7 @@ RUN mkdir -p /app/resources /app/data/local /app/resources/logs
 
 # 固定 Playwright 浏览器路径（避免 /root/.cache 问题）
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV AMIYA_GIT_SHA=${GIT_SHA}
 
 # 装项目依赖
 COPY requirements.txt /app/requirements.txt

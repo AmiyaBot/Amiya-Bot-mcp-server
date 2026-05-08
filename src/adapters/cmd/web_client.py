@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -22,6 +23,7 @@ DEFAULT_COMMAND_SERVICE_URL = "http://127.0.0.1:9000/"
 STATUS_PATH = "/rest/status"
 EXECUTE_PATH = "/rest/commands/execute"
 LOCAL_SERVICE_HOSTS = {"127.0.0.1", "localhost", "::1", "0.0.0.0"}
+SERVICE_GIT_SHA_ENV_KEYS = ("AMIYA_GIT_SHA", "GIT_SHA", "SOURCE_COMMIT")
 
 
 def resolve_command_service_url(cfg: Config, explicit_url: str | None = None) -> str:
@@ -51,6 +53,31 @@ def compute_service_code_revision(project_root: Path) -> str:
         hasher.update(str(stat.st_mtime_ns).encode("utf-8"))
         hasher.update(str(stat.st_size).encode("utf-8"))
     return hasher.hexdigest()[:12]
+
+
+def resolve_service_git_sha(project_root: Path) -> str:
+    for env_key in SERVICE_GIT_SHA_ENV_KEYS:
+        value = os.environ.get(env_key, "").strip()
+        if value:
+            return value
+
+    git_dir = project_root / ".git"
+    if not git_dir.exists():
+        return "unknown"
+
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(project_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+    value = completed.stdout.strip()
+    return value or "unknown"
 
 
 async def execute_remote_command_once(

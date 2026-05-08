@@ -74,7 +74,7 @@ docker run -d \
 	--name amiyabot-mcp \
 	-p 9000:9000 \
 	-v "$(pwd)/amiyabot-resources:/app/resources" \
-	hsyhhssyy/amiyabot-mcp:latest
+	hsyhhssyy/amiyabot-mcp:v0.1.0
 ```
 
 说明：
@@ -82,7 +82,7 @@ docker run -d \
 - `./amiyabot-resources:/app/resources` 会把资源目录映射到宿主机，资源更新、缓存和日志都会持久化到这里
 - 如果挂载的是一个空目录，容器首次启动时会先自动拉取资源，再启动 Web 服务
 - 资源仓库默认使用程序内置配置：`https://gitee.com/amiya-bot/amiya-bot-assets.git`
-- 日常使用直接拉 `latest` 即可
+- 建议显式使用版本标签，例如 `v0.1.0`，避免因为可变标签导致实际运行版本不明确
 
 如果你需要把对外访问地址改成自己的域名或反向代理地址，再额外挂载一个只覆盖 `BaseUrl` 的配置文件：
 
@@ -98,7 +98,7 @@ docker run -d \
 	-p 9000:9000 \
 	-v "$(pwd)/amiyabot-resources:/app/resources" \
 	-v "$(pwd)/config.json:/app/config.json:ro" \
-	hsyhhssyy/amiyabot-mcp:latest
+	hsyhhssyy/amiyabot-mcp:v0.1.0
 ```
 
 启动后可通过以下地址验证：
@@ -108,13 +108,14 @@ docker run -d \
 
 ### Helm 部署
 
-可直接通过 Helm 安装，默认镜像标签使用 `latest`，资源仓库也使用程序内置默认值，无需额外填写。
+可直接通过 Helm 安装。通常只需要填写对外访问地址和存储配置；默认会使用与当前 chart 对应的镜像版本，一般不需要额外设置 `image.tag`。
 
 最小化的 values 示例：
 
 ```yaml
 config:
   baseUrl: https://amiyabot.example.com/
+  mcpDnsRebindingProtectionEnabled: false
 
 persistence:
   storageClass: nfs-client
@@ -137,7 +138,8 @@ helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp -f your-values.yaml
 
 - chart 会把资源目录挂载到 `/app/resources`
 - chart 默认创建 PVC；如果你已经有现成的 claim，可以设置 `persistence.existingClaim`
-- `config.baseUrl` 必须写最终对外访问地址，例如 `https://amiyabot.example.com/`；MCP SSE 会按这个地址校验 Host，若与实际访问域名不一致会返回 `421 Invalid Host header`
+- `config.baseUrl` 仍建议写最终对外访问地址，例如 `https://amiyabot.example.com/`；它主要用于生成图片和静态资源链接
+- `config.mcpDnsRebindingProtectionEnabled` 默认是 `false`，这样 `/mcp/sse` 不会再校验 Host，可在任意反向代理 URL 下工作；如果你显式打开它，`BaseUrl` 与实际访问域名不一致时才可能出现 `421 Invalid Host header`
 - 如果 `config.baseUrl` 包含路径前缀，chart 会按该路径生成 Ingress，但具体是否需要重写路径，取决于你的 Ingress Controller 配置
 - 如果你需要固定某个版本，再显式设置 `image.tag`
 
@@ -158,6 +160,8 @@ helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp -f your-values.yaml
 
 其中 `BaseUrl` 会作为 MCP 服务器生成图片和静态资源链接的地址前缀。
 请确保 MCP 的使用方能够通过这个地址访问到当前服务；如果 MCP 客户端不在同一台机器上，就不要使用 `127.0.0.1`。
+
+如果你需要确认当前服务实例的版本，可以访问 `/rest/status`，其中 `git_sha` 字段可用于识别当前部署的代码版本。
 
 如果你只想给全局安装的 CLI 指定需要覆盖的 URL，可以在全局配置里只写相关字段，例如：
 

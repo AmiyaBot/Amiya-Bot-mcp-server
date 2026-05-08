@@ -13,6 +13,7 @@ CONFIG_FIELDS = (
     "GameDataRepo",
     "BaseUrl",
     "CommandServiceUrl",
+    "McpDnsRebindingProtectionEnabled",
 )
 
 @dataclass
@@ -22,6 +23,7 @@ class Config:
     GameDataRepo: Optional[str] = None
     BaseUrl: Optional[str] = None
     CommandServiceUrl: Optional[str] = None
+    McpDnsRebindingProtectionEnabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,22 @@ def _load_json_config(path: Path) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
+def _coerce_bool(value: object, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on", "y"}:
+            return True
+        if normalized in {"0", "false", "no", "off", "n", ""}:
+            return False
+    return default
+
+
 def inspect_config_state() -> ConfigState:
 
     project_root = FILE_PATH
@@ -121,6 +139,10 @@ def inspect_config_state() -> ConfigState:
         GameDataRepo=merged_config.get("GameDataRepo", None),
         BaseUrl=merged_config.get("BaseUrl", None),
         CommandServiceUrl=merged_config.get("CommandServiceUrl", None),
+        McpDnsRebindingProtectionEnabled=_coerce_bool(
+            merged_config.get("McpDnsRebindingProtectionEnabled", False),
+            default=False,
+        ),
     )
 
     return ConfigState(
