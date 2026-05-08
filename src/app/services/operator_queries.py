@@ -113,12 +113,21 @@ async def query_operator_basic(
 
         image_url = None
         image_path = None
+        skin_artifact = None
         try:
-            skin_artifact = await resolve_operator_skin_artifact(
-                context,
-                resolved,
-                bundle.tables,
-            )
+            try:
+                skin_artifact = await resolve_operator_skin_artifact(
+                    context,
+                    resolved,
+                    bundle.tables,
+                )
+            except Exception:
+                logger.warning(
+                    "准备干员立绘素材失败，将继续尝试生成角色卡: operator=%s",
+                    resolved.name,
+                    exc_info=True,
+                )
+
             if skin_artifact is not None:
                 result.data["skin_url"] = skin_artifact.to_data_uri()
                 result.data["skin_public_url"] = skin_artifact.url or ""
@@ -142,14 +151,20 @@ async def query_operator_basic(
                 card_artifact.path,
                 context.card_service.cache_root,
             )
-        except Exception as exc:
-            logger.info("准备干员角色卡失败，已降级为立绘直链或文本结果: %s", exc)
+        except Exception:
+            logger.warning(
+                "准备干员角色卡失败，已降级为立绘直链或文本结果: operator=%s payload_key=%s template=operator_info",
+                resolved.name,
+                payload_key,
+                exc_info=True,
+            )
             try:
-                skin_artifact = await resolve_operator_skin_artifact(
-                    context,
-                    resolved,
-                    bundle.tables,
-                )
+                if skin_artifact is None:
+                    skin_artifact = await resolve_operator_skin_artifact(
+                        context,
+                        resolved,
+                        bundle.tables,
+                    )
                 if skin_artifact is not None:
                     image_url = skin_artifact.url
                     image_path = _resolve_safe_local_artifact_path(

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi import Request
 from contextlib import asynccontextmanager
+from time import perf_counter
 import uvicorn
 
 import asyncio
@@ -33,18 +34,26 @@ class CommandExecuteRequest(BaseModel):
 
 
 async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
+    log.info("后台资源刷新循环已启动: interval_seconds=%s", interval_seconds)
     while True:
         await asyncio.sleep(interval_seconds)
 
         ctx = getattr(app.state, "ctx", None)
         if not isinstance(ctx, AppContext):
+            log.warning("跳过后台资源刷新: reason=context_not_ready")
             continue
         if not ctx.data_repository:
+            log.warning("跳过后台资源刷新: reason=data_repository_missing")
             continue
 
         try:
+            started_at = perf_counter()
+            log.info("开始执行后台资源刷新")
             await ctx.data_repository.update_and_refresh()
+            elapsed_ms = int((perf_counter() - started_at) * 1000)
+            log.info("后台资源刷新完成: elapsed_ms=%s", elapsed_ms)
         except asyncio.CancelledError:
+            log.info("后台资源刷新循环收到取消信号")
             raise
         except Exception:
             log.exception("data_repository.update failed")
@@ -53,24 +62,49 @@ async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
 def uvicorn_main():
 
     cfg = load_from_disk()
+    log.info(
+        "准备启动 Web 服务: project_root=%s resource_path=%s base_url=%s dns_rebinding_protection=%s",
+        cfg.ProjectRoot,
+        cfg.ResourcePath,
+        cfg.BaseUrl,
+        cfg.McpDnsRebindingProtectionEnabled,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        ctx = await build_context_from_disk(cfg)
-        app.state.ctx = ctx
-        app.state.code_revision = compute_service_code_revision(cfg.ProjectRoot)
-        app.state.git_sha = resolve_service_git_sha(cfg.ProjectRoot)
+        try:
+            log.info("开始初始化应用上下文")
+            ctx = await build_context_from_disk(cfg)
+            app.state.ctx = ctx
+            app.state.code_revision = compute_service_code_revision(cfg.ProjectRoot)
+            app.state.git_sha = resolve_service_git_sha(cfg.ProjectRoot)
+
+            resource_initialized = bool(
+                ctx.data_repository and ctx.data_repository.has_local_resources()
+            )
+            log.info(
+                "应用上下文初始化完成: resource_initialized=%s code_revision=%s git_sha=%s",
+                resource_initialized,
+                app.state.code_revision,
+                app.state.git_sha,
+            )
+        except Exception:
+            log.exception("应用上下文初始化失败")
+            raise
 
         task = asyncio.create_task(_periodic_update_loop(app, interval_seconds=15 * 60))
+        log.info("后台资源刷新任务已创建")
 
         try:
             yield
         finally:
+            log.info("Web 服务进入关闭流程")
             task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
+            log.info("后台资源刷新任务已停止")
 
     app = FastAPI(lifespan=lifespan)
 
@@ -86,6 +120,7 @@ def uvicorn_main():
 
     register_cardserver_asgi(app, cfg=cfg)
     register_asgi(app, cfg=cfg)
+    log.info("ASGI 路由注册完成")
 
     @app.get("/rest/status")
     async def status():
@@ -108,8 +143,14 @@ def uvicorn_main():
 
     @app.post("/rest/commands/execute")
     async def execute_command(request: Request, payload: CommandExecuteRequest):
+        started_at = perf_counter()
         ctx = getattr(app.state, "ctx", None)
         if payload.command not in {"help", "exit", "config-path"} and not isinstance(ctx, AppContext):
+            log.warning(
+                "命令执行失败: command=%s reason=context_not_ready client=%s",
+                payload.command,
+                request.client.host if request.client else "unknown",
+            )
             raise HTTPException(status_code=503, detail="应用上下文未就绪")
 
         request_ctx = ctx
@@ -120,7 +161,35 @@ def uvicorn_main():
                 output_format=payload.output_format,
             )
 
-        result = await execute_registered_command(request_ctx, payload.command, payload.args)
-        return result.to_response()
+        log.info(
+            "开始执行远程命令: command=%s output_format=%s prefer_local_artifact_path=%s client=%s",
+            payload.command,
+            payload.output_format,
+            getattr(request_ctx, "prefer_local_artifact_path", False) if request_ctx is not None else False,
+            request.client.host if request.client else "unknown",
+        )
 
+        try:
+            result = await execute_registered_command(request_ctx, payload.command, payload.args)
+        except Exception:
+            elapsed_ms = int((perf_counter() - started_at) * 1000)
+            log.exception(
+                "远程命令执行异常: command=%s elapsed_ms=%s client=%s",
+                payload.command,
+                elapsed_ms,
+                request.client.host if request.client else "unknown",
+            )
+            raise
+
+        elapsed_ms = int((perf_counter() - started_at) * 1000)
+        response_payload = result.to_response()
+        log.info(
+            "远程命令执行完成: command=%s elapsed_ms=%s response_keys=%s",
+            payload.command,
+            elapsed_ms,
+            sorted(response_payload.keys()),
+        )
+        return response_payload
+
+    log.info("开始监听 HTTP 服务: host=0.0.0.0 port=9000")
     uvicorn.run(app, host="0.0.0.0", port=9000)

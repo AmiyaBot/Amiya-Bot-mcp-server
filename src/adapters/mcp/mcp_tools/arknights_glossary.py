@@ -4,6 +4,10 @@ import logging
 from typing import Annotated,List,Union
 from pydantic import Field
 
+from src.adapters.mcp.tool_logging import log_tool_end
+from src.adapters.mcp.tool_logging import log_tool_exception
+from src.adapters.mcp.tool_logging import log_tool_not_ready
+from src.adapters.mcp.tool_logging import log_tool_start
 from src.app.context import AppContext
 from src.app.services.glossary_queries import query_glossary
 
@@ -25,17 +29,38 @@ def register_glossary_tool(mcp,app):
             1) 只要用户查询的术语中“包含” glossary 的术语（或反向包含以增强召回），就算匹配
             2) 如果某个术语解释文本中包含了其它 glossary 术语名，则级联把这些术语也加入返回结果
         """
-        
-        if not app.state.ctx:
-            return "{}"
-        
-        context: AppContext = app.state.ctx
+        tool_name = "get_glossary"
+        started_at = log_tool_start(logger, tool_name, glossary_name=glossary_name)
 
-        if not context.data_repository:
-            return "{}"
+        try:
+            if not app.state.ctx:
+                log_tool_not_ready(logger, tool_name)
+                payload = {}
+                log_tool_end(logger, tool_name, started_at, payload)
+                return "{}"
 
-        result = query_glossary(context, glossary_name)
-        retVal = json.dumps(result, ensure_ascii=False)
+            context: AppContext = app.state.ctx
 
-        logger.info(f"{retVal}")
-        return retVal
+            if not context.data_repository:
+                log_tool_not_ready(logger, tool_name)
+                payload = {}
+                log_tool_end(logger, tool_name, started_at, payload)
+                return "{}"
+
+            result = query_glossary(context, glossary_name)
+            ret_val = json.dumps(result, ensure_ascii=False)
+            log_tool_end(
+                logger,
+                tool_name,
+                started_at,
+                {
+                    "data": {
+                        "term_count": len(result),
+                        "terms": sorted(result.keys())[:10],
+                    }
+                },
+            )
+            return ret_val
+        except Exception:
+            log_tool_exception(logger, tool_name, started_at, glossary_name=glossary_name)
+            raise

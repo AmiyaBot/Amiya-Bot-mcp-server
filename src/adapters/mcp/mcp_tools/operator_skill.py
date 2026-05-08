@@ -1,9 +1,12 @@
-import json
 import logging
 from typing import Annotated
 
 from pydantic import Field
 
+from src.adapters.mcp.tool_logging import log_tool_end
+from src.adapters.mcp.tool_logging import log_tool_exception
+from src.adapters.mcp.tool_logging import log_tool_not_ready
+from src.adapters.mcp.tool_logging import log_tool_start
 from src.app.context import AppContext
 from src.app.services.operator_queries import query_operator_skill
 
@@ -17,20 +20,45 @@ def register_operator_skill_tool(mcp, app):
         index: Annotated[int, Field(description="技能序号，从1开始")] = 1,
         level: Annotated[int, Field(description="技能等级 1~10（8~10为专精一/二/三）")] = 10,
     ) -> dict:
-        if not getattr(app.state, "ctx", None):
-            return {"message": "未初始化数据上下文"}
-
-        context: AppContext = app.state.ctx
-        result = await query_operator_skill(
-            context,
+        tool_name = "get_operator_skill"
+        started_at = log_tool_start(
+            logger,
+            tool_name,
             operator_name=operator_name,
             operator_name_prefix=operator_name_prefix,
             index=index,
             level=level,
         )
-        result_payload = result.to_response()
-        logger.info(f"查询干员技能信息成功：{json.dumps(result_payload, ensure_ascii=False)}")
-        return result_payload
+
+        try:
+            if not getattr(app.state, "ctx", None):
+                log_tool_not_ready(logger, tool_name)
+                result_payload = {"message": "未初始化数据上下文"}
+                log_tool_end(logger, tool_name, started_at, result_payload)
+                return result_payload
+
+            context: AppContext = app.state.ctx
+            result = await query_operator_skill(
+                context,
+                operator_name=operator_name,
+                operator_name_prefix=operator_name_prefix,
+                index=index,
+                level=level,
+            )
+            result_payload = result.to_response()
+            log_tool_end(logger, tool_name, started_at, result_payload)
+            return result_payload
+        except Exception:
+            log_tool_exception(
+                logger,
+                tool_name,
+                started_at,
+                operator_name=operator_name,
+                operator_name_prefix=operator_name_prefix,
+                index=index,
+                level=level,
+            )
+            raise
 
 
 
