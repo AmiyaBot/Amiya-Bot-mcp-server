@@ -7,7 +7,11 @@
   <style>
     @font-face {
       font-family: "Harmony";
-      src: url("file:///home/coder/AmiyabotMCPServer/.temp/example/template/HarmonyOS_Sans_SC.ttf") format("truetype");
+      {% if template_font_url %}
+      src: url("{{ template_font_url }}") format("truetype");
+      {% else %}
+      src: local("HarmonyOS Sans SC"), local("Noto Sans CJK SC"), local("Noto Sans SC");
+      {% endif %}
       font-weight: normal;
       font-style: normal;
       font-display: swap;
@@ -25,9 +29,8 @@
 
     #template {
       width: 1600px;
-      height: 895px;
-      background: {% if template_bg_data %}url("{{ template_bg_data }}"){% else %}url("file:///home/coder/AmiyabotMCPServer/.temp/example/template/img/operator_bg.png"){% endif %} center / cover no-repeat;
-      overflow: hidden;
+      min-height: 895px;
+      background: {% if template_bg_data %}url("{{ template_bg_data }}"){% elif template_bg_url %}url("{{ template_bg_url }}"){% else %}linear-gradient(135deg, #757575, #4a4a4a){% endif %} center / cover no-repeat;
       position: relative;
     }
 

@@ -14,12 +14,12 @@ from src.helpers.card_urls import build_card_url
 from src.helpers.gamedata.search import build_sources, search_source_spec
 
 logger = logging.getLogger(__name__)
-OPERATOR_INFO_CARD_REVISION = "card-v19"
+OPERATOR_INFO_CARD_REVISION = "card-v20"
 
 
 @dataclass(slots=True)
 class QueryExecutionResult:
-    data: str | dict | None = None
+    data: str | dict | list[dict[str, str]] | None = None
     markdown: str | None = None
     image_url: str | None = None
     image_path: str | None = None
@@ -43,6 +43,26 @@ class QueryExecutionResult:
 
 def _dedupe_names(matches) -> list[str]:
     return list(dict.fromkeys(match.matched_text for match in matches))
+
+
+def _build_operator_search_items(matches) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+
+    for match in matches:
+        operator = match.value
+        operator_id = str(getattr(operator, "id", "") or "").strip()
+        operator_name = str(getattr(operator, "name", "") or match.matched_text).strip()
+        if not operator_id or not operator_name or operator_id in seen_ids:
+            continue
+
+        seen_ids.add(operator_id)
+        items.append({
+            "id": operator_id,
+            "name": operator_name,
+        })
+
+    return items
 
 
 def _resolve_safe_local_artifact_path(
@@ -94,13 +114,49 @@ def _resolve_operator(
     return name_matches[0].value
 
 
-async def query_operator_basic(
+def _resolve_operator_by_id(
     context: AppContext,
-    operator_name: str,
-    operator_name_prefix: str = "",
+    operator_id: str,
+) -> Operator | QueryExecutionResult:
+    normalized_operator_id = str(operator_id or "").strip()
+    if not normalized_operator_id:
+        return QueryExecutionResult(message="operator_id 不能为空")
+
+    bundle = context.data_repository.get_bundle()
+    operator = bundle.operators.get(normalized_operator_id)
+    if operator is None:
+        return QueryExecutionResult(message=f"未找到干员ID: {normalized_operator_id}")
+
+    return operator
+
+
+def search_operator(
+    context: AppContext,
+    query: str,
+    limit: int = 10,
+) -> QueryExecutionResult:
+    normalized_query = str(query or "").strip()
+    if not normalized_query:
+        return QueryExecutionResult(message="query 不能为空")
+
+    bundle = context.data_repository.get_bundle()
+    search_sources = build_sources(bundle, source_key=["name"])
+    search_results = search_source_spec(normalized_query, sources=search_sources, n=max(limit, 1))
+    name_matches = search_results.by_key("name")
+    items = _build_operator_search_items(name_matches)
+
+    if not items:
+        return QueryExecutionResult(message=f"未找到匹配的干员: {normalized_query}")
+
+    return QueryExecutionResult(data={"operators": items})
+
+
+async def query_operator_basic_by_id(
+    context: AppContext,
+    operator_id: str,
 ) -> QueryExecutionResult:
     try:
-        resolved = _resolve_operator(context, operator_name, operator_name_prefix)
+        resolved = _resolve_operator_by_id(context, operator_id)
         if isinstance(resolved, QueryExecutionResult):
             return resolved
 
@@ -109,7 +165,7 @@ async def query_operator_basic(
 
         bundle = context.data_repository.get_bundle()
         bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
-        payload_key = f"operator:{resolved.name}:{bundle_version}:{OPERATOR_INFO_CARD_REVISION}"
+        payload_key = f"operator:{resolved.id}:{bundle_version}:{OPERATOR_INFO_CARD_REVISION}"
 
         image_url = None
         image_path = None
@@ -123,7 +179,8 @@ async def query_operator_basic(
                 )
             except Exception:
                 logger.warning(
-                    "准备干员立绘素材失败，将继续尝试生成角色卡: operator=%s",
+                    "准备干员立绘素材失败，将继续尝试生成角色卡: operator_id=%s operator=%s",
+                    resolved.id,
                     resolved.name,
                     exc_info=True,
                 )
@@ -153,7 +210,8 @@ async def query_operator_basic(
             )
         except Exception:
             logger.warning(
-                "准备干员角色卡失败，已降级为立绘直链或文本结果: operator=%s payload_key=%s template=operator_info",
+                "准备干员角色卡失败，已降级为立绘直链或文本结果: operator_id=%s operator=%s payload_key=%s template=operator_info",
+                resolved.id,
                 resolved.name,
                 payload_key,
                 exc_info=True,
@@ -173,7 +231,7 @@ async def query_operator_basic(
                         context.cfg.ResourcePath / SKIN_CACHE_PATH,
                     )
             except Exception:
-                logger.info("准备干员立绘回退结果失败", exc_info=True)
+                logger.info("准备干员立绘回退结果失败: operator_id=%s operator=%s", resolved.id, resolved.name, exc_info=True)
 
         return QueryExecutionResult(
             data=structured_payload,
@@ -186,14 +244,13 @@ async def query_operator_basic(
             image_path=image_path,
         )
     except Exception:
-        logger.exception("查询干员基础信息失败")
+        logger.exception("按 ID 查询干员基础信息失败: operator_id=%s", operator_id)
         return QueryExecutionResult(message="查询干员信息时发生错误.")
 
 
-async def query_operator_skill(
+async def query_operator_skill_by_id(
     context: AppContext,
-    operator_name: str,
-    operator_name_prefix: str = "",
+    operator_id: str,
     index: int = 1,
     level: int = 10,
 ) -> QueryExecutionResult:
@@ -203,7 +260,7 @@ async def query_operator_skill(
         return QueryExecutionResult(message=f"技能等级 level 必须在 1~10 之间（当前：{level}）")
 
     try:
-        resolved = _resolve_operator(context, operator_name, operator_name_prefix)
+        resolved = _resolve_operator_by_id(context, operator_id)
         if isinstance(resolved, QueryExecutionResult):
             return resolved
 
@@ -253,7 +310,7 @@ async def query_operator_skill(
         }
 
         bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
-        payload_key = f"operator_skill:{resolved.name}:{index}:{level}:{bundle_version}"
+        payload_key = f"operator_skill:{resolved.id}:{index}:{level}:{bundle_version}"
 
         text_artifact = await context.card_service.get(
             template="operator_skill",
@@ -265,5 +322,29 @@ async def query_operator_skill(
 
         return QueryExecutionResult(data=text_artifact.read_text())
     except Exception:
-        logger.exception("查询干员技能信息失败")
+        logger.exception("按 ID 查询干员技能信息失败: operator_id=%s", operator_id)
         return QueryExecutionResult(message="查询干员技能信息时发生错误.")
+
+
+async def query_operator_basic(
+    context: AppContext,
+    operator_name: str,
+    operator_name_prefix: str = "",
+) -> QueryExecutionResult:
+    resolved = _resolve_operator(context, operator_name, operator_name_prefix)
+    if isinstance(resolved, QueryExecutionResult):
+        return resolved
+    return await query_operator_basic_by_id(context, resolved.id)
+
+
+async def query_operator_skill(
+    context: AppContext,
+    operator_name: str,
+    operator_name_prefix: str = "",
+    index: int = 1,
+    level: int = 10,
+) -> QueryExecutionResult:
+    resolved = _resolve_operator(context, operator_name, operator_name_prefix)
+    if isinstance(resolved, QueryExecutionResult):
+        return resolved
+    return await query_operator_skill_by_id(context, resolved.id, index=index, level=level)

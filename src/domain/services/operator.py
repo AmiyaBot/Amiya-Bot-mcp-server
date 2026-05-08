@@ -16,7 +16,9 @@ from src.helpers.glossary import mark_glossary_used_terms
 logger = logging.getLogger(__name__)
 SKILL_ASSET_PATH = Path("assets") / "skill"
 BUILDING_SKILL_ASSET_PATH = Path("assets") / "building_skill"
-EXAMPLE_OPERATOR_BG_PATH = Path(".temp") / "example" / "template" / "img" / "operator_bg.png"
+OPERATOR_TEMPLATE_ASSET_PATH = Path("data") / "templates" / "operator_info" / "assets"
+OPERATOR_TEMPLATE_BG_PATH = OPERATOR_TEMPLATE_ASSET_PATH / "operator_bg.png"
+OPERATOR_TEMPLATE_FONT_PATH = OPERATOR_TEMPLATE_ASSET_PATH / "HarmonyOS_Sans_SC.ttf"
 ITEM_ASSET_PATH = Path("assets") / "item"
 MODULE_ATTR_KEY_MAP = {
     "max_hp": "maxHp",
@@ -201,6 +203,16 @@ def _build_image_data_uri(path: Path) -> str | None:
     return f"data:{mime};base64,{payload}"
 
 
+def _build_file_uri(path: Path) -> str | None:
+    if not path.exists():
+        return None
+
+    try:
+        return path.resolve().as_uri()
+    except OSError:
+        return None
+
+
 def build_skill_icon_data(op, resource_root: Path) -> dict[str, str]:
     asset_root = resource_root / SKILL_ASSET_PATH
     result: dict[str, str] = {}
@@ -246,7 +258,15 @@ def build_building_skill_icon_data(items: list[dict], resource_root: Path) -> di
 
 
 def build_operator_template_bg_data(project_root: Path) -> str | None:
-    return _build_image_data_uri(project_root / EXAMPLE_OPERATOR_BG_PATH)
+    return _build_image_data_uri(project_root / OPERATOR_TEMPLATE_BG_PATH)
+
+
+def build_operator_template_bg_url(project_root: Path) -> str | None:
+    return _build_file_uri(project_root / OPERATOR_TEMPLATE_BG_PATH)
+
+
+def build_operator_template_font_url(project_root: Path) -> str | None:
+    return _build_file_uri(project_root / OPERATOR_TEMPLATE_FONT_PATH)
 
 
 def build_operator_class_icon_data(op, resource_root: Path) -> str | None:
@@ -316,6 +336,8 @@ def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
             "skill_icon_data": build_skill_icon_data(op, ctx.cfg.ResourcePath),
             "building_skill_icon_data": build_building_skill_icon_data(building_skills, ctx.cfg.ResourcePath),
             "template_bg_data": build_operator_template_bg_data(ctx.cfg.ProjectRoot),
+            "template_bg_url": build_operator_template_bg_url(ctx.cfg.ProjectRoot),
+            "template_font_url": build_operator_template_font_url(ctx.cfg.ProjectRoot),
             "class_icon_data": build_operator_class_icon_data(op, ctx.cfg.ResourcePath),
             "potential_icon_data": build_potential_icon_data(),
             "classes_icons": CLASSICON,
