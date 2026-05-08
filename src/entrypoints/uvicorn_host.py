@@ -22,6 +22,7 @@ from src.app.card_fileservier import register_cardserver_asgi
 from src.app.context import AppContext
 from src.app.config import load_from_disk
 from src.app.services.resource_update import read_resource_update_status
+from src.app.transformers.html_to_png_transformer import probe_playwright_chromium
 
 log = logging.getLogger("asset")
 LOCAL_REQUEST_HOSTS = {"127.0.0.1", "::1", "localhost"}
@@ -78,6 +79,8 @@ def uvicorn_main():
             app.state.ctx = ctx
             app.state.code_revision = compute_service_code_revision(cfg.ProjectRoot)
             app.state.git_sha = resolve_service_git_sha(cfg.ProjectRoot)
+            app.state.playwright_ready = None
+            app.state.playwright_message = None
 
             resource_initialized = bool(
                 ctx.data_repository and ctx.data_repository.has_local_resources()
@@ -88,6 +91,17 @@ def uvicorn_main():
                 app.state.code_revision,
                 app.state.git_sha,
             )
+
+            playwright_ready, playwright_message = await probe_playwright_chromium()
+            app.state.playwright_ready = playwright_ready
+            app.state.playwright_message = playwright_message
+            if playwright_ready:
+                log.info("Playwright Chromium 运行时自检通过")
+            else:
+                log.warning(
+                    "Playwright Chromium 运行时自检失败: %s",
+                    playwright_message,
+                )
         except Exception:
             log.exception("应用上下文初始化失败")
             raise
@@ -130,6 +144,10 @@ def uvicorn_main():
             "code_revision": getattr(app.state, "code_revision", "unknown"),
             "git_sha": getattr(app.state, "git_sha", "unknown"),
             "resource_initialized": bool(getattr(getattr(app.state, "ctx", None), "data_repository", None) and app.state.ctx.data_repository.has_local_resources()),
+            "playwright": {
+                "ready": getattr(app.state, "playwright_ready", None),
+                "message": getattr(app.state, "playwright_message", None),
+            },
             "update_status": {
                 "current_state": update_status.current_state,
                 "last_result": update_status.last_result,

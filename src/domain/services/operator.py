@@ -297,9 +297,9 @@ def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
     last_phase = op.phases[-1]
 
     bundle = ctx.data_repository.get_bundle()
-    CLASSICON = get_table(bundle.tables, "classes_icons", source="local")
-    SP_TYPE_NAME = get_table(bundle.tables, "sp_type", source="local")
-    SKILL_TYPE_NAME = get_table(bundle.tables, "skill_type", source="local")
+    CLASSICON = get_table(bundle.tables, "classes_icons", source="local", default={})
+    SP_TYPE_NAME = get_table(bundle.tables, "sp_type", source="local", default={})
+    SKILL_TYPE_NAME = get_table(bundle.tables, "skill_type", source="local", default={})
     building_skills = build_building_skills(op, bundle.tables)
     result = QueryResult(
         type="operator_profile",

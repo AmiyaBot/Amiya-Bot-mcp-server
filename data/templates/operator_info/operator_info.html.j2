@@ -454,6 +454,9 @@
       <div class="skills">
         {% for sk in op.skills %}
           {% set last = (sk.levels[-1] if sk.levels else None) %}
+          {% set last_sp = (last.sp if last and last.sp else None) %}
+          {% set sp_type_map = (sp_type_name or {}) %}
+          {% set skill_type_map = (skill_type_name or {}) %}
           {% set skill_icon = (skill_icon_data.get(sk.icon or "") if skill_icon_data else "") %}
           <div class="skill-item">
             <div style="width: 120px;text-align: center">
@@ -467,11 +470,11 @@
               <div>{{ sk.name or "" }}</div>
             </div>
             <div style="width: calc(100% - 240px);padding: 0 10px">
-              {% if last %}
+              {% if last and last_sp %}
                 <div class="skill-type">
-                  <div class="t{{ last.sp.sp_type }}">{{ sp_type_name.get(last.sp.sp_type, last.sp.sp_type) }}</div>
-                  <div>{{ skill_type_name.get(last.skill_type, last.skill_type) }}</div>
-                  <div>技力 {{ last.sp.init_sp }}/{{ last.sp.sp_cost }}</div>
+                  <div class="t{{ last_sp.sp_type }}">{{ sp_type_map.get(last_sp.sp_type, last_sp.sp_type) }}</div>
+                  <div>{{ skill_type_map.get(last.skill_type, last.skill_type) }}</div>
+                  <div>技力 {{ last_sp.init_sp }}/{{ last_sp.sp_cost }}</div>
                   {% if last.duration and last.duration > 0 %}<div>持续 {{ last.duration }} 秒</div>{% endif %}
                 </div>
                 <div class="skill-desc">{{ (last.description or "") | safe }}</div>

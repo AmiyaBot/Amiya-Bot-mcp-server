@@ -1,10 +1,32 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+import logging
 from typing import Any, Dict, Optional
 
 from src.app.transformers.types import Transformer
+
+logger = logging.getLogger(__name__)
+
+
+async def probe_playwright_chromium(
+    *,
+    headless: bool = True,
+    chromium_args: list[str] | None = None,
+) -> tuple[bool, str | None]:
+    try:
+        from playwright.async_api import async_playwright
+    except Exception as exc:
+        return False, f"Playwright 不可用: {exc}"
+
+    launch_args = chromium_args or []
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=headless, args=launch_args)
+            await browser.close()
+    except Exception as exc:
+        return False, str(exc)
+
+    return True, None
 
 class HTMLToPNGTransformer(Transformer):
     """
@@ -46,7 +68,22 @@ class HTMLToPNGTransformer(Transformer):
             ) from e
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=headless, args=chromium_args)
+            try:
+                logger.info(
+                    "开始启动 Playwright Chromium: headless=%s viewport=%s full_page=%s wait_until=%s extra_wait_ms=%s chromium_args=%s",
+                    headless,
+                    viewport,
+                    full_page,
+                    wait_until,
+                    extra_wait_ms,
+                    chromium_args,
+                )
+                browser = await p.chromium.launch(headless=headless, args=chromium_args)
+            except Exception:
+                logger.exception(
+                    "启动 Playwright Chromium 失败，无法渲染 PNG。请检查浏览器安装和系统依赖是否完整。"
+                )
+                raise
             try:
                 page = await browser.new_page(viewport=viewport)  # type: ignore
                 await page.set_content(input, wait_until=wait_until)
@@ -59,6 +96,7 @@ class HTMLToPNGTransformer(Transformer):
                     type="png",
                     omit_background=transparent,
                 )
+                logger.info("Playwright Chromium 渲染 PNG 成功: bytes=%s", len(png_bytes))
                 return png_bytes
             finally:
                 await browser.close()

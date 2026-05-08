@@ -3,9 +3,14 @@ from time import perf_counter
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI
-from fastapi import Request
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp
+from starlette.types import Message
+from starlette.types import Receive
+from starlette.types import Scope
+from starlette.types import Send
 
 from src.adapters.mcp.mcp_tools.arknights_glossary import register_glossary_tool
 from src.adapters.mcp.mcp_tools.operator_basic import register_operator_basic_tool
@@ -13,6 +18,75 @@ from src.adapters.mcp.mcp_tools.operator_skill import register_operator_skill_to
 from src.app.config import Config
 
 logger = logging.getLogger(__name__)
+
+
+class MCPRequestLoggingMiddleware:
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = str(scope.get("path") or "")
+        if path != "/mcp" and not path.startswith("/mcp/"):
+            await self.app(scope, receive, send)
+            return
+
+        started_at = perf_counter()
+        headers = Headers(scope=scope)
+        client = scope.get("client")
+        client_host = client[0] if client else "unknown"
+        query = (scope.get("query_string") or b"").decode("latin-1")
+        method = str(scope.get("method") or "")
+        host = headers.get("host", "")
+        origin = headers.get("origin", "")
+        user_agent = headers.get("user-agent", "")
+
+        logger.info(
+            "MCP 请求开始: method=%s path=%s query=%s client=%s host=%s origin=%s user_agent=%s",
+            method,
+            path,
+            query,
+            client_host,
+            host,
+            origin,
+            user_agent,
+        )
+
+        status_code: int | None = None
+
+        async def send_wrapper(message: Message) -> None:
+            nonlocal status_code
+            if message.get("type") == "http.response.start":
+                status_code = int(message.get("status", 0) or 0)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception:
+            elapsed_ms = int((perf_counter() - started_at) * 1000)
+            logger.exception(
+                "MCP 请求异常: method=%s path=%s elapsed_ms=%s client=%s host=%s",
+                method,
+                path,
+                elapsed_ms,
+                client_host,
+                host,
+            )
+            raise
+
+        elapsed_ms = int((perf_counter() - started_at) * 1000)
+        logger.info(
+            "MCP 请求结束: method=%s path=%s status=%s elapsed_ms=%s client=%s host=%s",
+            method,
+            path,
+            status_code if status_code is not None else "unknown",
+            elapsed_ms,
+            client_host,
+            host,
+        )
 
 server_instructions = """
 本服务器是一个游戏<明日方舟>的知识库查询助手，专注于为用户提供准确的干员信息数据和游戏资料。
@@ -78,54 +152,7 @@ def _register_mcp_request_logging(app: FastAPI) -> None:
     if getattr(app.state, "_mcp_request_logging_registered", False):
         return
 
-    @app.middleware("http")
-    async def log_mcp_requests(request: Request, call_next):
-        path = request.url.path
-        if path != "/mcp" and not path.startswith("/mcp/"):
-            return await call_next(request)
-
-        started_at = perf_counter()
-        client_host = request.client.host if request.client else "unknown"
-        host = request.headers.get("host", "")
-        origin = request.headers.get("origin", "")
-        user_agent = request.headers.get("user-agent", "")
-
-        logger.info(
-            "MCP 请求开始: method=%s path=%s query=%s client=%s host=%s origin=%s user_agent=%s",
-            request.method,
-            path,
-            request.url.query,
-            client_host,
-            host,
-            origin,
-            user_agent,
-        )
-
-        try:
-            response = await call_next(request)
-        except Exception:
-            elapsed_ms = int((perf_counter() - started_at) * 1000)
-            logger.exception(
-                "MCP 请求异常: method=%s path=%s elapsed_ms=%s client=%s host=%s",
-                request.method,
-                path,
-                elapsed_ms,
-                client_host,
-                host,
-            )
-            raise
-
-        elapsed_ms = int((perf_counter() - started_at) * 1000)
-        logger.info(
-            "MCP 请求结束: method=%s path=%s status=%s elapsed_ms=%s client=%s host=%s",
-            request.method,
-            path,
-            response.status_code,
-            elapsed_ms,
-            client_host,
-            host,
-        )
-        return response
+    app.add_middleware(MCPRequestLoggingMiddleware)
 
     app.state._mcp_request_logging_registered = True
 
