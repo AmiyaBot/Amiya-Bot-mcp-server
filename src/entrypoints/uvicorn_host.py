@@ -1,8 +1,10 @@
 # src/entrypoints/uvicorn_host.py
 from dataclasses import replace
-from typing import Literal
+from pathlib import Path
+from typing import Any, Literal
 from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi import Query
 from fastapi import Request
 from contextlib import asynccontextmanager
 from time import perf_counter
@@ -22,6 +24,7 @@ from src.app.card_fileservier import register_cardserver_asgi
 from src.app.context import AppContext
 from src.app.config import load_from_disk
 from src.app.services.resource_update import read_resource_update_status
+from src.app.services.operator_queries import search_operator
 from src.app.transformers.html_to_png_transformer import probe_playwright_chromium
 
 log = logging.getLogger("asset")
@@ -32,6 +35,140 @@ class CommandExecuteRequest(BaseModel):
     command: str
     args: str = ""
     output_format: Literal["markdown", "json"] = "markdown"
+
+
+def _normalize_operator_check_queries(raw_items: list[str] | None) -> list[str]:
+    default_queries = ["阿米娅", "凯尔希", "陈"]
+    if not raw_items:
+        return default_queries
+
+    queries: list[str] = []
+    seen: set[str] = set()
+    for raw in raw_items:
+        normalized = str(raw or "").replace("，", ",").replace("、", ",")
+        for item in normalized.split(","):
+            query = item.strip()
+            if not query or query in seen:
+                continue
+            seen.add(query)
+            queries.append(query)
+
+    return queries or default_queries
+
+
+def _build_path_summary(path: Path) -> dict[str, Any]:
+    exists = path.exists()
+    is_file = path.is_file() if exists else False
+    is_dir = path.is_dir() if exists else False
+    size = None
+    if is_file:
+        try:
+            size = path.stat().st_size
+        except OSError:
+            size = None
+
+    return {
+        "path": str(path),
+        "exists": exists,
+        "is_file": is_file,
+        "is_dir": is_dir,
+        "size": size,
+    }
+
+
+def build_resource_check_payload(
+    app: FastAPI,
+    *,
+    cfg,
+    operator_names: list[str] | None = None,
+) -> dict[str, Any]:
+    ctx = getattr(app.state, "ctx", None)
+    repository = getattr(ctx, "data_repository", None) if isinstance(ctx, AppContext) else None
+    update_status = read_resource_update_status(cfg)
+    queries = _normalize_operator_check_queries(operator_names)
+
+    payload: dict[str, Any] = {
+        "status": "ok",
+        "code_revision": getattr(app.state, "code_revision", "unknown"),
+        "git_sha": getattr(app.state, "git_sha", "unknown"),
+        "resource_initialized": bool(repository and repository.has_local_resources()),
+        "paths": {
+            "project_root": str(cfg.ProjectRoot),
+            "resource_root": _build_path_summary(cfg.ResourcePath),
+            "character_table": _build_path_summary(cfg.ResourcePath / "gamedata" / "excel" / "character_table.json"),
+            "resource_update_status": _build_path_summary(cfg.ProjectRoot / "data" / "local" / "resource-update-status.json"),
+        },
+        "bundle": {
+            "ready": bool(repository and repository.is_ready()),
+            "version": None,
+            "version_date": repository.get_bundle_version_date() if repository else None,
+            "operators_count": 0,
+            "tokens_count": 0,
+            "operator_name_index_count": 0,
+            "operator_index_count": 0,
+        },
+        "operator_checks": [],
+        "update_status": {
+            "current_state": update_status.current_state,
+            "last_result": update_status.last_result,
+            "last_started_at": update_status.last_started_at,
+            "last_finished_at": update_status.last_finished_at,
+            "message": update_status.message,
+            "version": update_status.version,
+            "version_date": update_status.version_date,
+        },
+    }
+
+    if not repository or not repository.is_ready():
+        payload["operator_checks"] = [
+            {
+                "query": query,
+                "exact_id": None,
+                "search_message": "context_not_ready",
+                "search_matches": [],
+            }
+            for query in queries
+        ]
+        return payload
+
+    bundle = repository.get_bundle()
+    payload["bundle"] = {
+        "ready": True,
+        "version": getattr(bundle, "version", None),
+        "version_date": repository.get_bundle_version_date(),
+        "operators_count": len(getattr(bundle, "operators", {}) or {}),
+        "tokens_count": len(getattr(bundle, "tokens", {}) or {}),
+        "operator_name_index_count": len(getattr(bundle, "operator_name_to_id", {}) or {}),
+        "operator_index_count": len(getattr(bundle, "operator_index_to_id", {}) or {}),
+    }
+
+    operator_checks: list[dict[str, Any]] = []
+    for query in queries:
+        exact_id = (getattr(bundle, "operator_name_to_id", {}) or {}).get(query)
+        search_message = None
+        search_matches: list[dict[str, str]] = []
+
+        try:
+            search_result = search_operator(ctx, query, limit=5)
+            search_payload = search_result.to_response()
+            search_message = search_payload.get("message")
+            search_data = search_payload.get("data") or {}
+            if isinstance(search_data, dict):
+                search_matches = list(search_data.get("operators") or [])
+        except Exception as exc:
+            search_message = f"search_error: {exc}"
+
+        operator_checks.append(
+            {
+                "query": query,
+                "exact_id": exact_id,
+                "search_message": search_message,
+                "search_matches": search_matches,
+            }
+        )
+
+    payload["operator_checks"] = operator_checks
+    return payload
 
 
 async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
@@ -158,6 +295,14 @@ def uvicorn_main():
                 "version_date": update_status.version_date,
             },
         }
+
+    @app.get("/rest/resource-check")
+    async def resource_check(operator_name: list[str] | None = Query(default=None)):
+        return build_resource_check_payload(
+            app,
+            cfg=cfg,
+            operator_names=operator_name,
+        )
 
     @app.post("/rest/commands/execute")
     async def execute_command(request: Request, payload: CommandExecuteRequest):
