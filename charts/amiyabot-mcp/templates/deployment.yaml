@@ -66,8 +66,6 @@ spec:
               readOnly: true
             - name: resources
               mountPath: /app/resources
-            - name: local-state
-              mountPath: /app/data/local
       volumes:
         - name: config
           configMap:
@@ -79,8 +77,6 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
-        - name: local-state
-          emptyDir: {}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

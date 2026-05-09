@@ -15,6 +15,7 @@ from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from src.app.config import Config
+from src.app.runtime_state import command_service_log_path
 from src.adapters.cmd.app import parse_command_line
 
 logger = logging.getLogger(__name__)
@@ -245,8 +246,7 @@ def wait_for_service_ready(base_url: str, timeout_seconds: float) -> None:
 
 def launch_detached_web_service(cfg: Config) -> None:
     python_executable = resolve_service_python(cfg.ProjectRoot)
-    log_path = cfg.ProjectRoot / "data" / "local" / "command-service.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path = command_service_log_path(cfg)
 
     logger.info("尝试在后台启动本地 Web 服务: %s", log_path)
     with log_path.open("ab") as log_file:

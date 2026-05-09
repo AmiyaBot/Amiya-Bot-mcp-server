@@ -11,6 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from src.app.config import Config
+from src.app.runtime_state import resource_update_lock_path
+from src.app.runtime_state import resource_update_log_path
+from src.app.runtime_state import resource_update_status_path
 from src.data.loader._git_gamedata_maintainer import GitGameDataMaintainer
 
 log = logging.getLogger(__name__)
@@ -39,25 +42,6 @@ class ResourceUpdateExecutionResult:
     message: str
     version: str | None = None
     version_date: str | None = None
-
-
-def resource_update_status_path(cfg: Config) -> Path:
-    path = cfg.ProjectRoot / "data" / "local" / "resource-update-status.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def resource_update_lock_path(cfg: Config) -> Path:
-    path = cfg.ProjectRoot / "data" / "local" / "resource-update.lock"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def resource_update_log_path(cfg: Config) -> Path:
-    path = cfg.ProjectRoot / "data" / "local" / "resource-update.log"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
-
 
 def is_resource_initialized(cfg: Config) -> bool:
     maintainer = GitGameDataMaintainer(cfg.GameDataRepo or "", cfg.ResourcePath)

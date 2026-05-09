@@ -23,6 +23,7 @@ from src.adapters.cmd.app import execute_registered_command
 from src.app.card_fileservier import register_cardserver_asgi
 from src.app.context import AppContext
 from src.app.config import load_from_disk
+from src.app.runtime_state import resource_update_status_path
 from src.app.services.resource_update import read_resource_update_status
 from src.app.services.operator_queries import search_operator
 from src.app.transformers.html_to_png_transformer import probe_playwright_chromium
@@ -95,8 +96,9 @@ def build_resource_check_payload(
         "paths": {
             "project_root": str(cfg.ProjectRoot),
             "resource_root": _build_path_summary(cfg.ResourcePath),
+            "runtime_state_root": _build_path_summary(cfg.ResourcePath / "runtime"),
             "character_table": _build_path_summary(cfg.ResourcePath / "gamedata" / "excel" / "character_table.json"),
-            "resource_update_status": _build_path_summary(cfg.ProjectRoot / "data" / "local" / "resource-update-status.json"),
+            "resource_update_status": _build_path_summary(resource_update_status_path(cfg)),
         },
         "bundle": {
             "ready": bool(repository and repository.is_ready()),
