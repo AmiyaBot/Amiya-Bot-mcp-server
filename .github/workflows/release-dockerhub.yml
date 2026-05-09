@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - "v*"
+      - "*.*.*"
+  release:
+    types:
+      - published
   workflow_dispatch:
     inputs:
       tag:
@@ -12,12 +16,12 @@ on:
         type: string
 
 concurrency:
-  group: publish-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  group: publish-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
   cancel-in-progress: false
 
 env:
   IMAGE_NAME: ${{ vars.DOCKERHUB_REPOSITORY || secrets.DOCKERHUB_REPOSITORY }}
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
   REPOSITORY_NAME: ${{ github.event.repository.name }}
   REPOSITORY_OWNER: ${{ github.repository_owner }}
 
