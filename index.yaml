@@ -2,53 +2,63 @@ apiVersion: v1
 entries:
   amiyabot-mcp:
   - apiVersion: v2
+    appVersion: 0.1.7
+    created: "2026-05-09T07:19:04.945538506Z"
+    description: Helm chart for deploying AmiyaBot MCP Server
+    digest: e13ea3e846ffac2fb43b348b1fd94832a3140190785c9d23f45e86fcfa1aa4f3
+    name: amiyabot-mcp
+    type: application
+    urls:
+    - https://AmiyaBot.github.io/Amiya-Bot-mcp-server/amiyabot-mcp-0.1.7.tgz
+    version: 0.1.7
+  - apiVersion: v2
     appVersion: 0.1.6
-    created: "2026-05-08T12:52:23.47090015Z"
+    created: "2026-05-09T07:19:04.945262018Z"
     description: Helm chart for deploying AmiyaBot MCP Server
     digest: e8f1bcb7e18c6300fae24e590c6e8603a5956dbf8bfc9f0967ad92ce032066f3
     name: amiyabot-mcp
     type: application
     urls:
-    - amiyabot-mcp-0.1.6.tgz
+    - https://AmiyaBot.github.io/Amiya-Bot-mcp-server/amiyabot-mcp-0.1.6.tgz
     version: 0.1.6
   - apiVersion: v2
     appVersion: 0.1.5
-    created: "2026-05-08T03:48:16.081808794Z"
+    created: "2026-05-09T07:19:04.945000233Z"
     description: Helm chart for deploying AmiyaBot MCP Server
     digest: 0fb4794751ebe0da22787c5af930f0a2ed306346b37305f37def436b326ea997
     name: amiyabot-mcp
     type: application
     urls:
-    - amiyabot-mcp-0.1.5.tgz
+    - https://AmiyaBot.github.io/Amiya-Bot-mcp-server/amiyabot-mcp-0.1.5.tgz
     version: 0.1.5
   - apiVersion: v2
     appVersion: 0.1.4
-    created: "2026-05-08T01:37:47.679092398Z"
+    created: "2026-05-09T07:19:04.944678647Z"
     description: Helm chart for deploying AmiyaBot MCP Server
     digest: d500269b67680de9034f9f9dc95010e15314f42691aadf7c84f026850cfbe094
     name: amiyabot-mcp
     type: application
     urls:
-    - amiyabot-mcp-0.1.4.tgz
+    - https://AmiyaBot.github.io/Amiya-Bot-mcp-server/amiyabot-mcp-0.1.4.tgz
     version: 0.1.4
   - apiVersion: v2
     appVersion: 0.1.3
-    created: "2026-05-08T00:59:13.983711846Z"
+    created: "2026-05-09T07:19:04.944372484Z"
     description: Helm chart for deploying AmiyaBot MCP Server
     digest: 28064369f68188f3a3f7945800965b84beb290545900318984bda215b36b3ec5
     name: amiyabot-mcp
     type: application
     urls:
-    - amiyabot-mcp-0.1.3.tgz
+    - https://AmiyaBot.github.io/Amiya-Bot-mcp-server/amiyabot-mcp-0.1.3.tgz
     version: 0.1.3
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2026-05-07T10:23:35.075297574Z"
+    created: "2026-05-09T07:19:04.944066883Z"
     description: Helm chart for deploying AmiyaBot MCP Server
     digest: ef2b453f91346dea0afa9a97ba1c5affae960e77acee415ad8e0f69ced2c1fff
     name: amiyabot-mcp
     type: application
     urls:
-    - amiyabot-mcp-0.1.0.tgz
+    - https://AmiyaBot.github.io/Amiya-Bot-mcp-server/amiyabot-mcp-0.1.0.tgz
     version: 0.1.0
-generated: "2026-05-08T12:52:23.470917764Z"
+generated: "2026-05-09T07:19:04.943605976Z"
