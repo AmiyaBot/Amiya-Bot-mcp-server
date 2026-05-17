@@ -61,8 +61,20 @@ class DataRepository:
 
     def get_bundle(self) -> DataBundle:
         if self._bundle is None:
+            log.warning("get_bundle: 数据未就绪 (bundle is None)")
             raise DataNotReadyError("Game data bundle is not ready. Call startup_prepare()/ensure_ready() first.")
-        return self._bundle
+        bundle = self._bundle
+        operators_count = len(bundle.operators) if bundle.operators else 0
+        name_index_count = len(bundle.operator_name_to_id) if bundle.operator_name_to_id else 0
+        log.debug(
+            "get_bundle: operators=%s name_index=%s is_ready=%s",
+            operators_count,
+            name_index_count,
+            True,
+        )
+        if operators_count == 0:
+            log.warning("get_bundle: operators 数量为 0，数据可能未正确加载")
+        return bundle
 
     def get_bundle_version_date(self) -> str | None:
         if self._maintainer is None:
@@ -95,7 +107,16 @@ class DataRepository:
             log.info("Loading game data bundle from disk...")
             bundle = await asyncio.to_thread(self._load_bundle)
             self._bundle = bundle
-            log.info("Game data bundle loaded. version=%s", getattr(bundle, "version", ""))
+            operators_count = len(bundle.operators) if bundle.operators else 0
+            name_index_count = len(bundle.operator_name_to_id) if bundle.operator_name_to_id else 0
+            log.info(
+                "Game data bundle loaded. version=%s operators=%s name_index=%s",
+                getattr(bundle, "version", ""),
+                operators_count,
+                name_index_count,
+            )
+            if operators_count == 0:
+                log.warning("ensure_ready: 加载完成但 operators 数量为 0！请检查游戏数据文件。")
             return bundle
 
     async def refresh_from_disk(self) -> DataBundle:

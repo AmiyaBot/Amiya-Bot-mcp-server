@@ -16,6 +16,8 @@ import logging
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from src.app.bootstrap_disk import build_context_from_disk
+from src.app.logging import setup_logging
+from src.app.memory_log_handler import get_memory_handler
 from src.adapters.cmd.web_client import compute_service_code_revision
 from src.adapters.cmd.web_client import resolve_service_git_sha
 from src.adapters.mcp.app import register_asgi
@@ -170,6 +172,17 @@ def build_resource_check_payload(
         )
 
     payload["operator_checks"] = operator_checks
+
+    # 附加最近搜索相关日志，便于远端诊断
+    memory_handler = get_memory_handler()
+    if memory_handler is not None:
+        # 只取搜索链路相关的日志关键字
+        search_keywords = "search_operator|build_sources|search_source_spec|get_bundle|DataBundle|DataRepository|operator_name"
+        payload["recent_search_logs"] = memory_handler.query(
+            keyword=search_keywords,
+            lines=30,
+        )
+
     return payload
 
 
@@ -200,6 +213,15 @@ async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
 
 
 def uvicorn_main():
+    # 初始化日志系统（从环境变量 LOG_LEVEL 读取级别，默认 DEBUG）
+    import os as _os
+    _log_level_str = _os.getenv("LOG_LEVEL", "DEBUG").upper()
+    _log_level = getattr(logging, _log_level_str, logging.DEBUG)
+    setup_logging(
+        log_file="resources/logs/app.log",
+        level=_log_level,
+    )
+    log.info("日志系统已初始化: level=%s", _log_level_str)
 
     cfg = load_from_disk()
     log.info(
@@ -305,6 +327,42 @@ def uvicorn_main():
             cfg=cfg,
             operator_names=operator_name,
         )
+
+    @app.get("/rest/logs")
+    async def query_logs(
+        level: str | None = Query(default=None, description="按级别过滤: DEBUG/INFO/WARNING/ERROR"),
+        keyword: str | None = Query(default=None, description="按消息或 logger 名关键字过滤"),
+        lines: int = Query(default=100, ge=1, le=2000, description="返回的最大条数"),
+        since: str | None = Query(default=None, description="ISO 时间戳，只返回此时间之后的日志"),
+    ):
+        """获取内存中的日志。"""
+        handler = get_memory_handler()
+        if handler is None:
+            return {
+                "total": 0,
+                "returned": 0,
+                "buffer_capacity": 0,
+                "logs": [],
+                "message": "内存日志处理器未初始化",
+            }
+        return handler.query(level=level, keyword=keyword, lines=lines, since=since)
+
+    @app.get("/rest/logs/levels")
+    async def log_level_counts():
+        """获取各级别日志计数。"""
+        handler = get_memory_handler()
+        if handler is None:
+            return {"levels": {}, "message": "内存日志处理器未初始化"}
+        return {"levels": handler.level_counts()}
+
+    @app.delete("/rest/logs")
+    async def clear_logs():
+        """清空内存日志缓冲区。"""
+        handler = get_memory_handler()
+        if handler is None:
+            return {"ok": False, "message": "内存日志处理器未初始化"}
+        handler.clear()
+        return {"ok": True}
 
     @app.post("/rest/commands/execute")
     async def execute_command(request: Request, payload: CommandExecuteRequest):

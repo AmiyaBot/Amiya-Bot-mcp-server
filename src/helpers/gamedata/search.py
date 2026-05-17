@@ -286,9 +286,23 @@ def search_source_spec(
         show_candidates(results.matches)
     """
         
+    import logging
+    _log = logging.getLogger(__name__)
+
     queries = _normalize_queries(query)
     if not queries or n <= 0:
+        _log.debug("search_source_spec: 查询为空或 n<=0, queries=%s n=%s", queries, n)
         return SearchResults(matches=[])
+
+    _log.debug(
+        "search_source_spec 开始: queries=%s sources=%s exact_only=%s",
+        queries,
+        len(sources),
+        exact_only,
+    )
+    for si, spec in enumerate(sources):
+        cand = list(spec.candidates()) if callable(spec.candidates) else spec.candidates
+        _log.debug("search_source_spec source[%s] key=%s candidates=%s", si, spec.key, len(cand))
 
     all_results: List[MatchResult] = []
 
@@ -335,11 +349,29 @@ def search_source_spec(
     return SearchResults(matches=deduped)
 
 def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) -> List[SourceSpec]:
+    import logging
+    _log = logging.getLogger(__name__)
+
+    operators_count = len(bundle.operators) if bundle.operators else 0
+    name_index_keys = list(bundle.operator_name_to_id.keys()) if bundle.operator_name_to_id else []
+    name_index_count = len(name_index_keys)
+
+    _log.debug(
+        "build_sources: operators=%s operator_name_to_id_keys=%s",
+        operators_count,
+        name_index_count,
+    )
+    if operators_count == 0 or name_index_count == 0:
+        _log.warning(
+            "build_sources: 数据为空！operators=%s name_index=%s. 所有搜索将返回空结果。",
+            operators_count,
+            name_index_count,
+        )
 
     all_source = [
         SourceSpec(
             key="name",
-            candidates=lambda: list(bundle.operator_name_to_id.keys()),
+            candidates=lambda: name_index_keys,
             resolve=lambda k: bundle.operators[bundle.operator_name_to_id[k]],
             continue_after_exact=False,   # 对于干员搜索，找到精确名就不会继续（除了阿米娅，目前暂不考虑）
             allow_fuzzy=True,

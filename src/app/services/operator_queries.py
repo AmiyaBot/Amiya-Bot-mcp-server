@@ -135,17 +135,54 @@ def search_operator(
     query: str,
     limit: int = 10,
 ) -> QueryExecutionResult:
+    from time import perf_counter
+    t0 = perf_counter()
+
     normalized_query = str(query or "").strip()
     if not normalized_query:
+        logger.debug("search_operator: query 为空")
         return QueryExecutionResult(message="query 不能为空")
 
+    logger.debug("search_operator 开始: query=%s limit=%s", normalized_query, limit)
+
     bundle = context.data_repository.get_bundle()
+    bundle_operators = len(bundle.operators) if bundle.operators else 0
+    name_index_size = len(bundle.operator_name_to_id) if bundle.operator_name_to_id else 0
+    logger.debug(
+        "search_operator bundle 状态: operators=%s name_index=%s",
+        bundle_operators,
+        name_index_size,
+    )
+    if bundle_operators == 0 or name_index_size == 0:
+        logger.warning(
+            "search_operator: 游戏数据为空！operators=%s name_index=%s",
+            bundle_operators,
+            name_index_size,
+        )
+
     search_sources = build_sources(bundle, source_key=["name"])
+    logger.debug("search_operator: build_sources 返回 %s 个 source", len(search_sources))
+
     search_results = search_source_spec(normalized_query, sources=search_sources, n=max(limit, 1))
     name_matches = search_results.by_key("name")
     items = _build_operator_search_items(name_matches)
 
+    elapsed_ms = int((perf_counter() - t0) * 1000)
+    logger.debug(
+        "search_operator 完成: query=%s matches=%s items=%s elapsed_ms=%s",
+        normalized_query,
+        len(name_matches),
+        len(items),
+        elapsed_ms,
+    )
+
     if not items:
+        logger.warning(
+            "search_operator: 未找到干员 query=%s bundle_operators=%s name_index=%s",
+            normalized_query,
+            bundle_operators,
+            name_index_size,
+        )
         return QueryExecutionResult(message=f"未找到匹配的干员: {normalized_query}")
 
     return QueryExecutionResult(data={"operators": items})

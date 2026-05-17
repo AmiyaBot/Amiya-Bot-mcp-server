@@ -4,6 +4,8 @@ import os
 from concurrent_log_handler import ConcurrentRotatingFileHandler
 from logging.config import dictConfig
 
+from src.app.memory_log_handler import MemoryLogHandler, set_memory_handler
+
 LOG_CONFIG = {}  # 先占位，setup_logging 调用后会写入
 
 
@@ -87,6 +89,15 @@ def setup_logging(
     }
 
     dictConfig(LOG_CONFIG)  # 应用配置
+
+    # 注册内存日志处理器（环形缓冲区，供 REST 接口查询）
+    memory_handler = MemoryLogHandler(capacity=2000)
+    memory_handler.setLevel(level)
+    # 使用与 stdout 相同的格式
+    memory_handler.setFormatter(logging.Formatter(fmt))
+    root_logger = logging.getLogger()
+    root_logger.addHandler(memory_handler)
+    set_memory_handler(memory_handler)
 
     logging.getLogger().info(
         f"Logging setup complete. All logs will be written to {log_file} and stdout."

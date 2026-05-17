@@ -33,6 +33,22 @@ def register_operator_search_tool(mcp, app):
                 return result_payload
 
             context: AppContext = app.state.ctx
+            # 记录数据仓库就绪状态
+            repo = getattr(context, "data_repository", None)
+            if repo is not None:
+                try:
+                    bundle = repo.get_bundle()
+                except Exception:
+                    bundle = None
+                logger.debug(
+                    "search_operator 调用上下文: repo_ready=%s bundle_operators=%s name_index=%s",
+                    repo.is_ready(),
+                    len(bundle.operators) if bundle and bundle.operators else 0,
+                    len(bundle.operator_name_to_id) if bundle and bundle.operator_name_to_id else 0,
+                )
+            else:
+                logger.warning("search_operator: data_repository 为 None")
+
             result = search_operator_query(
                 context,
                 query=query,
