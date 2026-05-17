@@ -102,11 +102,11 @@ class TestConnectivity:
         assert caps is not None, "服务器能力不应为空"
 
     async def test_list_tools(self, mcp_session: Any) -> None:
-        """工具列表应包含全部 4 个已注册工具。"""
+        """工具列表应包含全部 5 个已注册工具。"""
         result = await mcp_session.list_tools()
         tool_names = {t.name for t in result.tools}
 
-        expected = {"search_operator", "get_operator_basic", "get_operator_skill", "get_glossary"}
+        expected = {"search_operator", "get_operator_basic_data", "get_operator_card", "get_operator_skill", "get_glossary"}
         missing = expected - tool_names
         assert not missing, f"缺少工具: {missing}"
 
@@ -143,12 +143,11 @@ class TestSearchOperator:
         assert result.isError is False
 
 
-class TestGetOperatorBasic:
-    """测试 get_operator_basic 工具 — 验证干员卡片内容完整性。"""
+class TestGetOperatorBasicData:
+    """测试 get_operator_basic_data 工具 — 仅返回结构化数据，无 image_url。"""
 
     @pytest_asyncio.fixture(scope="function")
     async def operator_ids(self, mcp_session: Any) -> dict[str, str]:
-        """搜索阿米娅、凯尔希、银灰，返回 {name: id}。"""
         ids: dict[str, str] = {}
         for name in ["阿米娅", "凯尔希", "银灰"]:
             result = await mcp_session.call_tool("search_operator", {"query": name})
@@ -159,51 +158,80 @@ class TestGetOperatorBasic:
             ids[name] = operators[0]["id"]
         return ids
 
-    # 干员卡片必须包含的核心字段及其预期值
-    _EXPECTED_CARD_FIELDS = {
-        "阿米娅": {"id": "char_002_amiya", "name": "阿米娅", "rarity": 5, "class": "术师"},
-        "凯尔希": {"id": "char_003_kalts", "name": "凯尔希", "rarity": 6, "class": "医疗"},
-        "银灰": {"id": "char_172_svrash", "name": "银灰", "rarity": 6, "class": "近卫"},
-    }
-
     @pytest.mark.parametrize("operator_name", ["阿米娅", "凯尔希", "银灰"])
-    async def test_get_basic_verify_card_fields(
+    async def test_get_basic_data_fields(
         self, mcp_session: Any, operator_ids: dict[str, str], operator_name: str
     ) -> None:
-        """通过 ID 获取干员卡片，验证核心字段值和 image_url。"""
+        """get_operator_basic_data 应返回结构化数据，没有 image_url。"""
         op_id = operator_ids[operator_name]
-        result = await mcp_session.call_tool("get_operator_basic", {"operator_id": op_id})
+        result = await mcp_session.call_tool("get_operator_basic_data", {"operator_id": op_id})
         assert result.isError is False, f"工具返回错误(operator={operator_name}): {result.content}"
 
         text = _extract_text(result)
         data = json.loads(text)
 
-        # get_operator_basic 返回 {"data": {...}} 或 {"message": "错误信息"}
-        # 如果服务端出错返回 message，则跳过字段验证（服务端问题，非测试问题）
         if "message" in data and "data" not in data:
-            pytest.skip(f"服务端返回错误(operator={operator_name}): {data['message']}")
+            pytest.fail(f"服务端返回错误: {data['message']}")
+
+        # 不应包含 image_url
+        assert "image_url" not in data, f"get_operator_basic_data 不应包含 image_url(operator={operator_name})"
 
         card = data.get("data", {})
-        if not isinstance(card, dict) or not card:
-            pytest.fail(f"卡片数据为空或格式异常(operator={operator_name}): {data}")
+        assert isinstance(card, dict) and card, f"数据为空(operator={operator_name})"
 
-        expected = self._EXPECTED_CARD_FIELDS[operator_name]
-        assert card.get("id") == expected["id"], f"id 不匹配(operator={operator_name}): {card.get('id')} != {expected['id']}"
-        assert card.get("name") == expected["name"], f"name 不匹配(operator={operator_name})"
-        assert card.get("rarity") == expected["rarity"], f"rarity 不匹配(operator={operator_name}): {card.get('rarity')} != {expected['rarity']}"
-        assert card.get("class") == expected["class"], f"class 不匹配(operator={operator_name}): {card.get('class')} != {expected['class']}"
+        # 验证中文键层级
+        name_section = card.get("名称", {})
+        assert name_section.get("中文名") == operator_name
+        class_section = card.get("分类", {})
+        assert "稀有度" in class_section
+        assert "职业" in class_section
+        assert "基础档案" in card
+        assert isinstance(card.get("属性", {}), dict) and len(card["属性"]) > 0
 
-        # 卡片必须有的关键字段
-        for field in ["id", "name", "rarity", "class", "image_url", "type", "position"]:
-            assert field in card, f"卡片缺少字段(operator={operator_name}): {field}"
-
-        # image_url 必须是非空字符串
-        image_url = card.get("image_url")
-        assert isinstance(image_url, str) and len(image_url) > 0, f"image_url 无效(operator={operator_name}): {image_url!r}"
-
-    async def test_get_basic_invalid_id(self, mcp_session: Any) -> None:
+    async def test_get_basic_data_invalid_id(self, mcp_session: Any) -> None:
         """无效 ID 应返回错误信息而非崩溃。"""
-        result = await mcp_session.call_tool("get_operator_basic", {"operator_id": "nonexistent_999"})
+        result = await mcp_session.call_tool("get_operator_basic_data", {"operator_id": "nonexistent_999"})
+        assert result is not None
+
+
+class TestGetOperatorCard:
+    """测试 get_operator_card 工具 — 仅返回图片 URL。"""
+
+    @pytest_asyncio.fixture(scope="function")
+    async def operator_ids(self, mcp_session: Any) -> dict[str, str]:
+        ids: dict[str, str] = {}
+        for name in ["阿米娅", "凯尔希", "银灰"]:
+            result = await mcp_session.call_tool("search_operator", {"query": name})
+            text = _extract_text(result)
+            data = json.loads(text)
+            operators = data.get("data", {}).get("operators", [])
+            assert operators, f"搜索 {name} 应返回结果"
+            ids[name] = operators[0]["id"]
+        return ids
+
+    @pytest.mark.parametrize("operator_name", ["阿米娅", "凯尔希", "银灰"])
+    async def test_get_card_image_url(
+        self, mcp_session: Any, operator_ids: dict[str, str], operator_name: str
+    ) -> None:
+        """get_operator_card 应仅返回 image_url。"""
+        op_id = operator_ids[operator_name]
+        result = await mcp_session.call_tool("get_operator_card", {"operator_id": op_id})
+        assert result.isError is False, f"工具返回错误(operator={operator_name}): {result.content}"
+
+        text = _extract_text(result)
+        data = json.loads(text)
+
+        if "message" in data and "image_url" not in data:
+            pytest.skip(f"服务端未生成图片: {data['message']}")
+
+        # 应仅包含 image_url，不应包含 data
+        assert "image_url" in data, f"缺少 image_url(operator={operator_name})"
+        assert "data" not in data, f"get_operator_card 不应包含 data 字段(operator={operator_name})"
+        assert isinstance(data["image_url"], str) and len(data["image_url"]) > 0, f"image_url 无效(operator={operator_name})"
+
+    async def test_get_card_invalid_id(self, mcp_session: Any) -> None:
+        """无效 ID 应返回错误信息而非崩溃。"""
+        result = await mcp_session.call_tool("get_operator_card", {"operator_id": "nonexistent_999"})
         assert result is not None
 
 

@@ -1,12 +1,12 @@
 # MCP 工具说明
 
-本服务对外暴露 4 个 MCP 工具，通过 SSE 协议提供。调用流程为 `search_operator` → `get_operator_basic` / `get_operator_skill`。
+本服务对外暴露 5 个 MCP 工具，通过 SSE 协议提供。干员查询流程为 `search_operator` → `get_operator_card`（推荐）/ `get_operator_basic_data`，技能查询流程为 `search_operator` → `get_operator_skill`。
 
 ---
 
 ## 1. search_operator — 干员模糊搜索
 
-按干员名称进行模糊搜索，返回候选干员的 `id` 和 `name`。拿到 `id` 后，再调用 `get_operator_basic` 或 `get_operator_skill`。
+按干员名称进行模糊搜索，返回候选干员的 `id` 和 `name`。拿到 `id` 后，再调用 `get_operator_card`（推荐）或 `get_operator_basic_data`。
 
 ### 参数
 
@@ -47,9 +47,9 @@
 
 ---
 
-## 2. get_operator_basic — 干员卡片
+## 2. get_operator_card — 干员卡片图片（推荐）
 
-根据干员 ID 获取干员基础信息与属性，附带一张干员立绘图片。
+根据干员 ID 获取干员卡片图片 URL。用户要求查询干员时，应优先使用本工具并向用户展示图片。
 
 ### 参数
 
@@ -59,36 +59,59 @@
 
 ### 返回值
 
-**成功**：
+**成功**（仅返回 `image_url`）：
 ```json
 {
-  "data": {
-    "id": "char_002_amiya",
-    "name": "阿米娅",
-    "rarity": 5,
-    "class": "术师",
-    "type": "中坚术师",
-    "position": "远程位",
-    "...": "..."
-  },
   "image_url": "https://..."
 }
 ```
 
-`data` 字段是 dict，至少包含：`id`、`name`、`rarity`、`class`、`type`、`position`。`image_url` 是生成的干员卡片图片地址。
-
 **失败**：
 ```json
-{"message": "查询干员信息时发生错误."}
+{
+  "image_url": null,
+  "message": "未生成干员卡片图片"
+}
 ```
 或
 ```json
-{"message": "未找到干员ID: xxx"}
+{"message": "查询干员信息时发生错误."}
 ```
 
 ---
 
-## 3. get_operator_skill — 干员技能
+## 3. get_operator_basic_data — 干员结构化数据
+
+根据干员 ID 获取干员的结构化数据（属性、分类、技能数据等），**不包含图片**。
+
+> ⚠️ 除非用户指明了需要精确的某项数据（如"攻击力是多少"），否则在用户要求查询干员时应当使用 `get_operator_card` 并返回图片。
+
+### 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `operator_id` | `str` | 是 | 干员 ID，由 `search_operator` 返回 |
+
+### 返回值
+
+**成功**（`data` 为中文键名 dict，无 `image_url`）：
+```json
+{
+  "data": {
+    "名称": { "中文名": "阿米娅", "英文名": "Amiya", ... },
+    "分类": { "稀有度": { "星级": 5 }, "职业": "术师", ... },
+    "属性": { ... },
+    "基础档案": { ... },
+    "技能": [ ... ],
+    "天赋": [ ... ],
+    "潜能提升": { ... }
+  }
+}
+```
+
+---
+
+## 4. get_operator_skill — 干员技能
 
 根据干员 ID 获取技能数据，默认返回第 1 个技能的等级 10。本工具不生成图片。
 
@@ -127,7 +150,7 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ---
 
-## 4. get_glossary — 游戏术语
+## 5. get_glossary — 游戏术语
 
 获取明日方舟游戏数据中指定术语的解释和计算公式。
 
@@ -168,8 +191,11 @@ search_operator(query="银灰")
          {"id": "char_1045_svash2", "name": "凛御银灰"}
        ]}}
     │
-    ├── 用户选择 "银灰" → get_operator_basic(operator_id="char_172_svrash")
-    │       → {"data": {...}, "image_url": "..."}
+    ├── 用户选择 "银灰" → get_operator_card(operator_id="char_172_svrash")   ← 推荐
+    │       → {"image_url": "https://..."}
+    │
+    └── 用户选择 "银灰" → get_operator_basic_data(operator_id="char_172_svrash")
+    │       → {"data": {"名称": {...}, "分类": {...}, ...}}
     │
     └── 用户选择 "银灰" → get_operator_skill(operator_id="char_172_svrash", index=1, level=7)
             → {"data": "干员：银灰 ... 技能：强力击·γ型 ..."}
