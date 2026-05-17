@@ -307,10 +307,17 @@ def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
     if not search_results:
         raise OperatorNotFoundError(f"未找到干员: {name}")
     elif len(search_results.matches) > 1:
-        # 交互式选择结果
-        matched_names = [m.matched_text for m in search_results.matches if m.key == "name"]
-        # return f"❌ 找到多个匹配的干员名称: {', '.join(matched_names)}，请提供更精确的名称。"
-        raise OperatorNotFoundError(f"未找到干员: {name}")
+        # 优先选精确匹配（matched_text == name 且 kind == "exact"）
+        exact_matches = [
+            m for m in search_results.matches
+            if m.matched_text == name and m.kind == "exact"
+        ]
+        if len(exact_matches) == 1:
+            # 多个候选中存在唯一精确匹配，使用它
+            pass
+        else:
+            matched_names = [m.matched_text for m in search_results.matches if m.key == "name"]
+            raise OperatorNotFoundError(f"未找到干员: {name}")
     
     op: Operator = search_results.by_key("name")[0].value
 
