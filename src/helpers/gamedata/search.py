@@ -373,7 +373,7 @@ def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) ->
             key="name",
             candidates=lambda: name_index_keys,
             resolve=lambda k: bundle.operators[bundle.operator_name_to_id[k]],
-            continue_after_exact=False,   # 对于干员搜索，找到精确名就不会继续（除了阿米娅，目前暂不考虑）
+            continue_after_exact=True,   # 精确命中后继续模糊匹配，返回异格等同名变体供 AI 选择
             allow_fuzzy=True,
         ),
         # skin/group/voice/story 继续按同样方式加
