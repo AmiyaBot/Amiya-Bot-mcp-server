@@ -296,6 +296,45 @@ def build_potential_icon_data() -> str:
         return f"data:image/svg+xml;base64,{payload}"
 
 
+def build_operator_query_result(ctx: AppContext, op: Operator) -> QueryResult:
+    """基于已解析的 Operator 对象构建 QueryResult，不做名称搜索。"""
+    bundle = ctx.data_repository.get_bundle()
+    last_phase = op.phases[-1]
+
+    CLASSICON = get_table(bundle.tables, "classes_icons", source="local", default={})
+    SP_TYPE_NAME = get_table(bundle.tables, "sp_type", source="local", default={})
+    SKILL_TYPE_NAME = get_table(bundle.tables, "skill_type", source="local", default={})
+    building_skills = build_building_skills(op, bundle.tables)
+
+    return QueryResult(
+        type="operator_profile",
+        key=op.name,
+        title=op.name,
+        data={
+            "op": op,
+            "skin_url": "",
+            "base_attr": build_base_attr(op),
+            "trust_attr": build_trust_attr(op),
+            "module_attr": build_module_attr(op),
+            "op_range_html": None,
+            "skill_range_html": {},
+            "skill_icon_data": build_skill_icon_data(op, ctx.cfg.ResourcePath),
+            "building_skill_icon_data": build_building_skill_icon_data(building_skills, ctx.cfg.ResourcePath),
+            "template_bg_data": build_operator_template_bg_data(ctx.cfg.ProjectRoot),
+            "template_bg_url": build_operator_template_bg_url(ctx.cfg.ProjectRoot),
+            "template_font_url": build_operator_template_font_url(ctx.cfg.ProjectRoot),
+            "class_icon_data": build_operator_class_icon_data(op, ctx.cfg.ResourcePath),
+            "potential_icon_data": build_potential_icon_data(),
+            "classes_icons": CLASSICON,
+            "sp_type_name": SP_TYPE_NAME,
+            "skill_type_name": SKILL_TYPE_NAME,
+            "talents_list": op.talents(),
+            "building_skills": building_skills,
+            "potential_list": build_potential_list(op, bundle.tables),
+        },
+    )
+
+
 def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
 
     search_sources = build_sources(ctx.data_repository.get_bundle(), source_key=["name"])
@@ -320,39 +359,4 @@ def search_operator_by_name(ctx: AppContext, name: str) -> QueryResult:
             raise OperatorNotFoundError(f"未找到干员: {name}")
     
     op: Operator = search_results.by_key("name")[0].value
-
-    last_phase = op.phases[-1]
-
-    bundle = ctx.data_repository.get_bundle()
-    CLASSICON = get_table(bundle.tables, "classes_icons", source="local", default={})
-    SP_TYPE_NAME = get_table(bundle.tables, "sp_type", source="local", default={})
-    SKILL_TYPE_NAME = get_table(bundle.tables, "skill_type", source="local", default={})
-    building_skills = build_building_skills(op, bundle.tables)
-    result = QueryResult(
-        type="operator_profile",
-        key=op.name,
-        title=op.name,
-        data={
-            "op": op,
-            "skin_url": "",  # 你自己拼
-            "base_attr": build_base_attr(op),
-            "trust_attr": build_trust_attr(op),
-            "module_attr": build_module_attr(op),
-            "op_range_html": None,  # 后面补
-            "skill_range_html": {},
-            "skill_icon_data": build_skill_icon_data(op, ctx.cfg.ResourcePath),
-            "building_skill_icon_data": build_building_skill_icon_data(building_skills, ctx.cfg.ResourcePath),
-            "template_bg_data": build_operator_template_bg_data(ctx.cfg.ProjectRoot),
-            "template_bg_url": build_operator_template_bg_url(ctx.cfg.ProjectRoot),
-            "template_font_url": build_operator_template_font_url(ctx.cfg.ProjectRoot),
-            "class_icon_data": build_operator_class_icon_data(op, ctx.cfg.ResourcePath),
-            "potential_icon_data": build_potential_icon_data(),
-            "classes_icons": CLASSICON,
-            "sp_type_name": SP_TYPE_NAME,
-            "skill_type_name": SKILL_TYPE_NAME,
-            "talents_list": op.talents(),
-            "building_skills": building_skills,
-            "potential_list": build_potential_list(op, bundle.tables),
-        }
-    )
-    return result
+    return build_operator_query_result(ctx, op)

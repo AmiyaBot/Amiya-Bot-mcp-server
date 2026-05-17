@@ -8,7 +8,7 @@ from src.app.context import AppContext
 from src.app.services.operator_output import build_operator_payload, render_operator_markdown
 from src.app.services.operator_skin_assets import SKIN_CACHE_PATH, resolve_operator_skin_artifact
 from src.domain.models.operator import Operator
-from src.domain.services.operator import search_operator_by_name
+from src.domain.services.operator import build_operator_query_result, search_operator_by_name
 from src.helpers.bundle import get_table
 from src.helpers.card_urls import build_card_url
 from src.helpers.gamedata.search import build_sources, search_source_spec
@@ -197,7 +197,8 @@ async def query_operator_basic_by_id(
         if isinstance(resolved, QueryExecutionResult):
             return resolved
 
-        result = search_operator_by_name(context, resolved.name)
+        # 已通过 ID 拿到 Operator，直接构建 QueryResult，无需再做名称搜索
+        result = build_operator_query_result(context, resolved)
         structured_payload = build_operator_payload(result)
 
         bundle = context.data_repository.get_bundle()
