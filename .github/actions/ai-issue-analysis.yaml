@@ -1,0 +1,63 @@
+## 复制到目标仓库时，请将本文件保存为 .github/workflows/ai-issue-analysis.yml
+
+name: AI Issue Analysis
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to analyze"
+        required: true
+        type: number
+
+jobs:
+  ai-analysis:
+    if: |
+      (github.event_name == 'issues' && github.event.action == 'opened') ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.action == 'created' &&
+       contains(github.event.comment.body, '@github-actions') &&
+       github.event.comment.user.type != 'Bot')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # LLM_API_KEY 是一个 JSON 格式的 Secret，包含所有模型及其 API Key：
+      # {
+      #   "deepseek/deepseek-chat": "sk-xxx",
+      #   "openai/gpt-4o": "sk-yyy"
+      # }
+      - name: Analyze issue with AI (config file)
+        id: analysis
+        uses: hsyhhssyy/ai-issue-analysis@v2
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        with:
+          bot-name: "@github-actions"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 查看完整输入输出
+        if: always()
+        env:
+          ANALYSIS_PROMPT: ${{ steps.analysis.outputs.analysis-prompt }}
+          ISSUE_NUMBER: ${{ steps.analysis.outputs.issue-number }}
+          COMMENT_ID: ${{ steps.analysis.outputs.comment-id }}
+          COMMENT_URL: ${{ steps.analysis.outputs.comment-url }}
+          ANALYSIS_OUTPUT: ${{ steps.analysis.outputs.analysis-output }}
+          FINAL_CONCLUSION: ${{ steps.analysis.outputs.final-conclusion }}
+        run: |
+          printf '%s\n' "$ANALYSIS_PROMPT"
+          echo "issue_number=$ISSUE_NUMBER"
+          echo "comment_id=$COMMENT_ID"
+          echo "comment_url=$COMMENT_URL"
+          printf '%s\n' "$ANALYSIS_OUTPUT"
+          printf '%s\n' "$FINAL_CONCLUSION"
