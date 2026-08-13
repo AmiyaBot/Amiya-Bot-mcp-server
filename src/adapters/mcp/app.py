@@ -13,7 +13,17 @@ from starlette.types import Scope
 from starlette.types import Send
 
 from src.adapters.mcp.mcp_tools.arknights_glossary import register_glossary_tool
-from src.adapters.mcp.mcp_tools.operator_basic import register_operator_basic_data_tool, register_operator_card_tool
+# AI-REMOVED 2026-08-13:
+# Reason: get_operator_card 工具已按用户要求移除，图片输出并入 get_operator_basic_data（card_image_url）。
+# Trigger: MCP 工具说明重构需求（合并卡片与详情工具、字段改名）。
+# Evidence: 对应注册调用与工具清单同步移除；底层查询 query_operator_basic_by_id 保持共用。
+# Replacement: get_operator_basic_data 返回 card_image_url。
+# Risk: Low（服务端内部）——旧客户端若仍调用 get_operator_card 将收到协议层"工具不存在"错误，需同步更新客户端。
+# Human Review: Required
+#
+# Original code:
+# from src.adapters.mcp.mcp_tools.operator_basic import register_operator_basic_data_tool, register_operator_card_tool
+from src.adapters.mcp.mcp_tools.operator_basic import register_operator_basic_data_tool
 from src.adapters.mcp.mcp_tools.operator_material import register_operator_material_tool
 from src.adapters.mcp.mcp_tools.search import register_search_tool
 from src.adapters.mcp.mcp_tools.token_detail import register_token_detail_tool
@@ -95,7 +105,7 @@ class MCPRequestLoggingMiddleware:
 server_instructions = """
 本服务器是一个游戏<明日方舟>的知识库查询助手，专注于为用户提供准确的干员信息数据和游戏资料。
 你可以使用注册的工具来回答明日方舟游戏内的问题。
-任何查询都请先调用 search 获取候选实体的 id（干员或召唤物），再用该 id 调用对应的详情工具（干员：get_operator_card / get_operator_basic_data / get_operator_skill / get_operator_material；召唤物：get_token_detail）。
+任何查询都请先调用 search 获取候选实体的 id（干员、召唤物或皮肤），再用该 id 调用对应的详情工具（干员：get_operator_basic_data / get_operator_skill / get_operator_material；召唤物：get_token_detail；皮肤：get_operator_skins）。
 """
 
 
@@ -195,14 +205,22 @@ def register_asgi(app: FastAPI, cfg: Config):
     register_glossary_tool(mcp,app)
     register_search_tool(mcp,app)
     register_operator_basic_data_tool(mcp,app)
-    register_operator_card_tool(mcp,app)
+    # AI-REMOVED 2026-08-13:
+    # Reason: get_operator_card 工具已移除，图片输出并入 get_operator_basic_data（card_image_url）。
+    # Trigger: 用户要求合并卡片与详情工具。
+    # Evidence: import 与工具清单同步移除。
+    # Replacement: get_operator_basic_data 返回 card_image_url。
+    # Risk: Low。Human Review: Required。
+    #
+    # Original code:
+    # register_operator_card_tool(mcp,app)
     register_operator_skill_tool(mcp,app)
     register_operator_material_tool(mcp,app)
     register_token_detail_tool(mcp,app)
     register_operator_skins_tool(mcp,app)
     logger.info(
         "MCP 工具注册完成: tools=%s",
-        ["get_glossary", "search", "get_operator_basic_data", "get_operator_card", "get_operator_skill", "get_operator_material", "get_token_detail", "get_operator_skins"],
+        ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_token_detail", "get_operator_skins"],
     )
 
     app.mount("/mcp", mcp.sse_app())

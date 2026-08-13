@@ -53,8 +53,10 @@ class QueryExecutionResult:
         response = {}
         if self.data is not None:
             response["data"] = self.data
+        # 2026-08-13: 输出契约统一——图片 URL 字段由 image_url 更名为 card_image_url，
+        # CLI 与 MCP 共用本方法，均输出 card_image_url；内部字段名 image_url 保持不变。
         if self.image_url is not None:
-            response["image_url"] = self.image_url
+            response["card_image_url"] = self.image_url
         if self.image_path is not None:
             response["image_path"] = self.image_path
         if self.message is not None:

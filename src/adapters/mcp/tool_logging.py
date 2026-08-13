@@ -46,8 +46,9 @@ def summarize_response(payload: Any) -> dict[str, Any]:
         if message:
             summary["message"] = _short_repr(message, max_length=100)
 
-        if "image_url" in payload:
-            summary["has_image_url"] = bool(payload.get("image_url"))
+        # AI-CORRECTION 2026-08-13: 输出契约统一后图片字段更名为 card_image_url，日志汇总改为读取新字段。
+        if "card_image_url" in payload:
+            summary["has_card_image_url"] = bool(payload.get("card_image_url"))
         if "image_path" in payload:
             summary["has_image_path"] = bool(payload.get("image_path"))
 

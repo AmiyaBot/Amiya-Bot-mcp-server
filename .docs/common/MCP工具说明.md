@@ -1,12 +1,12 @@
 # MCP 工具说明
 
-本服务对外暴露 8 个 MCP 工具，通过 SSE 协议提供。`search` 是资源统一搜索入口（任何查询都应从它开始），干员查询流程为 `search` → `get_operator_card`（推荐）/ `get_operator_basic_data`，技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`。
+本服务对外暴露 7 个 MCP 工具，通过 SSE 协议提供。`search` 是资源统一搜索入口（任何查询都应从它开始），干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`。
 
 ---
 
 ## 1. search — 资源统一搜索（任何查询的入口）
 
-本服务所有查询的统一入口：按名称模糊搜索「干员」「干员的召唤物」与「干员皮肤（具名时装）」，返回候选实体的 `id`、`name` 和 `type`。拿到 `id` 后，再调用 `get_operator_card`（推荐）或 `get_operator_basic_data`；召唤物条目额外携带所属干员的 `operator_id` / `operator_name`，用 `operator_id` 调用干员相关工具即可查看所属干员详情；皮肤条目同样携带归属干员的 `operator_id` / `operator_name`，查看皮肤可通过归属干员的卡片/详情工具。
+本服务所有查询的统一入口：按名称模糊搜索「干员」「干员的召唤物」与「干员皮肤（具名时装）」，返回候选实体的 `id`、`name` 和 `type`。拿到 `id` 后，再调用 `get_operator_basic_data`（推荐，返回结构化数据 + `card_image_url` 卡片图片）；召唤物条目额外携带所属干员的 `operator_id` / `operator_name`，用 `operator_id` 调用干员相关工具即可查看所属干员详情；皮肤条目同样携带归属干员的 `operator_id` / `operator_name`，查看皮肤可通过归属干员的详情/皮肤工具。
 
 > 注：本工具是统一搜索入口，可搜索范围未来会继续扩展（扩展内容不会提前暴露在 MCP 说明中）。
 
@@ -58,44 +58,11 @@
 
 ---
 
-## 2. get_operator_card — 干员卡片图片（推荐）
+## 2. get_operator_basic_data — 干员详情（推荐）
 
-根据干员 ID 获取干员卡片图片 URL。用户要求查询干员时，应优先使用本工具并向用户展示图片。
+根据干员 ID 获取干员的结构化数据（属性、分类、技能数据等），以及一张包含上述全部数据的精美展示卡URL。
 
-### 参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `operator_id` | `str` | 是 | 干员 ID，由 `search` 返回 |
-
-### 返回值
-
-**成功**（仅返回 `image_url`）：
-```json
-{
-  "image_url": "https://..."
-}
-```
-
-**失败**：
-```json
-{
-  "image_url": null,
-  "message": "未生成干员卡片图片"
-}
-```
-或
-```json
-{"message": "查询干员信息时发生错误."}
-```
-
----
-
-## 3. get_operator_basic_data — 干员结构化数据
-
-根据干员 ID 获取干员的结构化数据（属性、分类、技能数据等），**不包含图片**。
-
-> ⚠️ 除非用户指明了需要精确的某项数据（如"攻击力是多少"），否则在用户要求查询干员时应当使用 `get_operator_card` 并返回图片。
+> ⚠️ 注意：除非用户指明了需要精确的某项属性数据（如"攻击力是多少"），否则在用户要求查询干员时应当优先，并且只向用户展示 card_image_url 所指示的图片，里面包含了更加丰富的信息。
 
 ### 参数
 
@@ -105,7 +72,7 @@
 
 ### 返回值
 
-**成功**（`data` 为中文键名 dict，无顶层 `image_url`）：
+**成功**（`data` 为中文键名 dict，另带 `card_image_url` 干员卡片图片 URL）：
 ```json
 {
   "data": {
@@ -116,9 +83,13 @@
     "技能": [ ... ],
     "天赋": [ ... ],
     "潜能提升": { ... }
-  }
+  },
+  "card_image_url": "https://..."
 }
 ```
+
+说明：
+- `card_image_url` 为干员卡片图片 URL；若卡片生成失败（如本地 CLI 场景无 `BaseUrl`），该字段缺省，但 `data` 结构化数据始终返回。
 
 **召唤物**：若干员拥有召唤物/装置（来自 `displayTokenDict` 与技能 `overrideTokenKey`），`data` 中额外包含 `召唤物` 分区：
 ```json
@@ -153,9 +124,11 @@
 
 ---
 
-## 4. get_token_detail — 召唤物详情
+## 3. get_token_detail — 召唤物详情
 
 根据召唤物 ID 获取召唤物的详情数据（名称、属性、天赋、技能、所属干员等）与召唤物卡片图片。
+
+> ⚠️ 注意：除非用户指明了需要精确的某项属性数据，否则在用户要求查询召唤物时应当优先，并且只向用户展示 card_image_url 所指示的图片，里面包含了更加丰富的信息。
 
 ### 参数
 
@@ -165,7 +138,7 @@
 
 ### 返回值
 
-**成功**（`data` 为中文键名 dict，另带 `image_url`）：
+**成功**（`data` 为中文键名 dict，另带 `card_image_url`）：
 ```json
 {
   "data": {
@@ -181,12 +154,12 @@
     "技能": [ { "名称": "...", "回复方式": "...", "技能类型": "...", "技力": {"初始": 0, "消耗": 0}, "持续时间": 20.0, "攻击范围": "■□□□", "描述": "..." } ],
     "所属干员": { "id": "char_003_kalts", "名称": "凯尔希" }
   },
-  "image_url": "https://..."
+  "card_image_url": "https://..."
 }
 ```
 
 说明：
-- `image_url` 为召唤物卡片图片 URL；若卡片生成失败（如本地场景无 `BaseUrl`），该字段缺省，但 `data` 结构化数据始终返回。
+- `card_image_url` 为召唤物卡片图片 URL；若卡片生成失败（如本地场景无 `BaseUrl`），该字段缺省，但 `data` 结构化数据始终返回。
 - 「天赋」取该召唤物的有效天赋（名称非空）；「技能」取每个技能的最高等级，字段口径与 `get_operator_basic_data` 的召唤物分区一致。
 - 无主召唤物（未挂靠任何干员）无 `所属干员` 分区，也不会生成卡片图片。
 
@@ -203,7 +176,7 @@
 
 ---
 
-## 5. get_operator_skill — 干员技能
+## 4. get_operator_skill — 干员技能
 
 根据干员 ID 获取技能数据，默认返回第 1 个技能的等级 10。本工具不生成图片。
 
@@ -242,9 +215,11 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ---
 
-## 6. get_operator_material — 干员材料
+## 5. get_operator_material — 干员材料
 
 根据干员 ID 获取干员精英化与技能升级材料，同时返回材料卡片图片与结构化数据。
+
+> ⚠️ 注意：除非用户指明了需要精确的某项材料数据，否则在用户要求查询干员材料时应当优先，并且只向用户展示 card_image_url 所指示的图片，里面包含了更加丰富的信息。
 
 ### 参数
 
@@ -254,7 +229,7 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ### 返回值
 
-**成功** — 同时携带 `image_url`（材料卡片图片）、`image_path`（本地路径，本地场景）与 `data`（结构化材料数据）：
+**成功** — 同时携带 `card_image_url`（材料卡片图片）、`image_path`（本地路径，本地场景）与 `data`（结构化材料数据）：
 ```json
 {
   "data": {
@@ -268,7 +243,7 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
       "专精": [ { "技能名": "强力击·γ型", "专精一": [ ... ], "专精二": [ ... ], "专精三": [ ... ] } ]
     }
   },
-  "image_url": "https://..."
+  "card_image_url": "https://..."
 }
 ```
 
@@ -287,7 +262,7 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ---
 
-## 7. get_glossary — 游戏术语
+## 6. get_glossary — 游戏术语
 
 获取明日方舟游戏数据中指定术语的解释和计算公式。
 
@@ -316,9 +291,11 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ---
 
-## 8. get_operator_skins — 干员皮肤
+## 7. get_operator_skins — 干员皮肤
 
 根据干员 ID 获取该干员的皮肤列表（含精英化立绘与具名皮肤），返回结构化数据与每个皮肤的立绘卡片图片 URL。
+
+> ⚠️ 注意：除非用户指明了需要精确的某项皮肤数据，否则在用户要求查询干员皮肤时应当优先，并且只向用户展示各皮肤条目 card_url 所指示的图片，里面包含了更加丰富的信息。
 
 ### 参数
 
@@ -396,17 +373,14 @@ search(query="银灰")
          {"id": "char_1045_svash2", "name": "凛御银灰", "type": "干员"}
        ]}}
     │
-    ├── 用户选择 "银灰" → get_operator_card(operator_id="char_172_svrash")   ← 推荐
-    │       → {"image_url": "https://..."}
-    │
-    ├── 用户选择 "银灰" → get_operator_basic_data(operator_id="char_172_svrash")
-    │       → {"data": {"名称": {...}, "分类": {...}, ...}}
+    ├── 用户选择 "银灰" → get_operator_basic_data(operator_id="char_172_svrash")   ← 推荐
+    │       → {"data": {"名称": {...}, "分类": {...}, ...}, "card_image_url": "https://..."}
     │
     ├── 用户选择 "银灰" → get_operator_skill(operator_id="char_172_svrash", index=1, level=7)
     │       → {"data": "干员：银灰 ... 技能：强力击·γ型 ..."}
     │
     └── 用户选择 "银灰" → get_operator_material(operator_id="char_172_svrash")
-            → {"data": {"精英化材料": [...], ...}, "image_url": "https://..."}
+            → {"data": {"精英化材料": [...], ...}, "card_image_url": "https://..."}
 ```
 
 ```
@@ -420,10 +394,10 @@ search(query="Mon3tr")
        ]}}
     │
     ├── 查看召唤物 → get_token_detail(token_id="token_10002_kalts_mon3tr")
-    │       → {"data": {"名称": "Mon3tr", ...}, "image_url": "https://..."}
+    │       → {"data": {"名称": "Mon3tr", ...}, "card_image_url": "https://..."}
     │
-    └── 查看所属干员 → get_operator_card(operator_id="char_003_kalts")
-            → {"image_url": "https://..."}
+    └── 查看所属干员 → get_operator_basic_data(operator_id="char_003_kalts")
+            → {"data": {...}, "card_image_url": "https://..."}
 ```
 
 ```
