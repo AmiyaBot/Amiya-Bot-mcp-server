@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ op.name }} - {{ skin.name }}</title>
+  <style>
+    @font-face {
+      font-family: "Harmony";
+      {% if template_font_url %}
+      src: url("{{ template_font_url }}") format("truetype");
+      {% else %}
+      src: local("HarmonyOS Sans SC"), local("Noto Sans CJK SC"), local("Noto Sans SC");
+      {% endif %}
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: "Harmony", serif !important;
+    }
+
+    body {
+      margin: 0;
+    }
+
+    #template {
+      width: 1600px;
+      min-height: 1200px;
+      background: {% if template_bg_data %}url("{{ template_bg_data }}"){% elif template_bg_url %}url("{{ template_bg_url }}"){% else %}linear-gradient(135deg, #757575, #4a4a4a){% endif %} center / cover no-repeat;
+      display: flex;
+      flex-direction: column;
+      padding: 30px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .header .title {
+      color: #fff;
+      background: #000;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 34px;
+      font-weight: bold;
+    }
+
+    .skin-body {
+      display: flex;
+      gap: 24px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .skin-info {
+      width: 460px;
+      flex: none;
+      background: rgb(255 255 255 / 92%);
+      border-radius: 10px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-size: 24px;
+      line-height: 1.5;
+      color: #222;
+    }
+
+    .skin-info .skin-name {
+      font-size: 30px;
+      font-weight: bold;
+      border-bottom: 2px solid #222;
+      padding-bottom: 12px;
+    }
+
+    .skin-info .label {
+      color: #666;
+      font-size: 22px;
+      margin-bottom: 2px;
+    }
+
+    .skin-info .quote {
+      color: #444;
+      font-style: italic;
+    }
+
+    .skin-image {
+      flex: 1;
+      min-width: 0;
+      background-color: rgb(0 0 0 / 8%);
+      border-radius: 10px;
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+  </style>
+</head>
+<body>
+  <div id="template">
+    <div class="header">
+      <div class="title">{{ op.name }} - {{ skin.name }}</div>
+    </div>
+    <div class="skin-body">
+      <div class="skin-info">
+        <div class="skin-name">{{ skin.name }}（{{ skin.skin_key }}）</div>
+        {% if skin.group %}
+        <div><span class="label">系列</span><br>{{ skin.group }}</div>
+        {% endif %}
+        {% if skin.drawer %}
+        <div><span class="label">画师</span><br>{{ skin.drawer }}</div>
+        {% endif %}
+        {% if skin.source %}
+        <div><span class="label">获得途径</span><br>{{ skin.source }}</div>
+        {% endif %}
+        {% if skin.usage %}
+        <div><span class="label">用途</span><br>{{ skin.usage }}</div>
+        {% endif %}
+        {% if skin.content %}
+        <div><span class="label">台词</span><br>{{ skin.content }}</div>
+        {% endif %}
+        {% if skin.desc %}
+        <div class="quote">「{{ skin.desc }}」</div>
+        {% endif %}
+      </div>
+      {% if skin_url %}
+      <div class="skin-image" style="background-image: url('{{ skin_url }}')"></div>
+      {% else %}
+      <div class="skin-image"></div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

@@ -102,11 +102,11 @@ class TestConnectivity:
         assert caps is not None, "服务器能力不应为空"
 
     async def test_list_tools(self, mcp_session: Any) -> None:
-        """工具列表应包含全部 7 个已注册工具。"""
+        """工具列表应包含全部 8 个已注册工具。"""
         result = await mcp_session.list_tools()
         tool_names = {t.name for t in result.tools}
 
-        expected = {"search", "get_operator_basic_data", "get_operator_card", "get_operator_skill", "get_glossary", "get_operator_material", "get_token_detail"}
+        expected = {"search", "get_operator_basic_data", "get_operator_card", "get_operator_skill", "get_glossary", "get_operator_material", "get_token_detail", "get_operator_skins"}
         missing = expected - tool_names
         assert not missing, f"缺少工具: {missing}"
 
@@ -152,11 +152,63 @@ class TestSearch:
         for item in token_items:
             assert item.get("operator_id"), f"召唤物条目应携带 operator_id: {item}"
 
+    async def test_search_known_skin(self, mcp_session: Any) -> None:
+        """搜索皮肤名应返回皮肤条目（携带归属干员信息）。"""
+        result = await mcp_session.call_tool("search", {"query": "报童"})
+        assert result.isError is False, f"工具返回错误: {result.content}"
+
+        text = _extract_text(result)
+        data = json.loads(text)
+        items = data.get("data", {}).get("items", [])
+        assert len(items) > 0, "搜索 '报童' 应至少返回一个结果"
+
+        skin_items = [item for item in items if item.get("type") == "皮肤"]
+        assert skin_items, f"搜索 '报童' 应返回皮肤条目: {items}"
+        for item in skin_items:
+            assert item.get("operator_id"), f"皮肤条目应携带 operator_id: {item}"
+            assert item.get("operator_name"), f"皮肤条目应携带 operator_name: {item}"
+
     async def test_search_empty_query(self, mcp_session: Any) -> None:
         """空查询应正常返回（不崩溃）。"""
         result = await mcp_session.call_tool("search", {"query": ""})
         # 空查询不应报错
         assert result.isError is False
+
+
+class TestGetOperatorSkins:
+    """测试 get_operator_skins 工具 — 干员皮肤列表（结构化数据 + 皮肤卡片）。"""
+
+    async def test_get_operator_skins(self, mcp_session: Any) -> None:
+        """按干员 ID 查询应返回皮肤列表，且条目携带皮肤字段。"""
+        result = await mcp_session.call_tool(
+            "get_operator_skins",
+            {"operator_id": "char_210_stward"},
+        )
+        assert result.isError is False, f"工具返回错误: {result.content}"
+
+        text = _extract_text(result)
+        data = json.loads(text)
+        payload = data.get("data", {})
+        operator = payload.get("operator", {})
+        assert operator.get("id") == "char_210_stward", f"应返回 operator: {operator}"
+
+        skins = payload.get("skins", [])
+        assert len(skins) > 0, f"应至少返回一个皮肤条目: {payload}"
+        for item in skins:
+            assert item.get("id"), f"皮肤条目应携带 id: {item}"
+            assert item.get("名称"), f"皮肤条目应携带名称: {item}"
+            assert "card_url" in item, f"皮肤条目应携带 card_url 字段: {item}"
+
+    async def test_get_operator_skins_invalid_id(self, mcp_session: Any) -> None:
+        """不存在的干员 ID 应返回提示。"""
+        result = await mcp_session.call_tool(
+            "get_operator_skins",
+            {"operator_id": "char_9999_not_exist"},
+        )
+        assert result.isError is False
+        text = _extract_text(result)
+        data = json.loads(text)
+        assert "未找到干员ID" in (data.get("message") or ""), f"应返回未找到提示: {data}"
 
 
 class TestGetTokenDetail:

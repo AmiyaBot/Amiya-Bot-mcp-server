@@ -24,6 +24,7 @@ DOWNLOAD_USER_AGENT = "AmiyaBotMCPServer/0.1"
 _index_cache_path: Path | None = None
 _index_cache_mtime_ns: int | None = None
 _index_cache_payload: dict[str, dict[str, str]] = {}
+_global_skin_url_cache: dict[str, str] = {}
 _download_locks: dict[str, asyncio.Lock] = {}
 _download_locks_guard = asyncio.Lock()
 
@@ -64,6 +65,37 @@ async def resolve_operator_skin_artifact(
         return None
 
     skin_id, remote_url = selected
+    return await _resolve_and_download(context, skin_id, remote_url)
+
+
+async def resolve_skin_artifact_by_id(
+    context: AppContext,
+    skin_id: str,
+) -> OperatorSkinArtifact | None:
+    """按 skin_id 精确解析皮肤立绘（索引全局 skin_id 零重复，可直接全局查找）。
+
+    供 get_operator_skins 皮肤卡片使用；索引中缺失该 skin_id 时返回 None。
+    """
+    normalized_skin_id = str(skin_id or "").strip()
+    if not normalized_skin_id:
+        return None
+
+    _load_skin_index(context.cfg.ResourcePath)
+    remote_url = _global_skin_url_cache.get(normalized_skin_id)
+    if not remote_url:
+        logger.debug("皮肤立绘 URL 索引中不存在: %s", normalized_skin_id)
+        return None
+
+    return await _resolve_and_download(context, normalized_skin_id, remote_url)
+
+
+async def _resolve_and_download(
+    context: AppContext,
+    skin_id: str,
+    remote_url: str,
+) -> OperatorSkinArtifact:
+    """下载/缓存皮肤立绘并构建 artifact（resolve_operator_skin_artifact 与
+    resolve_skin_artifact_by_id 的公共尾段）。"""
     cache_root = context.cfg.ResourcePath / SKIN_CACHE_PATH
     cache_root.mkdir(parents=True, exist_ok=True)
 
@@ -88,7 +120,7 @@ async def resolve_operator_skin_artifact(
             mount_path=CHAR_SKIN_MOUNT_PATH,
         )
     except Exception:
-        logger.info("构建干员立绘 URL 失败，已仅返回本地缓存路径", exc_info=True)
+        logger.info("构建皮肤立绘 URL 失败，已仅返回本地缓存路径", exc_info=True)
 
     return OperatorSkinArtifact(skin_id=skin_id, path=cached_path, url=image_url)
 
@@ -128,6 +160,11 @@ def _load_skin_index(resource_root: Path) -> dict[str, dict[str, str]]:
                 for skin_id, url in skin_urls.items()
                 if isinstance(url, str) and url.strip()
             }
+
+    # 全局 skin_id -> url 映射（数据验证：skin_id 全局零重复）
+    _global_skin_url_cache.clear()
+    for group in normalized.values():
+        _global_skin_url_cache.update(group)
 
     _index_cache_path = index_path
     _index_cache_mtime_ns = mtime_ns

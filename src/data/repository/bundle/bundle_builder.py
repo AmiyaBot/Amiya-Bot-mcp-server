@@ -10,6 +10,7 @@ from src.app.config import Config
 from src.data.models.bundle import DataBundle
 from src.data.models._operator_impl import OperatorImpl
 from src.domain.models.operator import Operator
+from src.domain.models.skin import Skin
 from src.domain.models.token import Token
 from src.helpers.bundle import build_range, get_table, html_tag_format, parse_template
 
@@ -72,6 +73,7 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
     # 3) 构建
     tokens, token_name_to_id = _build_token(tables)
     operators, name_to_id, index_to_id = _build_operators(tables)
+    skins, skin_name_to_id = _build_skin_index(operators)
 
     return DataBundle(
         version=version,
@@ -80,6 +82,8 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
         operator_name_to_id=name_to_id,
         operator_index_to_id=index_to_id,
         token_name_to_id=token_name_to_id,
+        skins=skins,
+        skin_name_to_id=skin_name_to_id,
         tables=tables,
     )
 
@@ -198,13 +202,16 @@ def _build_operators(tables) -> tuple[Dict[str, Operator], Dict[str, str], Dict[
     name_to_id: Dict[str, str] = {}
     index_to_id: Dict[str, str] = {}
 
+    # 干员 id 全集，供皮肤异格归属修正判断修正目标是否存在
+    known_operator_ids = {str(op_id) for op_id in character_table if str(op_id).startswith("char_")}
+
     for op_id, data in character_table.items():
         if not isinstance(data, dict):
             continue
         if not str(op_id).startswith("char_"):
             continue
 
-        op = OperatorImpl(op_id, data, tables=tables, is_recruit=False)
+        op = OperatorImpl(op_id, data, tables=tables, is_recruit=False, known_operator_ids=known_operator_ids)
         operators[op_id] = op
 
         if getattr(op, "name", ""):
@@ -215,6 +222,23 @@ def _build_operators(tables) -> tuple[Dict[str, Operator], Dict[str, str], Dict[
             index_to_id[op.index_name] = op_id
 
     return operators, name_to_id, index_to_id
+
+
+def _build_skin_index(operators: Dict[str, Operator]) -> tuple[Dict[str, Skin], Dict[str, str]]:
+    """汇总各干员的皮肤，构建 skin_id -> Skin 字典与 皮肤名 -> skin_id 搜索索引。
+
+    只收录具名皮肤进搜索索引：精英化立绘名字为 初始/精英一/精英二 这类通用词，
+    不可能作为检索词，且收录会与干员名 source 产生噪音。
+    皮肤名在解包数据中零重名（2026-08 数据验证：488 个具名皮肤无重复）。
+    """
+    skins: Dict[str, Skin] = {}
+    name_to_id: Dict[str, str] = {}
+    for op in operators.values():
+        for skin in op.skins():
+            skins[skin.skin_id] = skin
+            if not skin.is_evolve and skin.name:
+                name_to_id[skin.name] = skin.skin_id
+    return skins, name_to_id
 
 
 

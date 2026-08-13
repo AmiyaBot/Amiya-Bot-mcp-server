@@ -384,6 +384,15 @@ def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) ->
             allow_fuzzy=True,
         ),
         # skin/group/voice/story 继续按同样方式加
+        # AI-CORRECTION 2026-08-13: skin 已按同样方式添加（见下方 skin SourceSpec），
+        # group/voice/story 仍待实现。
+        SourceSpec(
+            key="skin",
+            candidates=lambda: list((bundle.skin_name_to_id or {}).keys()),
+            resolve=lambda k: bundle.skins[bundle.skin_name_to_id[k]],
+            continue_after_exact=False,
+            allow_fuzzy=True,
+        ),
     ]
 
     if source_key:

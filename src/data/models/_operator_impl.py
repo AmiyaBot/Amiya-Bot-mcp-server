@@ -1,7 +1,8 @@
 # src/data/models/_operator_impl.py
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Set
 from src.domain.models.operator import Operator,OperatorPhase, Skill, SkillLevel, SkillSpData, OperatorModule, STR_DICT, LIST_STR_DICT
+from src.domain.models.skin import Skin
 from src.domain.models.generic import Cost, MaterialCost, parse_cost
 from src.helpers.bundle import *
 
@@ -12,7 +13,12 @@ class OperatorImpl(Operator):
         data: dict,
         tables: Dict[str, Any],
         is_recruit: bool = False,
+        known_operator_ids: Optional[Set[str]] = None,
     ):
+        """
+        known_operator_ids: 干员 id 全集，供皮肤异格归属修正判断修正目标是否存在；
+        未传入时按旧项目行为无条件修正（可能将皮肤归属到集合外的异格干员）。
+        """
         super().__init__()
 
         sub_classes = get_table(tables, "uniequip_table", source="gamedata", default={}).get("subProfDict", {})
@@ -100,6 +106,7 @@ class OperatorImpl(Operator):
         self._init_skills(data, tables)
         self._init_modules(tables)   # <- 新增这一行（放 skills 后面就行）
         self._init_token_ids(data)
+        self._init_skins(tables, known_operator_ids)
 
     def _init_phases(self, data):
         raw = data.get("phases") or []
@@ -395,9 +402,93 @@ class OperatorImpl(Operator):
 
         self.modules = modules
 
-    def skins(self) -> LIST_STR_DICT:
+    def _init_skins(self, tables, known_operator_ids: Optional[Set[str]] = None):
+        """初始化该干员的皮肤列表（精英化立绘 + 具名皮肤）。
+
+        沿用旧项目（AmiyaBot v5 operatorBuilder.skins）的数据组织：
+        - skin_id 不含 '@' 的是精英化立绘：'#1'→初始/stage0、'#1+'→精英一/stage1、
+          '#2'→精英二/stage2，皮肤名取自固定映射；
+        - 含 '@' 的是具名皮肤，按 displaySkin.getTime 排序后依次编号 skin1..skinN；
+        - 异格归属修正沿用旧项目：char_1001_amiya2 / char_1037_amiya3 皮肤在解包
+          数据中 charId 错误指向 char_002_amiya。此处泛化为：char_ 前缀皮肤若 skin_id
+          前缀与 charId 不一致且前缀是合法干员 id，则归属修正为该前缀；若前缀不在
+          known_operator_ids 中（干员集合尚未包含异格实体），降级保留原 charId，
+          避免皮肤悬挂到不存在的干员上。
+        """
+        skin_table = get_table(tables, "skin_table", source="gamedata", default={})
+        char_skins = skin_table.get("charSkins") or {}
+
+        raw_skins: List[tuple] = []
+        for skin_id, item in char_skins.items():
+            if not isinstance(item, dict):
+                continue
+            skin_id = str(skin_id)
+            char_id = str(item.get("charId") or "")
+            prefix = skin_id.split("@")[0].split("#")[0]
+            if prefix.startswith("char_") and char_id != prefix:
+                # 异格归属修正（沿用旧项目，当前数据仅 char_1001_amiya2 / char_1037_amiya3 命中）
+                if known_operator_ids is None or prefix in known_operator_ids:
+                    char_id = prefix
+            if char_id != self.id:
+                continue
+            raw_skins.append((skin_id, item))
+
+        raw_skins.sort(key=lambda pair: (pair[1].get("displaySkin") or {}).get("getTime") or 0)
+
+        skin_lvl = {
+            "1": ("初始", "stage0"),
+            "1+": ("精英一", "stage1"),
+            "2": ("精英二", "stage2"),
+        }
+
+        skins: List[Skin] = []
+        skin_sort = 0
+        for skin_id, item in raw_skins:
+            skin_data = item.get("displaySkin") or {}
+            parts = skin_id.split("#")
+            skin_index = parts[1] if len(parts) > 1 else "1"
+
+            skin_name = ""
+            skin_key = ""
+            is_evolve = False
+            if "@" not in skin_id:
+                skin_name, skin_key = skin_lvl.get(skin_index, ("", skin_index))
+                is_evolve = True
+            else:
+                skin_sort += 1
+                skin_key = f"skin{skin_sort}"
+
+            final_name = str(skin_data.get("skinName") or skin_name or "")
+            drawer_list = skin_data.get("drawerList") or []
+            skins.append(
+                Skin(
+                    operator_id=self.id,
+                    operator_name=self.name,
+                    skin_id=skin_id,
+                    skin_key=skin_key,
+                    name=final_name,
+                    drawer=str(drawer_list[-1]) if drawer_list else "",
+                    group=str(skin_data.get("skinGroupName") or ""),
+                    content=str(skin_data.get("dialog") or ""),
+                    # 旧项目兜底为 skin_name + '立绘'（具名皮肤时 skin_name 为空，实际得到 '立绘'，
+                    # 属旧实现缺陷）；此处订正为具名皮肤兜底 "{皮肤名}立绘"。
+                    usage=str(skin_data.get("usage") or f"{final_name}立绘"),
+                    desc=str(skin_data.get("description") or ""),
+                    source=str(skin_data.get("obtainApproach") or ""),
+                    voice_id=str(item.get("voiceId") or ""),
+                    voice_type=str(item.get("voiceType") or ""),
+                    is_evolve=is_evolve,
+                )
+            )
+
+        self._skins = skins
+
+    def skins(self) -> List[Skin]:
         # 旧项目 skins() 依赖 Collection 皮肤列表；你可以把 skins 表在 load_bundle 阶段预处理塞进 tables，再在这里生成
-        return []
+        # AI-CORRECTION 2026-08-13: 以上旧注释已过时。现实现为独立 Skin 类，皮肤数据在
+        # _init_skins 中从 skin_table.charSkins 按 charId 归属（含异格修正）加载并缓存于
+        # self._skins，不再依赖旧项目 Collection 全局皮肤表；字典序列化由 Skin.to_dict() 提供。
+        return list(self._skins)
 
     def voices(self) -> LIST_STR_DICT:
         return []

@@ -1,12 +1,12 @@
 # MCP 工具说明
 
-本服务对外暴露 7 个 MCP 工具，通过 SSE 协议提供。`search` 是资源统一搜索入口（任何查询都应从它开始），干员查询流程为 `search` → `get_operator_card`（推荐）/ `get_operator_basic_data`，技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material`，召唤物查询流程为 `search` → `get_token_detail`。
+本服务对外暴露 8 个 MCP 工具，通过 SSE 协议提供。`search` 是资源统一搜索入口（任何查询都应从它开始），干员查询流程为 `search` → `get_operator_card`（推荐）/ `get_operator_basic_data`，技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`。
 
 ---
 
 ## 1. search — 资源统一搜索（任何查询的入口）
 
-本服务所有查询的统一入口：按名称模糊搜索「干员」与「干员的召唤物」，返回候选实体的 `id`、`name` 和 `type`。拿到 `id` 后，再调用 `get_operator_card`（推荐）或 `get_operator_basic_data`；召唤物条目额外携带所属干员的 `operator_id` / `operator_name`，用 `operator_id` 调用干员相关工具即可查看所属干员详情。
+本服务所有查询的统一入口：按名称模糊搜索「干员」「干员的召唤物」与「干员皮肤（具名时装）」，返回候选实体的 `id`、`name` 和 `type`。拿到 `id` 后，再调用 `get_operator_card`（推荐）或 `get_operator_basic_data`；召唤物条目额外携带所属干员的 `operator_id` / `operator_name`，用 `operator_id` 调用干员相关工具即可查看所属干员详情；皮肤条目同样携带归属干员的 `operator_id` / `operator_name`，查看皮肤可通过归属干员的卡片/详情工具。
 
 > 注：本工具是统一搜索入口，可搜索范围未来会继续扩展（扩展内容不会提前暴露在 MCP 说明中）。
 
@@ -14,7 +14,7 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `query` | `str` | 是 | 搜索关键词（干员名称或召唤物名称），支持模糊搜索 |
+| `query` | `str` | 是 | 搜索关键词（干员名称、召唤物名称或皮肤名），支持模糊搜索 |
 
 ### 返回值
 
@@ -24,16 +24,18 @@
   "data": {
     "items": [
       {"id": "char_002_amiya", "name": "阿米娅", "type": "干员"},
-      {"id": "token_10002_kalts_mon3tr", "name": "Mon3tr", "type": "召唤物", "operator_id": "char_003_kalts", "operator_name": "凯尔希"}
+      {"id": "token_10002_kalts_mon3tr", "name": "Mon3tr", "type": "召唤物", "operator_id": "char_003_kalts", "operator_name": "凯尔希"},
+      {"id": "char_002_amiya@winter#1", "name": "报童", "type": "皮肤", "operator_id": "char_002_amiya", "operator_name": "阿米娅"}
     ]
   }
 }
 ```
 
 字段说明：
-- `type`：实体类型，当前为 `干员` 或 `召唤物`。
+- `type`：实体类型，当前为 `干员`、`召唤物` 或 `皮肤`。
 - 干员条目：`id` 为干员 ID，可直接传给干员详情工具。
 - 召唤物条目：`id` 为召唤物 ID，传给 `get_token_detail` 查看召唤物详情；`operator_id` / `operator_name` 为该召唤物所属干员（也可用于查看所属干员）。未挂靠任何干员的召唤物不会出现在结果中。
+- 皮肤条目：`id` 为皮肤 ID（skin_id）；`operator_id` / `operator_name` 为皮肤归属干员，用 `operator_id` 调用 `get_operator_skins` 查看该干员全部皮肤与皮肤卡片。仅具名皮肤（有时装名）可被搜索，精英化立绘（初始/精英一/精英二）无独立名称、不进入搜索结果。
 
 **空查询**：
 ```json
@@ -42,7 +44,7 @@
 
 **无匹配**：
 ```json
-{"message": "未找到匹配的干员或召唤物: xxx"}
+{"message": "未找到匹配的干员、召唤物或皮肤: xxx"}
 ```
 
 > 提示：若搜不到结果，可能是用户使用了干员外号（非正式称呼）。此时可先联网搜索该外号对应的干员正式名称，再用正式名称重新搜索。
@@ -52,7 +54,7 @@
 1. **精确匹配**（`query == name`）— 排最前，如搜索「银灰」命中「银灰」
 2. **包含匹配**（`query in name`）— 其次，如「银灰」命中「凛御银灰」
 3. **相似度匹配**（文本相似度 ≥ 0.2）— 最后，如「银灰」命中「灰喉」「洋灰」
-4. 同类型内按匹配分数降序；干员条目优先于召唤物条目；最多返回 10 条
+4. 同类型内按匹配分数降序；条目按来源类型排序：干员优先于召唤物，召唤物优先于皮肤；最多返回 10 条
 
 ---
 
@@ -314,6 +316,74 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ---
 
+## 8. get_operator_skins — 干员皮肤
+
+根据干员 ID 获取该干员的皮肤列表（含精英化立绘与具名皮肤），返回结构化数据与每个皮肤的立绘卡片图片 URL。
+
+### 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `operator_id` | `str` | 是 | 干员 ID，由 `search` 返回（`type` 为「干员」的条目 `id`，或「皮肤」条目的 `operator_id`） |
+
+### 返回值
+
+**成功**：
+```json
+{
+  "data": {
+    "operator": { "id": "char_210_stward", "name": "史都华德" },
+    "skins": [
+      {
+        "id": "char_210_stward#1",
+        "名称": "初始",
+        "立绘键": "stage0",
+        "画师": "一立里子",
+        "系列": "默认服装",
+        "用途": "初始立绘",
+        "语音类型": "NONE",
+        "card_url": "https://...",
+        "立绘URL": "https://..."
+      },
+      {
+        "id": "char_210_stward@sale#6",
+        "名称": "风雪邀请",
+        "立绘键": "skin1",
+        "画师": "一立里子",
+        "系列": "忒斯特收藏/VII",
+        "台词": "...",
+        "用途": "...",
+        "描述": "...",
+        "获取方式": "活动获得",
+        "语音类型": "NONE",
+        "card_url": "https://...",
+        "立绘URL": "https://..."
+      }
+    ]
+  }
+}
+```
+
+说明：
+- `skins` 为皮肤列表，按上线时间（`getTime`）排序；包含精英化立绘（`立绘键` 为 `stage0/stage1/stage2`）与具名皮肤（`立绘键` 为 `skin1..skinN`）。
+- 每条目 `card_url` 为该皮肤立绘卡片图片 URL；`立绘URL` 为皮肤立绘原图 URL。若对应皮肤在立绘索引中缺失或卡片生成失败（如本地场景无 `BaseUrl`），`card_url`/`立绘URL` 为空字符串，其余结构化字段仍返回。
+
+**失败**：
+```json
+{"message": "operator_id 不能为空"}
+```
+```json
+{"message": "未找到干员ID: xxx"}
+```
+```json
+{"message": "干员 xxx 没有皮肤数据"}
+```
+```json
+{"message": "查询干员皮肤信息时发生错误."}
+```
+
+---
+
 ## 调用流程
 
 ```
@@ -354,6 +424,21 @@ search(query="Mon3tr")
     │
     └── 查看所属干员 → get_operator_card(operator_id="char_003_kalts")
             → {"image_url": "https://..."}
+```
+
+```
+用户输入 "报童"
+    │
+    ▼
+search(query="报童")
+    → {"data": {"items": [
+         {"id": "char_002_amiya@winter#1", "name": "报童", "type": "皮肤",
+          "operator_id": "char_002_amiya", "operator_name": "阿米娅"}
+       ]}}
+    │
+    └── get_operator_skins(operator_id="char_002_amiya")
+            → {"data": {"operator": {"id": "char_002_amiya", "name": "阿米娅"},
+                         "skins": [{... "名称": "报童", "card_url": "https://..."}, ...]}}
 ```
 
 ---

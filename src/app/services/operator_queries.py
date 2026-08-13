@@ -9,12 +9,17 @@ from src.app.context import AppContext
 from src.app.services.operator_material_output import build_operator_material_payload, render_operator_material_markdown
 from src.app.services.operator_output import (
     build_operator_payload,
+    build_skin_payload,
     build_token_entries,
     render_operator_markdown,
     token_first_range,
     token_max_attr_data,
 )
-from src.app.services.operator_skin_assets import SKIN_CACHE_PATH, resolve_operator_skin_artifact
+from src.app.services.operator_skin_assets import (
+    SKIN_CACHE_PATH,
+    resolve_operator_skin_artifact,
+    resolve_skin_artifact_by_id,
+)
 from src.domain.models.operator import Operator
 from src.domain.services.operator import (
     build_operator_query_result,
@@ -32,6 +37,7 @@ logger = logging.getLogger(__name__)
 OPERATOR_INFO_CARD_REVISION = "card-v20"
 OPERATOR_MATERIAL_CARD_REVISION = "mat-v1"
 OPERATOR_TOKEN_CARD_REVISION = "token-v4"
+OPERATOR_SKIN_CARD_REVISION = "skin-v1"
 
 
 @dataclass(slots=True)
@@ -64,6 +70,8 @@ def _dedupe_names(matches) -> list[str]:
 
 # 原函数名 _build_operator_search_items（2026-08-13 起重构为 _build_search_items，
 # 统一构建干员与召唤物候选条目；干员条目与旧逻辑一致）。
+# AI-CORRECTION 2026-08-13: 已支持皮肤条目（key=skin），返回 {"id", "name",
+# "type": "皮肤", "operator_id", "operator_name"}，其中 operator_* 为皮肤归属干员。
 def _build_search_items(
     matches,
     token_owner: dict[str, Operator],
@@ -74,6 +82,8 @@ def _build_search_items(
     召唤物条目：{"id", "name", "type": "召唤物", "operator_id", "operator_name"}，
     其中 operator_id/operator_name 为该召唤物所属干员（下游详情工具只接受干员 ID）。
     无主召唤物（未挂靠在任何干员下）不进入候选。
+    皮肤条目：{"id", "name", "type": "皮肤", "operator_id", "operator_name"}，
+    其中 operator_id/operator_name 为皮肤归属干员。
     """
     items: list[dict[str, str]] = []
     seen_ids: set[str] = set()
@@ -108,6 +118,23 @@ def _build_search_items(
                 "type": "召唤物",
                 "operator_id": owner.id,
                 "operator_name": owner.name,
+            })
+        elif match.key == "skin":
+            # 皮肤：附带归属干员信息（皮肤立绘可通过所属干员查询）
+            skin_id = str(getattr(value, "skin_id", "") or "").strip()
+            skin_name = str(getattr(value, "name", "") or match.matched_text).strip()
+            operator_id = str(getattr(value, "operator_id", "") or "").strip()
+            operator_name = str(getattr(value, "operator_name", "") or "").strip()
+            if not skin_id or not skin_name or skin_id in seen_ids or not operator_id:
+                continue
+
+            seen_ids.add(skin_id)
+            items.append({
+                "id": skin_id,
+                "name": skin_name,
+                "type": "皮肤",
+                "operator_id": operator_id,
+                "operator_name": operator_name,
             })
 
     return items
@@ -338,6 +365,101 @@ async def query_token_detail_by_id(
         return QueryExecutionResult(message="查询召唤物信息时发生错误.")
 
 
+async def _render_operator_skin_card(
+    context: AppContext,
+    operator: Operator,
+    skin,
+    skin_artifact,
+    bundle_version: str,
+) -> str | None:
+    """渲染单个皮肤的立绘卡片，返回卡片 URL；失败由调用方降级处理。"""
+    payload_key = f"operator_skin:{skin.skin_id}:{bundle_version}:{OPERATOR_SKIN_CARD_REVISION}"
+    payload = QueryResult(
+        type="operator_skin",
+        key=operator.name,
+        title=f"{operator.name} - {skin.name}",
+        data={
+            "op": operator,
+            "skin": skin,
+            "skin_url": skin_artifact.to_data_uri(),
+            "skin_public_url": skin_artifact.url or "",
+            "template_bg_data": build_operator_template_bg_data(context.cfg.ProjectRoot),
+            "template_bg_url": build_operator_template_bg_url(context.cfg.ProjectRoot),
+            "template_font_url": build_operator_template_font_url(context.cfg.ProjectRoot),
+        },
+    )
+
+    await context.card_service.get(
+        template="operator_skin",
+        payload_key=payload_key,
+        payload=payload,
+        format="png",
+    )
+    return build_card_url(
+        cfg=context.cfg,
+        template="operator_skin",
+        payload_key=payload_key,
+        format="png",
+    )
+
+
+async def query_operator_skins(
+    context: AppContext,
+    operator_id: str,
+) -> QueryExecutionResult:
+    """根据干员 ID 获取皮肤列表（结构化数据 + 每个皮肤的立绘卡片 URL）。
+
+    条目结构复用 build_skin_payload；逐皮肤按 skin_id 精确取立绘并渲染
+    operator_skin 卡片，取图/渲染失败时该条目降级为无 card_url。
+    """
+    try:
+        resolved = _resolve_operator_by_id(context, operator_id)
+        if isinstance(resolved, QueryExecutionResult):
+            return resolved
+
+        bundle = context.data_repository.get_bundle()
+        bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
+
+        skins = resolved.skins()
+        if not skins:
+            return QueryExecutionResult(message=f"干员 {resolved.name} 没有皮肤数据")
+
+        entries = build_skin_payload(resolved)
+        for entry, skin in zip(entries, skins):
+            entry["card_url"] = ""
+            entry["立绘URL"] = ""
+            try:
+                skin_artifact = await resolve_skin_artifact_by_id(context, skin.skin_id)
+                if skin_artifact is None:
+                    logger.debug("皮肤立绘索引缺失，跳过卡片渲染: skin_id=%s", skin.skin_id)
+                    continue
+                entry["立绘URL"] = skin_artifact.url or ""
+                entry["card_url"] = await _render_operator_skin_card(
+                    context,
+                    resolved,
+                    skin,
+                    skin_artifact,
+                    bundle_version=bundle_version,
+                )
+            except Exception:
+                logger.warning(
+                    "准备皮肤卡片失败，已降级为无卡片: operator_id=%s skin_id=%s",
+                    resolved.id,
+                    skin.skin_id,
+                    exc_info=True,
+                )
+
+        return QueryExecutionResult(
+            data={
+                "operator": {"id": resolved.id, "name": resolved.name},
+                "skins": entries,
+            }
+        )
+    except Exception:
+        logger.exception("查询干员皮肤列表失败: operator_id=%s", operator_id)
+        return QueryExecutionResult(message="查询干员皮肤信息时发生错误.")
+
+
 def _resolve_operator_by_id(
     context: AppContext,
     operator_id: str,
@@ -375,11 +497,13 @@ def search(
     bundle_operators = len(bundle.operators) if bundle.operators else 0
     name_index_size = len(bundle.operator_name_to_id) if bundle.operator_name_to_id else 0
     token_name_index_size = len(bundle.token_name_to_id) if bundle.token_name_to_id else 0
+    skin_name_index_size = len(bundle.skin_name_to_id) if bundle.skin_name_to_id else 0
     logger.debug(
-        "search bundle 状态: operators=%s name_index=%s token_name_index=%s",
+        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s",
         bundle_operators,
         name_index_size,
         token_name_index_size,
+        skin_name_index_size,
     )
     if bundle_operators == 0 or name_index_size == 0:
         logger.warning(
@@ -388,7 +512,7 @@ def search(
             name_index_size,
         )
 
-    search_sources = build_sources(bundle, source_key=["name", "token_name"])
+    search_sources = build_sources(bundle, source_key=["name", "token_name", "skin"])
     logger.debug("search: build_sources 返回 %s 个 source", len(search_sources))
 
     search_results = search_source_spec(normalized_query, sources=search_sources, n=max(limit, 1))
@@ -408,13 +532,14 @@ def search(
 
     if not items:
         logger.warning(
-            "search: 未找到干员或召唤物 query=%s bundle_operators=%s name_index=%s token_name_index=%s",
+            "search: 未找到干员、召唤物或皮肤 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s",
             normalized_query,
             bundle_operators,
             name_index_size,
             token_name_index_size,
+            skin_name_index_size,
         )
-        return QueryExecutionResult(message=f"未找到匹配的干员或召唤物: {normalized_query}")
+        return QueryExecutionResult(message=f"未找到匹配的干员、召唤物或皮肤: {normalized_query}")
 
     return QueryExecutionResult(data={"items": items})
 

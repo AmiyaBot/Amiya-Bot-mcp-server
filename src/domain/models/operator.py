@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Tuple, Any, Optional
 
 from src.domain.models.generic import Cost, MaterialCost, parse_cost
+from src.domain.models.skin import Skin
 
 STR_DICT = Dict[str, Any]
 LIST_STR_DICT = List[STR_DICT]
@@ -132,7 +133,8 @@ class Operator(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def skins(self) -> LIST_STR_DICT:
+    def skins(self) -> List[Skin]:
+        """皮肤与精英化立绘列表（按上线时间排序，含具名皮肤与 stage 立绘）。"""
         raise NotImplementedError
 
     @abstractmethod

@@ -17,6 +17,7 @@ from src.adapters.mcp.mcp_tools.operator_basic import register_operator_basic_da
 from src.adapters.mcp.mcp_tools.operator_material import register_operator_material_tool
 from src.adapters.mcp.mcp_tools.search import register_search_tool
 from src.adapters.mcp.mcp_tools.token_detail import register_token_detail_tool
+from src.adapters.mcp.mcp_tools.operator_skins import register_operator_skins_tool
 from src.adapters.mcp.mcp_tools.operator_skill import register_operator_skill_tool
 from src.app.config import Config
 
@@ -198,9 +199,10 @@ def register_asgi(app: FastAPI, cfg: Config):
     register_operator_skill_tool(mcp,app)
     register_operator_material_tool(mcp,app)
     register_token_detail_tool(mcp,app)
+    register_operator_skins_tool(mcp,app)
     logger.info(
         "MCP 工具注册完成: tools=%s",
-        ["get_glossary", "search", "get_operator_basic_data", "get_operator_card", "get_operator_skill", "get_operator_material", "get_token_detail"],
+        ["get_glossary", "search", "get_operator_basic_data", "get_operator_card", "get_operator_skill", "get_operator_material", "get_token_detail", "get_operator_skins"],
     )
 
     app.mount("/mcp", mcp.sse_app())

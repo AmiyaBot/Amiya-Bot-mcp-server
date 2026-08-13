@@ -202,6 +202,17 @@ def build_operator_payload(
             sp_type_name=data.get("sp_type_name") or {},
             skill_type_name=data.get("skill_type_name") or {},
         ),
+        # AI-REMOVED 2026-08-13:
+        # Reason: 皮肤信息改为由专有 MCP 工具 get_operator_skins 返回，干员详情 JSON 不再携带皮肤列表
+        # Trigger: 需求调整——新增 get_operator_skins 接口，从干员详情 JSON 移除皮肤信息
+        # Evidence: 用户明确要求“从干员详情json里移除皮肤信息,改为使用专有接口来返回”
+        # Replacement: src/app/services/operator_queries.py::query_operator_skins（get_operator_skins 工具）；
+        #              条目构建逻辑仍复用本文件 build_skin_payload（原 _build_skin_payload）
+        # Risk: Low
+        # Human Review: Required
+        #
+        # Original code:
+        #         "皮肤": _build_skin_payload(op),
     }
     if token_entries:
         token_payload: dict[str, Any] = {"列表": token_entries}
@@ -209,6 +220,40 @@ def build_operator_payload(
             token_payload["卡片"] = token_card_url
         payload["召唤物"] = token_payload
     return _compact_value(payload)
+
+
+def build_skin_payload(op: Any) -> list[dict[str, Any]]:
+    """皮肤/立绘条目（仅进入 JSON 结构化输出，不进角色卡模板）。
+
+    AI-CORRECTION 2026-08-13: 原注释“仅进入 JSON 结构化输出”已过时。现由专有接口
+    get_operator_skins（query_operator_skins）复用本函数构建皮肤条目并追加
+    card_url/立绘URL；干员详情 payload 已移除皮肤区块（见上方 AI-REMOVED）。
+    """
+    result: list[dict[str, Any]] = []
+    for skin in op.skins():
+        entry: dict[str, Any] = {
+            "id": skin.skin_id,
+            "名称": skin.name,
+            "立绘键": skin.skin_key,
+        }
+        if skin.drawer:
+            entry["画师"] = skin.drawer
+        if skin.group:
+            entry["系列"] = skin.group
+        if skin.content:
+            entry["台词"] = skin.content
+        if skin.usage:
+            entry["用途"] = skin.usage
+        if skin.desc:
+            entry["描述"] = skin.desc
+        if skin.source:
+            entry["获取方式"] = skin.source
+        if skin.voice_id:
+            entry["语音"] = skin.voice_id
+        if skin.voice_type:
+            entry["语音类型"] = skin.voice_type
+        result.append(entry)
+    return result
 
 
 def render_operator_markdown(
