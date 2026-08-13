@@ -108,6 +108,9 @@ class Operator(ABC):
         self.max_level: str = ""
         """最大精英化阶段与等级，如 '2 - 90' """
 
+        self.token_ids: List[str] = []
+        """该干员拥有的召唤物/装置 id 列表（来自 displayTokenDict 与技能 overrideTokenKey）"""
+
         # ---- 结构化数据 ----
 
         self.phases: List[OperatorPhase] = []

@@ -376,6 +376,13 @@ def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) ->
             continue_after_exact=True,   # 精确命中后继续模糊匹配，返回异格等同名变体供 AI 选择
             allow_fuzzy=True,
         ),
+        SourceSpec(
+            key="token_name",
+            candidates=lambda: list((bundle.token_name_to_id or {}).keys()),
+            resolve=lambda k: bundle.tokens[bundle.token_name_to_id[k]],
+            continue_after_exact=False,
+            allow_fuzzy=True,
+        ),
         # skin/group/voice/story 继续按同样方式加
     ]
 

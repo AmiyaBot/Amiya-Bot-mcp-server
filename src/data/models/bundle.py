@@ -19,6 +19,8 @@ class DataBundle:
     """干员中文名/英文代号 -> operator_id 的映射"""
     operator_index_to_id: Dict[str, str]
     """干员index_name -> operator_id 的映射"""
+    token_name_to_id: Dict[str, str]
+    """召唤物中文名/英文名 -> token_id 的映射（供统一搜索使用）"""
 
     tables: Dict[str, Dict[str,Any]]
     """保留一些表，方便详情方法内部使用（避免再读磁盘）"""

@@ -1,16 +1,29 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 import logging
 from pathlib import Path
 
 from src.app.context import AppContext
 from src.app.services.operator_material_output import build_operator_material_payload, render_operator_material_markdown
-from src.app.services.operator_output import build_operator_payload, render_operator_markdown
+from src.app.services.operator_output import (
+    build_operator_payload,
+    build_token_entries,
+    render_operator_markdown,
+    token_first_range,
+    token_max_attr_data,
+)
 from src.app.services.operator_skin_assets import SKIN_CACHE_PATH, resolve_operator_skin_artifact
 from src.domain.models.operator import Operator
-from src.domain.services.operator import build_operator_query_result, search_operator_by_name
+from src.domain.services.operator import (
+    build_operator_query_result,
+    build_operator_template_bg_data,
+    build_operator_template_bg_url,
+    build_operator_template_font_url,
+)
 from src.domain.services.operator_material import build_operator_material_query_result
+from src.domain.types import QueryResult
 from src.helpers.bundle import get_table
 from src.helpers.card_urls import build_card_url
 from src.helpers.gamedata.search import build_sources, search_source_spec
@@ -18,6 +31,7 @@ from src.helpers.gamedata.search import build_sources, search_source_spec
 logger = logging.getLogger(__name__)
 OPERATOR_INFO_CARD_REVISION = "card-v20"
 OPERATOR_MATERIAL_CARD_REVISION = "mat-v1"
+OPERATOR_TOKEN_CARD_REVISION = "token-v4"
 
 
 @dataclass(slots=True)
@@ -48,22 +62,53 @@ def _dedupe_names(matches) -> list[str]:
     return list(dict.fromkeys(match.matched_text for match in matches))
 
 
-def _build_operator_search_items(matches) -> list[dict[str, str]]:
+# 原函数名 _build_operator_search_items（2026-08-13 起重构为 _build_search_items，
+# 统一构建干员与召唤物候选条目；干员条目与旧逻辑一致）。
+def _build_search_items(
+    matches,
+    token_owner: dict[str, Operator],
+) -> list[dict[str, str]]:
+    """将搜索命中结果组装为统一候选条目。
+
+    干员条目：{"id", "name", "type": "干员"}。
+    召唤物条目：{"id", "name", "type": "召唤物", "operator_id", "operator_name"}，
+    其中 operator_id/operator_name 为该召唤物所属干员（下游详情工具只接受干员 ID）。
+    无主召唤物（未挂靠在任何干员下）不进入候选。
+    """
     items: list[dict[str, str]] = []
     seen_ids: set[str] = set()
 
     for match in matches:
-        operator = match.value
-        operator_id = str(getattr(operator, "id", "") or "").strip()
-        operator_name = str(getattr(operator, "name", "") or match.matched_text).strip()
-        if not operator_id or not operator_name or operator_id in seen_ids:
-            continue
+        value = match.value
+        if match.key == "name":
+            # 干员
+            operator_id = str(getattr(value, "id", "") or "").strip()
+            operator_name = str(getattr(value, "name", "") or match.matched_text).strip()
+            if not operator_id or not operator_name or operator_id in seen_ids:
+                continue
 
-        seen_ids.add(operator_id)
-        items.append({
-            "id": operator_id,
-            "name": operator_name,
-        })
+            seen_ids.add(operator_id)
+            items.append({
+                "id": operator_id,
+                "name": operator_name,
+                "type": "干员",
+            })
+        elif match.key == "token_name":
+            # 召唤物：只返回有主的召唤物（"干员的召唤物"）
+            token_id = str(getattr(value, "id", "") or "").strip()
+            token_name = str(getattr(value, "name", "") or match.matched_text).strip()
+            owner = token_owner.get(token_id)
+            if not token_id or not token_name or token_id in seen_ids or owner is None:
+                continue
+
+            seen_ids.add(token_id)
+            items.append({
+                "id": token_id,
+                "name": token_name,
+                "type": "召唤物",
+                "operator_id": owner.id,
+                "operator_name": owner.name,
+            })
 
     return items
 
@@ -85,6 +130,118 @@ def _resolve_safe_local_artifact_path(
     except Exception:
         logger.warning("解析本地图片缓存路径失败", exc_info=True)
         return None
+
+
+def _build_png_data_uri(path: Path) -> str | None:
+    """读取 PNG 资源并转为 data uri；不存在返回 None（模板侧隐藏图片）"""
+    if not path or not path.exists():
+        return None
+    try:
+        payload = base64.b64encode(path.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{payload}"
+    except Exception:
+        logger.warning("读取图片资源失败: path=%s", path, exc_info=True)
+        return None
+
+
+def _build_token_avatar_data_uri(resource_root: Path, token_id: str) -> str | None:
+    """读取召唤物头像并转为 data uri；头像缺失返回 None（模板侧隐藏图片）"""
+    if not resource_root:
+        return None
+    return _build_png_data_uri(resource_root / "assets" / "avatar" / f"{token_id}#1.png")
+
+
+def _build_skill_icon_data_uri(resource_root: Path, icon_id: str) -> str | None:
+    """读取技能图标并转为 data uri；图标缺失返回 None（模板侧隐藏图片）"""
+    if not resource_root or not icon_id:
+        return None
+    icon_path = resource_root / "assets" / "skill" / icon_id
+    if not icon_path.suffix:
+        icon_path = icon_path.with_suffix(".png")
+    return _build_png_data_uri(icon_path)
+
+
+async def _render_operator_token_card(
+    context: AppContext,
+    bundle,
+    operator: Operator,
+    token_entries: list[dict],
+    *,
+    bundle_version: str,
+) -> str | None:
+    """渲染干员召唤物卡片并返回图片 URL；任何失败由调用方降级处理"""
+    tokens_map = getattr(bundle, "tokens", {}) or {}
+    render_tokens: list[dict] = []
+    for entry in token_entries:
+        token = tokens_map.get(str(entry.get("id") or ""))
+        if token is None:
+            continue
+
+        # 召唤物技能图标资源为 skchr_ 前缀（跟随所属干员），且召唤物技能通常与干员技能同名，
+        # 因此按技能名复用干员技能图标；未命中时回退到召唤物技能自身 id（通常无对应资源）。
+        operator_skill_icons = {
+            str(getattr(skill, "name", "") or ""): str(getattr(skill, "icon", "") or "")
+            for skill in operator.skills or []
+        }
+
+        render_skills: list[dict] = []
+        for skill in token.skills or []:
+            icon_id = operator_skill_icons.get(str(skill.get("name") or "")) or str(skill.get("icon") or "")
+            render_skills.append(
+                {
+                    **skill,
+                    "icon_data": _build_skill_icon_data_uri(
+                        context.cfg.ResourcePath,
+                        icon_id,
+                    ),
+                }
+            )
+
+        render_tokens.append(
+            {
+                "id": token.id,
+                "name": token.name,
+                "en_name": token.en_name,
+                "classes": token.classes,
+                "type": token.type,
+                "description": token.description,
+                "avatar_data": _build_token_avatar_data_uri(context.cfg.ResourcePath, token.id),
+                "max_attr": token_max_attr_data(token),
+                "range": token_first_range(token),
+                "talents": token.talents or [],
+                "skills": render_skills,
+            }
+        )
+
+    if not render_tokens:
+        return None
+
+    payload_key = f"operator_token:{operator.id}:{bundle_version}:{OPERATOR_TOKEN_CARD_REVISION}"
+    payload = QueryResult(
+        type="operator_token",
+        key=operator.name,
+        title=f"{operator.name} 的召唤物",
+        data={
+            "op": operator,
+            "tokens": render_tokens,
+            "template_bg_data": build_operator_template_bg_data(context.cfg.ProjectRoot),
+            "template_bg_url": build_operator_template_bg_url(context.cfg.ProjectRoot),
+            "template_font_url": build_operator_template_font_url(context.cfg.ProjectRoot),
+        },
+    )
+
+    await context.card_service.get(
+        template="operator_token",
+        payload_key=payload_key,
+        payload=payload,
+        format="png",
+    )
+    return build_card_url(
+        cfg=context.cfg,
+        template="operator_token",
+        payload_key=payload_key,
+        format="png",
+    )
 
 
 def _resolve_operator(
@@ -117,6 +274,70 @@ def _resolve_operator(
     return name_matches[0].value
 
 
+def _build_token_owner_map(bundle) -> dict[str, Operator]:
+    """构建 召唤物 id -> 所属干员 的映射（被 search 与召唤物详情查询共用）"""
+    token_owner: dict[str, Operator] = {}
+    for op in (bundle.operators or {}).values():
+        for token_id in op.token_ids or []:
+            token_owner.setdefault(token_id, op)
+    return token_owner
+
+
+async def query_token_detail_by_id(
+    context: AppContext,
+    token_id: str,
+) -> QueryExecutionResult:
+    """根据召唤物 ID 获取召唤物详情（结构化数据 + 卡片图片）。
+
+    复用 build_token_entries 组装语义化条目、_render_operator_token_card 渲染卡片；
+    卡片渲染依赖所属干员（技能图标复用干员资源），无主召唤物仅返回结构化数据。
+    """
+    try:
+        normalized_token_id = str(token_id or "").strip()
+        if not normalized_token_id:
+            return QueryExecutionResult(message="token_id 不能为空")
+
+        bundle = context.data_repository.get_bundle()
+        tokens_map = bundle.tokens or {}
+        token = tokens_map.get(normalized_token_id)
+        if token is None:
+            return QueryExecutionResult(message=f"未找到召唤物ID: {normalized_token_id}")
+
+        entries = build_token_entries(tokens_map, [normalized_token_id])
+        if not entries:
+            return QueryExecutionResult(message=f"召唤物数据为空: {normalized_token_id}")
+
+        payload = dict(entries[0])
+        owner = _build_token_owner_map(bundle).get(normalized_token_id)
+
+        token_card_url = None
+        if owner is not None:
+            payload["所属干员"] = {"id": owner.id, "名称": owner.name}
+            bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
+            try:
+                token_card_url = await _render_operator_token_card(
+                    context,
+                    bundle,
+                    owner,
+                    entries,
+                    bundle_version=bundle_version,
+                )
+            except Exception:
+                logger.warning(
+                    "准备召唤物卡片失败，已降级为无卡片: token_id=%s",
+                    normalized_token_id,
+                    exc_info=True,
+                )
+
+        result = QueryExecutionResult(data=payload)
+        if token_card_url:
+            result.image_url = token_card_url
+        return result
+    except Exception:
+        logger.exception("查询召唤物详情失败: token_id=%s", token_id)
+        return QueryExecutionResult(message="查询召唤物信息时发生错误.")
+
+
 def _resolve_operator_by_id(
     context: AppContext,
     operator_id: str,
@@ -133,7 +354,9 @@ def _resolve_operator_by_id(
     return operator
 
 
-def search_operator(
+# 原函数名 search_operator（2026-08-13 起重命名为 search，
+# 升级为资源统一搜索：干员 + 干员的召唤物；未来扩展其他资源类型时在此收敛）。
+def search(
     context: AppContext,
     query: str,
     limit: int = 10,
@@ -143,52 +366,57 @@ def search_operator(
 
     normalized_query = str(query or "").strip()
     if not normalized_query:
-        logger.debug("search_operator: query 为空")
+        logger.debug("search: query 为空")
         return QueryExecutionResult(message="query 不能为空")
 
-    logger.debug("search_operator 开始: query=%s limit=%s", normalized_query, limit)
+    logger.debug("search 开始: query=%s limit=%s", normalized_query, limit)
 
     bundle = context.data_repository.get_bundle()
     bundle_operators = len(bundle.operators) if bundle.operators else 0
     name_index_size = len(bundle.operator_name_to_id) if bundle.operator_name_to_id else 0
+    token_name_index_size = len(bundle.token_name_to_id) if bundle.token_name_to_id else 0
     logger.debug(
-        "search_operator bundle 状态: operators=%s name_index=%s",
+        "search bundle 状态: operators=%s name_index=%s token_name_index=%s",
         bundle_operators,
         name_index_size,
+        token_name_index_size,
     )
     if bundle_operators == 0 or name_index_size == 0:
         logger.warning(
-            "search_operator: 游戏数据为空！operators=%s name_index=%s",
+            "search: 游戏数据为空！operators=%s name_index=%s",
             bundle_operators,
             name_index_size,
         )
 
-    search_sources = build_sources(bundle, source_key=["name"])
-    logger.debug("search_operator: build_sources 返回 %s 个 source", len(search_sources))
+    search_sources = build_sources(bundle, source_key=["name", "token_name"])
+    logger.debug("search: build_sources 返回 %s 个 source", len(search_sources))
 
     search_results = search_source_spec(normalized_query, sources=search_sources, n=max(limit, 1))
-    name_matches = search_results.by_key("name")
-    items = _build_operator_search_items(name_matches)
+    # 召唤物 -> 所属干员 反向映射：只允许"干员的召唤物"进入候选
+    token_owner = _build_token_owner_map(bundle)
+
+    items = _build_search_items(search_results.matches, token_owner)
 
     elapsed_ms = int((perf_counter() - t0) * 1000)
     logger.debug(
-        "search_operator 完成: query=%s matches=%s items=%s elapsed_ms=%s",
+        "search 完成: query=%s matches=%s items=%s elapsed_ms=%s",
         normalized_query,
-        len(name_matches),
+        len(search_results.matches),
         len(items),
         elapsed_ms,
     )
 
     if not items:
         logger.warning(
-            "search_operator: 未找到干员 query=%s bundle_operators=%s name_index=%s",
+            "search: 未找到干员或召唤物 query=%s bundle_operators=%s name_index=%s token_name_index=%s",
             normalized_query,
             bundle_operators,
             name_index_size,
+            token_name_index_size,
         )
-        return QueryExecutionResult(message=f"未找到匹配的干员: {normalized_query}")
+        return QueryExecutionResult(message=f"未找到匹配的干员或召唤物: {normalized_query}")
 
-    return QueryExecutionResult(data={"operators": items})
+    return QueryExecutionResult(data={"items": items})
 
 
 async def query_operator_basic_by_id(
@@ -202,10 +430,35 @@ async def query_operator_basic_by_id(
 
         # 已通过 ID 拿到 Operator，直接构建 QueryResult，无需再做名称搜索
         result = build_operator_query_result(context, resolved)
-        structured_payload = build_operator_payload(result)
 
         bundle = context.data_repository.get_bundle()
         bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
+
+        # 召唤物：组装语义化条目并渲染召唤物卡片（失败降级为无卡片 URL）
+        token_entries = build_token_entries(bundle.tokens, resolved.token_ids or [])
+        token_card_url = None
+        if token_entries:
+            try:
+                token_card_url = await _render_operator_token_card(
+                    context,
+                    bundle,
+                    resolved,
+                    token_entries,
+                    bundle_version=bundle_version,
+                )
+            except Exception:
+                logger.warning(
+                    "准备干员召唤物卡片失败，已降级为无召唤物卡片: operator_id=%s operator=%s",
+                    resolved.id,
+                    resolved.name,
+                    exc_info=True,
+                )
+
+        structured_payload = build_operator_payload(
+            result,
+            token_entries=token_entries,
+            token_card_url=token_card_url,
+        )
         payload_key = f"operator:{resolved.id}:{bundle_version}:{OPERATOR_INFO_CARD_REVISION}"
 
         image_url = None

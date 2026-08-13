@@ -27,7 +27,7 @@ from src.app.context import AppContext
 from src.app.config import load_from_disk
 from src.app.runtime_state import resource_update_status_path
 from src.app.services.resource_update import read_resource_update_status
-from src.app.services.operator_queries import search_operator
+from src.app.services.operator_queries import search
 from src.app.transformers.html_to_png_transformer import probe_playwright_chromium
 
 log = logging.getLogger("asset")
@@ -153,12 +153,12 @@ def build_resource_check_payload(
         search_matches: list[dict[str, str]] = []
 
         try:
-            search_result = search_operator(ctx, query, limit=5)
+            search_result = search(ctx, query, limit=5)
             search_payload = search_result.to_response()
             search_message = search_payload.get("message")
             search_data = search_payload.get("data") or {}
             if isinstance(search_data, dict):
-                search_matches = list(search_data.get("operators") or [])
+                search_matches = list(search_data.get("items") or [])
         except Exception as exc:
             search_message = f"search_error: {exc}"
 
@@ -177,7 +177,7 @@ def build_resource_check_payload(
     memory_handler = get_memory_handler()
     if memory_handler is not None:
         # 只取搜索链路相关的日志关键字
-        search_keywords = "search_operator|build_sources|search_source_spec|get_bundle|DataBundle|DataRepository|operator_name"
+        search_keywords = "search|build_sources|search_source_spec|get_bundle|DataBundle|DataRepository|operator_name"
         payload["recent_search_logs"] = memory_handler.query(
             keyword=search_keywords,
             lines=30,

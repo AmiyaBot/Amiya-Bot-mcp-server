@@ -99,6 +99,7 @@ class OperatorImpl(Operator):
         self._init_talents(data, tables)
         self._init_skills(data, tables)
         self._init_modules(tables)   # <- 新增这一行（放 skills 后面就行）
+        self._init_token_ids(data)
 
     def _init_phases(self, data):
         raw = data.get("phases") or []
@@ -211,6 +212,24 @@ class OperatorImpl(Operator):
             self.origin_name = unique_names[0]
 
     # ------------------ domain 接口实现（先做可用版，复杂聚合可逐步补齐） ------------------
+
+    def _init_token_ids(self, data):
+        """收集该干员拥有的召唤物/装置 id（displayTokenDict + 技能 overrideTokenKey）。
+        仅原样收集，存在性由查询层对照 bundle.tokens 过滤。"""
+        token_ids: List[str] = []
+
+        display_token_dict = data.get("displayTokenDict") or {}
+        for key in display_token_dict.keys():
+            key_str = str(key or "").strip()
+            if key_str and key_str not in token_ids:
+                token_ids.append(key_str)
+
+        for skill in data.get("skills") or []:
+            override_key = str((skill or {}).get("overrideTokenKey") or "").strip()
+            if override_key and override_key not in token_ids:
+                token_ids.append(override_key)
+
+        self.token_ids = token_ids
 
     def _init_detail(self, data, tables):
         items = get_table(tables, "item_table", source="gamedata", default={}).get("items", {})

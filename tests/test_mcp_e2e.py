@@ -102,11 +102,11 @@ class TestConnectivity:
         assert caps is not None, "服务器能力不应为空"
 
     async def test_list_tools(self, mcp_session: Any) -> None:
-        """工具列表应包含全部 5 个已注册工具。"""
+        """工具列表应包含全部 7 个已注册工具。"""
         result = await mcp_session.list_tools()
         tool_names = {t.name for t in result.tools}
 
-        expected = {"search_operator", "get_operator_basic_data", "get_operator_card", "get_operator_skill", "get_glossary"}
+        expected = {"search", "get_operator_basic_data", "get_operator_card", "get_operator_skill", "get_glossary", "get_operator_material", "get_token_detail"}
         missing = expected - tool_names
         assert not missing, f"缺少工具: {missing}"
 
@@ -120,27 +120,79 @@ class TestConnectivity:
 # 工具功能测试
 # ---------------------------------------------------------------------------
 
-class TestSearchOperator:
-    """测试 search_operator 工具。"""
+class TestSearch:
+    """测试 search 工具（资源统一搜索）。"""
 
     @pytest.mark.parametrize("query", ["阿米娅", "凯尔希", "银灰"])
     async def test_search_known_operator(self, mcp_session: Any, query: str) -> None:
         """搜索已知干员应返回结果。"""
-        result = await mcp_session.call_tool("search_operator", {"query": query})
+        result = await mcp_session.call_tool("search", {"query": query})
         assert result.isError is False, f"工具返回错误(query={query}): {result.content}"
 
         # 解析文本内容
         text = _extract_text(result)
         data = json.loads(text)
         assert "data" in data, f"响应缺少 data 字段(query={query}): {data}"
-        operators = data.get("data", {}).get("operators", [])
-        assert len(operators) > 0, f"搜索 '{query}' 应至少返回一个干员"
+        items = data.get("data", {}).get("items", [])
+        assert len(items) > 0, f"搜索 '{query}' 应至少返回一个结果"
+        assert any(item.get("type") == "干员" for item in items), f"搜索 '{query}' 应返回干员条目"
+
+    async def test_search_known_token(self, mcp_session: Any) -> None:
+        """搜索召唤物名称应返回召唤物条目（携带所属干员信息）。"""
+        result = await mcp_session.call_tool("search", {"query": "Mon3tr"})
+        assert result.isError is False, f"工具返回错误: {result.content}"
+
+        text = _extract_text(result)
+        data = json.loads(text)
+        items = data.get("data", {}).get("items", [])
+        assert len(items) > 0, "搜索 'Mon3tr' 应至少返回一个结果"
+
+        token_items = [item for item in items if item.get("type") == "召唤物"]
+        assert token_items, f"搜索 'Mon3tr' 应返回召唤物条目: {items}"
+        for item in token_items:
+            assert item.get("operator_id"), f"召唤物条目应携带 operator_id: {item}"
 
     async def test_search_empty_query(self, mcp_session: Any) -> None:
         """空查询应正常返回（不崩溃）。"""
-        result = await mcp_session.call_tool("search_operator", {"query": ""})
+        result = await mcp_session.call_tool("search", {"query": ""})
         # 空查询不应报错
         assert result.isError is False
+
+
+class TestGetTokenDetail:
+    """测试 get_token_detail 工具 — 召唤物详情（结构化数据 + 卡片图片）。"""
+
+    @pytest_asyncio.fixture(scope="function")
+    async def token_id(self, mcp_session: Any) -> str:
+        """通过 search 找到召唤物条目 id。"""
+        result = await mcp_session.call_tool("search", {"query": "Mon3tr"})
+        text = _extract_text(result)
+        data = json.loads(text)
+        items = data.get("data", {}).get("items", [])
+        token_items = [item for item in items if item.get("type") == "召唤物"]
+        assert token_items, f"搜索 'Mon3tr' 应返回召唤物条目: {items}"
+        return token_items[0]["id"]
+
+    async def test_get_token_detail_returns_data(self, mcp_session: Any, token_id: str) -> None:
+        """获取召唤物详情应返回结构化数据与所属干员信息。"""
+        result = await mcp_session.call_tool("get_token_detail", {"token_id": token_id})
+        assert result.isError is False, f"工具返回错误: {result.content}"
+
+        text = _extract_text(result)
+        data = json.loads(text)
+
+        if "message" in data and "data" not in data:
+            pytest.fail(f"服务端返回错误: {data['message']}")
+
+        detail = data.get("data", {})
+        assert isinstance(detail, dict) and detail, f"召唤物数据为空: {data}"
+        assert detail.get("名称") == "Mon3tr", f"召唤物名称不符: {detail.get('名称')}"
+        assert detail.get("所属干员", {}).get("名称") == "凯尔希", f"所属干员信息不符: {detail.get('所属干员')}"
+
+    async def test_get_token_detail_invalid_id(self, mcp_session: Any) -> None:
+        """无效召唤物 ID 应返回错误信息而非崩溃。"""
+        result = await mcp_session.call_tool("get_token_detail", {"token_id": "token_nonexistent_999"})
+        assert result is not None
 
 
 class TestGetOperatorBasicData:
@@ -150,12 +202,12 @@ class TestGetOperatorBasicData:
     async def operator_ids(self, mcp_session: Any) -> dict[str, str]:
         ids: dict[str, str] = {}
         for name in ["阿米娅", "凯尔希", "银灰"]:
-            result = await mcp_session.call_tool("search_operator", {"query": name})
+            result = await mcp_session.call_tool("search", {"query": name})
             text = _extract_text(result)
             data = json.loads(text)
-            operators = data.get("data", {}).get("operators", [])
-            assert operators, f"搜索 {name} 应返回结果"
-            ids[name] = operators[0]["id"]
+            items = data.get("data", {}).get("items", [])
+            assert items, f"搜索 {name} 应返回结果"
+            ids[name] = items[0]["id"]
         return ids
 
     @pytest.mark.parametrize("operator_name", ["阿米娅", "凯尔希", "银灰"])
@@ -201,12 +253,12 @@ class TestGetOperatorCard:
     async def operator_ids(self, mcp_session: Any) -> dict[str, str]:
         ids: dict[str, str] = {}
         for name in ["阿米娅", "凯尔希", "银灰"]:
-            result = await mcp_session.call_tool("search_operator", {"query": name})
+            result = await mcp_session.call_tool("search", {"query": name})
             text = _extract_text(result)
             data = json.loads(text)
-            operators = data.get("data", {}).get("operators", [])
-            assert operators, f"搜索 {name} 应返回结果"
-            ids[name] = operators[0]["id"]
+            items = data.get("data", {}).get("items", [])
+            assert items, f"搜索 {name} 应返回结果"
+            ids[name] = items[0]["id"]
         return ids
 
     @pytest.mark.parametrize("operator_name", ["阿米娅", "凯尔希", "银灰"])
@@ -247,12 +299,12 @@ class TestGetOperatorSkill:
         """搜索阿米娅、凯尔希、银灰，返回 {name: id}。"""
         ids: dict[str, str] = {}
         for name in ["阿米娅", "凯尔希", "银灰"]:
-            result = await mcp_session.call_tool("search_operator", {"query": name})
+            result = await mcp_session.call_tool("search", {"query": name})
             text = _extract_text(result)
             data = json.loads(text)
-            operators = data.get("data", {}).get("operators", [])
-            assert operators, f"搜索 {name} 应返回结果"
-            ids[name] = operators[0]["id"]
+            items = data.get("data", {}).get("items", [])
+            assert items, f"搜索 {name} 应返回结果"
+            ids[name] = items[0]["id"]
         return ids
 
     # 技能1在7级时 markdown 中应包含的关键词

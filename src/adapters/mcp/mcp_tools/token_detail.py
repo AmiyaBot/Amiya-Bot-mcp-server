@@ -8,24 +8,24 @@ from src.adapters.mcp.tool_logging import log_tool_exception
 from src.adapters.mcp.tool_logging import log_tool_not_ready
 from src.adapters.mcp.tool_logging import log_tool_start
 from src.app.context import AppContext
-from src.app.services.operator_queries import query_operator_skill_by_id
+from src.app.services.operator_queries import query_token_detail_by_id
 
 logger = logging.getLogger(__name__)
 
-def register_operator_skill_tool(mcp, app):
-    @mcp.tool(description="根据干员 ID 获取干员技能数据（默认第1个技能，等级10）。请先调用 search 获取 id。本工具不生成图片。")
-    async def get_operator_skill(
-        operator_id: Annotated[str, Field(description="干员ID，可先调用 search 获取")],
-        index: Annotated[int, Field(description="技能序号，从1开始")] = 1,
-        level: Annotated[int, Field(description="技能等级 1~10（8~10为专精一/二/三）")] = 10,
+_TOKEN_DETAIL_TOOL_DESC = """根据召唤物 ID 获取召唤物的详情数据（名称、属性、天赋、技能、所属干员等）与召唤物卡片图片。
+请先调用 search 获取候选召唤物的 id（type 为「召唤物」的条目），再把返回的 id 传给本工具。"""
+
+
+def register_token_detail_tool(mcp, app):
+    @mcp.tool(description=_TOKEN_DETAIL_TOOL_DESC)
+    async def get_token_detail(
+        token_id: Annotated[str, Field(description="召唤物ID，可先调用 search 获取（type 为「召唤物」的条目 id）")],
     ) -> dict:
-        tool_name = "get_operator_skill"
+        tool_name = "get_token_detail"
         started_at = log_tool_start(
             logger,
             tool_name,
-            operator_id=operator_id,
-            index=index,
-            level=level,
+            token_id=token_id,
         )
 
         try:
@@ -36,11 +36,9 @@ def register_operator_skill_tool(mcp, app):
                 return result_payload
 
             context: AppContext = app.state.ctx
-            result = await query_operator_skill_by_id(
+            result = await query_token_detail_by_id(
                 context,
-                operator_id=operator_id,
-                index=index,
-                level=level,
+                token_id=token_id,
             )
             result_payload = result.to_response()
             log_tool_end(logger, tool_name, started_at, result_payload)
@@ -50,12 +48,6 @@ def register_operator_skill_tool(mcp, app):
                 logger,
                 tool_name,
                 started_at,
-                operator_id=operator_id,
-                index=index,
-                level=level,
+                token_id=token_id,
             )
             raise
-
-
-
-

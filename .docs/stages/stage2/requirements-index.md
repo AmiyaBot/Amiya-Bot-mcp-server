@@ -54,6 +54,7 @@
 | STAGE2-RQ-001 | 干员详情展示重构与档案数据补全 | P0 | done | M2 | [REQ-001](requirements/REQ-001-operator-detail-enhancement.md) |
 | STAGE2-RQ-002 | 干员查询结构化结果契约与 CLI JSON / Markdown 输出 | P1 | done | M2 | [REQ-002](requirements/REQ-002-operator-query-output-contract.md) |
 | STAGE2-RQ-003 | 干员材料页面复刻（精英化与技能升级材料） | P1 | in-progress | M2 | [REQ-003](requirements/REQ-003-operator-material-page.md) |
+| STAGE2-RQ-004 | 干员查询召唤物输出与 search_operator 类型字段 | P1 | done | M2 | [REQ-004](requirements/REQ-004-operator-token-and-search-type.md) |
 
 ## 当前阶段观察
 
@@ -74,6 +75,7 @@
 
 ## 更新日志
 
+- 2026-08-13：新增 STAGE2-RQ-004（干员查询召唤物输出与 search_operator 类型字段），实现与本地验证完成，状态 `done`。
 - 2026-04-13：建立 stage2 需求索引总表，并登记首个 P0 需求。
 - 2026-04-13：确认 stage2 主题、整合推进方式与首轮验收字段，stage2 进入 `in-progress`。
 - 2026-04-13：根据当前未提交改动的实际运行结果回写进度；STAGE2-RQ-001 从 `M1` 推进到 `M2`，并记录银灰样例已完成图片卡片验证。

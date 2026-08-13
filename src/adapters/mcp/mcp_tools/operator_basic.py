@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 
 
 _DATA_TOOL_DESC = """根据干员 ID 获取干员的结构化数据（属性、分类、技能数据等）。
-请先调用 search_operator 进行模糊搜索，再把返回的 id 传给本工具。
+请先调用 search 进行模糊搜索，再把返回的 id 传给本工具。
 
 注意：除非用户指明了需要精确的某项属性数据（如"攻击力是多少"），
 否则在用户要求查询干员时应当使用 get_operator_card 并返回图片。
 """
 
 _CARD_TOOL_DESC = """根据干员 ID 获取干员的图片卡片 URL。
-请先调用 search_operator 进行模糊搜索，再把返回的 id 传给本工具。
+请先调用 search 进行模糊搜索，再把返回的 id 传给本工具。
 
 用户要求查询干员时，应优先使用本工具，向用户展示干员卡片图片。
 """
@@ -30,7 +30,7 @@ _CARD_TOOL_DESC = """根据干员 ID 获取干员的图片卡片 URL。
 def register_operator_basic_data_tool(mcp, app):
     @mcp.tool(description=_DATA_TOOL_DESC)
     async def get_operator_basic_data(
-        operator_id: Annotated[str, Field(description='干员ID，可先调用 search_operator 获取')],
+        operator_id: Annotated[str, Field(description='干员ID，可先调用 search 获取')],
     ) -> dict:
         tool_name = "get_operator_basic_data"
         started_at = log_tool_start(
@@ -70,7 +70,7 @@ def register_operator_basic_data_tool(mcp, app):
 def register_operator_card_tool(mcp, app):
     @mcp.tool(description=_CARD_TOOL_DESC)
     async def get_operator_card(
-        operator_id: Annotated[str, Field(description='干员ID，可先调用 search_operator 获取')],
+        operator_id: Annotated[str, Field(description='干员ID，可先调用 search 获取')],
     ) -> dict:
         tool_name = "get_operator_card"
         started_at = log_tool_start(

@@ -4,6 +4,7 @@
 
 本仓库是 QQ 机器人 AmiyaBot 官方插件库 [AmiyaBot/Amiya-Bot-plugins](https://github.com/AmiyaBot/Amiya-Bot-plugins) 中**明日方舟数据展示**相关能力的 MCP 重做版。
 
+- **原版代码本地副本**：原插件仓库代码已克隆至 `.temp/Amiya-Bot-plugins`,复刻功能时可在此对照原实现。
 - **复刻范围**：原插件库功能很多(签到、抽卡、游戏等),本仓库只关注其中**明日方舟数据展示**相关内容,其余功能不关心。
 - **重做方式**：不是代码一比一复刻,而是在保证功能一致的基础上**全新重做**,包括数据结构层面的调整。
 - **交付形态**：独立 MCP Server,对外暴露 MCP 工具(SSE 协议 `/mcp/sse`)与 REST 端点(`/rest/status` 等),提供可安装命令 `amiyabot-cli`。

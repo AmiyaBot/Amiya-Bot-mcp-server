@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ op.name or "operator" }} 的召唤物</title>
+  <style>
+    @font-face {
+      font-family: "Harmony";
+      {% if template_font_url %}
+      src: url("{{ template_font_url }}") format("truetype");
+      {% else %}
+      src: local("HarmonyOS Sans SC"), local("Noto Sans CJK SC"), local("Noto Sans SC");
+      {% endif %}
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: "Harmony", serif !important;
+    }
+
+    body {
+      margin: 0;
+    }
+
+    #template {
+      width: 1600px;
+      min-height: 895px;
+      background: {% if template_bg_data %}url("{{ template_bg_data }}"){% elif template_bg_url %}url("{{ template_bg_url }}"){% else %}linear-gradient(135deg, #757575, #4a4a4a){% endif %} center / cover no-repeat;
+      position: relative;
+      padding: 30px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .header .title {
+      color: #fff;
+      background: #000;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 34px;
+      font-weight: bold;
+    }
+
+    .token-list {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .token-item {
+      background: rgb(255 255 255 / 90%);
+      border-radius: 10px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .token-head {
+      display: flex;
+      align-items: flex-start;
+    }
+
+    .token-avatar {
+      width: 128px;
+      height: 128px;
+      border-radius: 8px;
+      margin-right: 20px;
+      background: rgb(0 0 0 / 10%);
+      flex: none;
+      object-fit: contain;
+    }
+
+    .token-head-info {
+      flex: 1;
+    }
+
+    .token-name-line {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .token-name {
+      font-size: 32px;
+      font-weight: bold;
+      color: #000;
+    }
+
+    .token-en-name {
+      font-size: 20px;
+      color: #555;
+    }
+
+    .token-badge {
+      font-size: 18px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      background: #0069ff;
+      color: #fff;
+    }
+
+    .token-classes {
+      font-size: 20px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .token-desc {
+      font-size: 20px;
+      color: #b8860b;
+      line-height: 1.6;
+    }
+
+    .token-body {
+      display: flex;
+      gap: 32px;
+      margin-top: 20px;
+    }
+
+    .token-attrs table {
+      border-collapse: collapse;
+      font-size: 20px;
+    }
+
+    .token-attrs td {
+      padding: 6px 18px;
+    }
+
+    .token-attrs td:first-child {
+      color: #0069ff;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .token-range pre {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.5;
+      color: #333;
+      letter-spacing: 2px;
+    }
+
+    .token-range-title {
+      color: #0069ff;
+      font-weight: bold;
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+
+    .token-extra {
+      margin-top: 20px;
+      border-top: 1px dashed rgb(0 0 0 / 20%);
+      padding-top: 14px;
+    }
+
+    .token-extra-title {
+      color: #fff;
+      background: #000;
+      display: inline-block;
+      padding: 3px 14px;
+      border-radius: 4px;
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+
+    .token-extra-item {
+      margin-bottom: 10px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .talent-name {
+      color: #ff9800;
+      font-weight: bold;
+      font-size: 20px;
+      white-space: nowrap;
+    }
+
+    .talent-desc {
+      color: #333;
+      font-size: 20px;
+      line-height: 1.6;
+    }
+
+    .token-skill {
+      margin-bottom: 16px;
+    }
+
+    .token-skill-line {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    .skill-name {
+      color: #00bcd4;
+      font-weight: bold;
+      font-size: 22px;
+    }
+
+    .skill-badge {
+      font-size: 16px;
+      padding: 2px 10px;
+      border-radius: 4px;
+      background: #0069ff;
+      color: #fff;
+    }
+
+    .skill-sp {
+      font-size: 18px;
+      color: #555;
+    }
+
+    .skill-desc {
+      font-size: 19px;
+      color: #333;
+      line-height: 1.6;
+    }
+
+    .skill-icon {
+      width: 56px;
+      height: 56px;
+      flex: none;
+      margin-right: 14px;
+    }
+
+    .block-group {
+      display: flex;
+    }
+
+    .block {
+      width: 15px;
+      height: 15px;
+      margin: 1px;
+    }
+
+    .block.r {
+      border: 1px solid #000;
+      background: #fff;
+    }
+
+    .block.s {
+      background: #000;
+    }
+
+    .skill-range {
+      display: flex;
+      flex-direction: column;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+{% macro render_range_blocks(text) -%}
+  {% for line in (text or "").splitlines() %}
+    <div class="block-group">
+      {% for char in line %}
+        {% if char == "□" %}
+          <div class="block r"></div>
+        {% elif char == "■" %}
+          <div class="block s"></div>
+        {% else %}
+          <div class="block"></div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endfor %}
+{%- endmacro %}
+<div id="template">
+  <div class="header">
+    <div class="title">{{ op.name }}的召唤物</div>
+  </div>
+  <div class="token-list">
+    {% for item in tokens %}
+    <div class="token-item">
+      <div class="token-head">
+        {% if item.avatar_data %}
+        <img class="token-avatar" src="{{ item.avatar_data }}" alt="{{ item.name }}">
+        {% endif %}
+        <div class="token-head-info">
+          <div class="token-name-line">
+            <span class="token-name">{{ item.name }}</span>
+            {% if item.en_name %}
+            <span class="token-en-name">{{ item.en_name }}</span>
+            {% endif %}
+            {% if item.type %}
+            <span class="token-badge">{{ item.type }}</span>
+            {% endif %}
+            {% if item.classes %}
+            <span class="token-badge" style="background: #ff641e;">{{ item.classes }}</span>
+            {% endif %}
+          </div>
+          {% if item.description %}
+          <div class="token-desc">{{ item.description }}</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="token-body">
+        <div class="token-attrs">
+          <table>
+            <tr>
+              <td>最大生命值</td><td>{{ item.max_attr.get("maxHp", "-") }}</td>
+              <td>攻击力</td><td>{{ item.max_attr.get("atk", "-") }}</td>
+            </tr>
+            <tr>
+              <td>防御力</td><td>{{ item.max_attr.get("def", "-") }}</td>
+              <td>法术抗性</td><td>{{ item.max_attr.get("magicResistance", "-") }}</td>
+            </tr>
+            <tr>
+              <td>攻击间隔</td><td>{{ item.max_attr.get("baseAttackTime", "-") }}</td>
+              <td>阻挡数</td><td>{{ item.max_attr.get("blockCnt", "-") }}</td>
+            </tr>
+            <tr>
+              <td>部署费用</td><td>{{ item.max_attr.get("cost", "-") }}</td>
+              <td>再部署时间</td><td>{{ item.max_attr.get("respawnTime", "-") }}</td>
+            </tr>
+          </table>
+        </div>
+        {% if item.range and item.range != "无范围" %}
+        <div class="token-range">
+          <div class="token-range-title">攻击范围</div>
+          <pre>{{ item.range }}</pre>
+        </div>
+        {% endif %}
+      </div>
+      {% if item.talents %}
+      <div class="token-extra">
+        <div class="token-extra-title">天赋</div>
+        {% for talent in item.talents %}
+        <div class="token-extra-item">
+          {% if talent.name %}
+          <span class="talent-name">{{ talent.name }}</span>
+          {% endif %}
+          {% if talent.description %}
+          <span class="talent-desc">{{ talent.description }}</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if item.skills %}
+      <div class="token-extra">
+        <div class="token-extra-title">技能</div>
+        {% for skill in item.skills %}
+        <div class="token-skill">
+          <div class="token-skill-line">
+            {% if skill.icon_data %}
+            <img class="skill-icon" src="{{ skill.icon_data }}" alt="{{ skill.name or '' }}图标">
+            {% endif %}
+            <div>
+              <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
+                {% if skill.name %}
+                <span class="skill-name">{{ skill.name }}</span>
+                {% endif %}
+                {% if skill.sp_type_name %}
+                <span class="skill-badge">{{ skill.sp_type_name }}</span>
+                {% endif %}
+                {% if skill.skill_type_name %}
+                <span class="skill-badge" style="background: #ff641e;">{{ skill.skill_type_name }}</span>
+                {% endif %}
+                {% if skill.init_sp or skill.sp_cost %}
+                <span class="skill-sp">技力 {{ skill.init_sp }}/{{ skill.sp_cost }}</span>
+                {% endif %}
+                {% if skill.duration and skill.duration > 0 %}
+                <span class="skill-sp">持续 {{ skill.duration }} 秒</span>
+                {% endif %}
+              </div>
+              {% if skill.range %}
+              <div class="skill-range">{{ render_range_blocks(skill.range) }}</div>
+              {% endif %}
+              {% if skill.description %}
+              <div class="skill-desc">{{ skill.description }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+</body>
+</html>

@@ -1,18 +1,20 @@
 # MCP 工具说明
 
-本服务对外暴露 6 个 MCP 工具，通过 SSE 协议提供。干员查询流程为 `search_operator` → `get_operator_card`（推荐）/ `get_operator_basic_data`，技能查询流程为 `search_operator` → `get_operator_skill`，材料查询流程为 `search_operator` → `get_operator_material`。
+本服务对外暴露 7 个 MCP 工具，通过 SSE 协议提供。`search` 是资源统一搜索入口（任何查询都应从它开始），干员查询流程为 `search` → `get_operator_card`（推荐）/ `get_operator_basic_data`，技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material`，召唤物查询流程为 `search` → `get_token_detail`。
 
 ---
 
-## 1. search_operator — 干员模糊搜索
+## 1. search — 资源统一搜索（任何查询的入口）
 
-按干员名称进行模糊搜索，返回候选干员的 `id` 和 `name`。拿到 `id` 后，再调用 `get_operator_card`（推荐）或 `get_operator_basic_data`。
+本服务所有查询的统一入口：按名称模糊搜索「干员」与「干员的召唤物」，返回候选实体的 `id`、`name` 和 `type`。拿到 `id` 后，再调用 `get_operator_card`（推荐）或 `get_operator_basic_data`；召唤物条目额外携带所属干员的 `operator_id` / `operator_name`，用 `operator_id` 调用干员相关工具即可查看所属干员详情。
+
+> 注：本工具是统一搜索入口，可搜索范围未来会继续扩展（扩展内容不会提前暴露在 MCP 说明中）。
 
 ### 参数
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `query` | `str` | 是 | 干员名称关键词，支持模糊搜索 |
+| `query` | `str` | 是 | 搜索关键词（干员名称或召唤物名称），支持模糊搜索 |
 
 ### 返回值
 
@@ -20,13 +22,18 @@
 ```json
 {
   "data": {
-    "operators": [
-      {"id": "char_002_amiya", "name": "阿米娅"},
-      {"id": "char_003_kalts", "name": "凯尔希"}
+    "items": [
+      {"id": "char_002_amiya", "name": "阿米娅", "type": "干员"},
+      {"id": "token_10002_kalts_mon3tr", "name": "Mon3tr", "type": "召唤物", "operator_id": "char_003_kalts", "operator_name": "凯尔希"}
     ]
   }
 }
 ```
+
+字段说明：
+- `type`：实体类型，当前为 `干员` 或 `召唤物`。
+- 干员条目：`id` 为干员 ID，可直接传给干员详情工具。
+- 召唤物条目：`id` 为召唤物 ID，传给 `get_token_detail` 查看召唤物详情；`operator_id` / `operator_name` 为该召唤物所属干员（也可用于查看所属干员）。未挂靠任何干员的召唤物不会出现在结果中。
 
 **空查询**：
 ```json
@@ -35,7 +42,7 @@
 
 **无匹配**：
 ```json
-{"message": "未找到匹配的干员: xxx"}
+{"message": "未找到匹配的干员或召唤物: xxx"}
 ```
 
 ### 排序规则
@@ -43,7 +50,7 @@
 1. **精确匹配**（`query == name`）— 排最前，如搜索「银灰」命中「银灰」
 2. **包含匹配**（`query in name`）— 其次，如「银灰」命中「凛御银灰」
 3. **相似度匹配**（文本相似度 ≥ 0.2）— 最后，如「银灰」命中「灰喉」「洋灰」
-4. 同类型内按匹配分数降序；最多返回 10 条
+4. 同类型内按匹配分数降序；干员条目优先于召唤物条目；最多返回 10 条
 
 ---
 
@@ -55,7 +62,7 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `operator_id` | `str` | 是 | 干员 ID，由 `search_operator` 返回 |
+| `operator_id` | `str` | 是 | 干员 ID，由 `search` 返回 |
 
 ### 返回值
 
@@ -90,11 +97,11 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `operator_id` | `str` | 是 | 干员 ID，由 `search_operator` 返回 |
+| `operator_id` | `str` | 是 | 干员 ID，由 `search` 返回 |
 
 ### 返回值
 
-**成功**（`data` 为中文键名 dict，无 `image_url`）：
+**成功**（`data` 为中文键名 dict，无顶层 `image_url`）：
 ```json
 {
   "data": {
@@ -109,9 +116,90 @@
 }
 ```
 
+**召唤物**：若干员拥有召唤物/装置（来自 `displayTokenDict` 与技能 `overrideTokenKey`），`data` 中额外包含 `召唤物` 分区：
+```json
+{
+  "data": {
+    "召唤物": {
+      "卡片": "https://.../cards/operator_token/.../artifact.png",
+      "列表": [
+        {
+          "id": "token_10002_kalts_mon3tr",
+          "名称": "Mon3tr",
+          "英文名": "Mon3tr",
+          "职业": "召唤物",
+          "位置": "近战位",
+          "描述": "...",
+          "属性": { "最大生命值": {"精英满级": 5433}, ... },
+          "攻击范围": "□□□\n■□□□",
+          "天赋": [ { "名称": "...", "描述": "..." } ],
+          "技能": [ { "名称": "...", "回复方式": "...", "技能类型": "...", "技力": {"初始": 0, "消耗": 0}, "持续时间": 20.0, "攻击范围": "■□□□", "描述": "..." } ]
+        }
+      ]
+    }
+  }
+}
+```
+
+说明：
+- 「卡片」为召唤物卡片图片 URL；若卡片生成失败（如本地 CLI 场景无 `BaseUrl`），该字段缺省，但「列表」中的结构化数据始终返回。
+- 「天赋」取该召唤物的有效天赋（名称非空）；「技能」取每个技能的最高等级，`回复方式`/`技能类型`为中文名，`技力`仅在有消耗时出现，`持续时间`仅大于 0 时出现，`攻击范围`为文本形式（优先技能自身范围，否则回退召唤物基础范围），`描述`仅非空时出现。
+- 召唤物卡片中技能图标复用同名干员技能的图标资源（无对应资源时隐藏），技能范围以方块图形渲染。
+- 干员无召唤物时不包含 `召唤物` 分区。
+
 ---
 
-## 4. get_operator_skill — 干员技能
+## 4. get_token_detail — 召唤物详情
+
+根据召唤物 ID 获取召唤物的详情数据（名称、属性、天赋、技能、所属干员等）与召唤物卡片图片。
+
+### 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `token_id` | `str` | 是 | 召唤物 ID，由 `search` 返回（`type` 为「召唤物」的条目 `id`） |
+
+### 返回值
+
+**成功**（`data` 为中文键名 dict，另带 `image_url`）：
+```json
+{
+  "data": {
+    "id": "token_10002_kalts_mon3tr",
+    "名称": "Mon3tr",
+    "英文名": "Mon3tr",
+    "职业": "召唤物",
+    "位置": "近战位",
+    "描述": "...",
+    "属性": { "最大生命值": {"精英满级": 5433}, ... },
+    "攻击范围": "□□□\n■□□□",
+    "天赋": [ { "名称": "...", "描述": "..." } ],
+    "技能": [ { "名称": "...", "回复方式": "...", "技能类型": "...", "技力": {"初始": 0, "消耗": 0}, "持续时间": 20.0, "攻击范围": "■□□□", "描述": "..." } ],
+    "所属干员": { "id": "char_003_kalts", "名称": "凯尔希" }
+  },
+  "image_url": "https://..."
+}
+```
+
+说明：
+- `image_url` 为召唤物卡片图片 URL；若卡片生成失败（如本地场景无 `BaseUrl`），该字段缺省，但 `data` 结构化数据始终返回。
+- 「天赋」取该召唤物的有效天赋（名称非空）；「技能」取每个技能的最高等级，字段口径与 `get_operator_basic_data` 的召唤物分区一致。
+- 无主召唤物（未挂靠任何干员）无 `所属干员` 分区，也不会生成卡片图片。
+
+**失败**：
+```json
+{"message": "token_id 不能为空"}
+```
+```json
+{"message": "未找到召唤物ID: xxx"}
+```
+```json
+{"message": "查询召唤物信息时发生错误."}
+```
+
+---
+
+## 5. get_operator_skill — 干员技能
 
 根据干员 ID 获取技能数据，默认返回第 1 个技能的等级 10。本工具不生成图片。
 
@@ -150,7 +238,7 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ---
 
-## 5. get_operator_material — 干员材料
+## 6. get_operator_material — 干员材料
 
 根据干员 ID 获取干员精英化与技能升级材料，同时返回材料卡片图片与结构化数据。
 
@@ -158,7 +246,7 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `operator_id` | `str` | 是 | 干员 ID，由 `search_operator` 返回 |
+| `operator_id` | `str` | 是 | 干员 ID，由 `search` 返回 |
 
 ### 返回值
 
@@ -195,7 +283,7 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ---
 
-## 6. get_glossary — 游戏术语
+## 7. get_glossary — 游戏术语
 
 获取明日方舟游戏数据中指定术语的解释和计算公式。
 
@@ -230,10 +318,10 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 用户输入 "银灰"
     │
     ▼
-search_operator(query="银灰")
-    → {"data": {"operators": [
-         {"id": "char_172_svrash", "name": "银灰"},
-         {"id": "char_1045_svash2", "name": "凛御银灰"}
+search(query="银灰")
+    → {"data": {"items": [
+         {"id": "char_172_svrash", "name": "银灰", "type": "干员"},
+         {"id": "char_1045_svash2", "name": "凛御银灰", "type": "干员"}
        ]}}
     │
     ├── 用户选择 "银灰" → get_operator_card(operator_id="char_172_svrash")   ← 推荐
@@ -247,6 +335,23 @@ search_operator(query="银灰")
     │
     └── 用户选择 "银灰" → get_operator_material(operator_id="char_172_svrash")
             → {"data": {"精英化材料": [...], ...}, "image_url": "https://..."}
+```
+
+```
+用户输入 "Mon3tr"
+    │
+    ▼
+search(query="Mon3tr")
+    → {"data": {"items": [
+         {"id": "token_10002_kalts_mon3tr", "name": "Mon3tr", "type": "召唤物",
+          "operator_id": "char_003_kalts", "operator_name": "凯尔希"}
+       ]}}
+    │
+    ├── 查看召唤物 → get_token_detail(token_id="token_10002_kalts_mon3tr")
+    │       → {"data": {"名称": "Mon3tr", ...}, "image_url": "https://..."}
+    │
+    └── 查看所属干员 → get_operator_card(operator_id="char_003_kalts")
+            → {"image_url": "https://..."}
 ```
 
 ---

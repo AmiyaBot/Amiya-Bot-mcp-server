@@ -13,7 +13,7 @@ from src.app.services.operator_queries import query_operator_material_by_id
 logger = logging.getLogger(__name__)
 
 _MATERIAL_TOOL_DESC = """根据干员 ID 获取干员精英化与技能升级所需的材料数据。
-请先调用 search_operator 进行模糊搜索，再把返回的 id 传给本工具。
+请先调用 search 进行模糊搜索，再把返回的 id 传给本工具。
 
 返回值同时携带：
 - image_url / image_path：材料卡片图片（含精英化、技能通用升级、专精三大区块）；
@@ -25,7 +25,7 @@ _MATERIAL_TOOL_DESC = """根据干员 ID 获取干员精英化与技能升级所
 def register_operator_material_tool(mcp, app):
     @mcp.tool(description=_MATERIAL_TOOL_DESC)
     async def get_operator_material(
-        operator_id: Annotated[str, Field(description='干员ID，可先调用 search_operator 获取')],
+        operator_id: Annotated[str, Field(description='干员ID，可先调用 search 获取')],
     ) -> dict:
         tool_name = "get_operator_material"
         started_at = log_tool_start(

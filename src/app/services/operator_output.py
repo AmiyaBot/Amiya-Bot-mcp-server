@@ -18,8 +18,130 @@ ATTRIBUTE_SPECS = [
 ]
 TRUST_ATTRIBUTE_KEYS = {"maxHp", "atk", "def"}
 
+# 召唤物/装置属性展示规格（与原版插件 operatorToken 卡片口径一致）
+TOKEN_ATTRIBUTE_SPECS = [
+    ("maxHp", "最大生命值", None),
+    ("atk", "攻击力", None),
+    ("def", "防御力", None),
+    ("magicResistance", "法术抗性", None),
+    ("attackSpeed", "攻击速度", None),
+    ("baseAttackTime", "攻击间隔", "秒"),
+    ("blockCnt", "阻挡数", None),
+    ("cost", "部署费用", None),
+    ("respawnTime", "再部署时间", "秒"),
+]
 
-def build_operator_payload(result: QueryResult) -> dict[str, Any]:
+
+def token_max_attr_data(token: Any) -> dict[str, Any]:
+    """取召唤物最后一个精英阶段、最后一帧的属性 data（与原版 maxAttrs 口径一致）"""
+    if not token.attr:
+        return {}
+    frames = (token.attr[-1] or {}).get("attr") or []
+    if not frames:
+        return {}
+    return (frames[-1] or {}).get("data") or {}
+
+
+def token_first_range(token: Any) -> str:
+    """取召唤物基础形态的攻击范围文本"""
+    if not token.attr:
+        return ""
+    return str((token.attr[0] or {}).get("range") or "")
+
+
+def build_token_entries(tokens_map: dict[str, Any], token_ids: list[str]) -> list[dict[str, Any]]:
+    """将干员 token_id 列表组装为语义化召唤物条目（过滤不存在的 id）"""
+    entries: list[dict[str, Any]] = []
+    for token_id in token_ids:
+        token = tokens_map.get(token_id)
+        if token is None:
+            continue
+
+        attr_payload: dict[str, Any] = {}
+        max_attr_data = token_max_attr_data(token)
+        for raw_key, label, unit in TOKEN_ATTRIBUTE_SPECS:
+            value = max_attr_data.get(raw_key)
+            if value is None:
+                continue
+            item: dict[str, Any] = {"精英满级": value}
+            if unit:
+                item["单位"] = unit
+            attr_payload[label] = item
+
+        entries.append(
+            {
+                "id": token.id,
+                "名称": token.name,
+                "英文名": token.en_name,
+                "职业": token.classes,
+                "位置": token.type,
+                "描述": token.description,
+                "属性": attr_payload,
+                "攻击范围": token_first_range(token),
+                "天赋": _build_token_talent_payload(token),
+                "技能": _build_token_skill_payload(token),
+            }
+        )
+    return entries
+
+
+def _build_token_talent_payload(token: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for item in token.talents or []:
+        name = str(item.get("name") or "").strip()
+        description = str(item.get("description") or "").strip()
+        if not name and not description:
+            continue
+        result.append(
+            {
+                "名称": name,
+                "描述": description,
+            }
+        )
+    return result
+
+
+def _build_token_skill_payload(token: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for item in token.skills or []:
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        entry: dict[str, Any] = {"名称": name}
+
+        sp_type_name = item.get("sp_type_name") or item.get("sp_type") or ""
+        if sp_type_name:
+            entry["回复方式"] = str(sp_type_name)
+        skill_type_name = item.get("skill_type_name") or item.get("skill_type") or ""
+        if skill_type_name:
+            entry["技能类型"] = str(skill_type_name)
+
+        init_sp = item.get("init_sp") or 0
+        sp_cost = item.get("sp_cost") or 0
+        if init_sp or sp_cost:
+            entry["技力"] = {"初始": init_sp, "消耗": sp_cost}
+
+        duration = item.get("duration") or 0
+        if duration and float(duration) > 0:
+            entry["持续时间"] = duration
+
+        skill_range = str(item.get("range") or "").strip()
+        if skill_range:
+            entry["攻击范围"] = skill_range
+
+        description = str(item.get("description") or "").strip()
+        if description:
+            entry["描述"] = description
+
+        result.append(entry)
+    return result
+
+
+def build_operator_payload(
+    result: QueryResult,
+    token_entries: list[dict[str, Any]] | None = None,
+    token_card_url: str | None = None,
+) -> dict[str, Any]:
     data = result.data or {}
     op = data.get("op")
     if op is None:
@@ -81,6 +203,11 @@ def build_operator_payload(result: QueryResult) -> dict[str, Any]:
             skill_type_name=data.get("skill_type_name") or {},
         ),
     }
+    if token_entries:
+        token_payload: dict[str, Any] = {"列表": token_entries}
+        if token_card_url:
+            token_payload["卡片"] = token_card_url
+        payload["召唤物"] = token_payload
     return _compact_value(payload)
 
 
