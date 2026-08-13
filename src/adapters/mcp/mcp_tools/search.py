@@ -18,6 +18,8 @@ _SEARCH_TOOL_DESC = """本工具是资源统一搜索入口，任何查询都应
 支持按名称模糊搜索「干员」与「干员的召唤物」，返回候选的 id、name、type（干员 / 召唤物）以及召唤物所属干员的 operator_id。
 - 干员：用返回的 id 调用 get_operator_card（推荐）/ get_operator_basic_data / get_operator_skill / get_operator_material；
 - 召唤物：用返回的 id 调用 get_token_detail 查看召唤物详情；也可以用 operator_id 查看所属干员。
+
+提示：若搜不到结果，可能是用户使用了干员外号（非正式称呼）。此时可先联网搜索该外号对应的干员正式名称，再用正式名称重新调用本工具。
 """
 
 
