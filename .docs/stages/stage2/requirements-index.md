@@ -51,16 +51,18 @@
 
 | 编号 | 名称 | 优先级 | 状态 | 当前阶段 | 需求文档 |
 | --- | --- | --- | --- | --- | --- |
-| STAGE2-RQ-001 | 干员详情展示重构与档案数据补全 | P0 | in-progress | M2 | [REQ-001](requirements/REQ-001-operator-detail-enhancement.md) |
+| STAGE2-RQ-001 | 干员详情展示重构与档案数据补全 | P0 | done | M2 | [REQ-001](requirements/REQ-001-operator-detail-enhancement.md) |
 | STAGE2-RQ-002 | 干员查询结构化结果契约与 CLI JSON / Markdown 输出 | P1 | done | M2 | [REQ-002](requirements/REQ-002-operator-query-output-contract.md) |
+| STAGE2-RQ-003 | 干员材料页面复刻（精英化与技能升级材料） | P1 | in-progress | M2 | [REQ-003](requirements/REQ-003-operator-material-page.md) |
 
 ## 当前阶段观察
 
 ### 当前排序
 
-1. STAGE2-RQ-001 已完成首轮范围冻结，并在银灰样例上验证了新的详情卡片图片链路。
+1. STAGE2-RQ-001 已于 2026-08-13 收尾，状态 `done`；详情卡片与档案数据链路已在银灰样例完成端到端验证。
 2. 当前验收必需覆盖基础档案、画师、真名、潜能列表、基建技能与 `favorKeyFrames`；这些字段已在样例卡片中出现。
 3. STAGE2-RQ-002 已完成第一轮实现：`op` 命令默认输出 Markdown，`--json` 输出结构化 JSON，MCP 复用同一份 payload。
+4. STAGE2-RQ-003（材料页面复刻）已登记并完成首轮范围冻结，状态 `todo`；STAGE2-RQ-001 已收尾，RQ-003 具备启动条件。
 
 ### 当前阻塞
 
@@ -77,3 +79,6 @@
 - 2026-04-13：根据当前未提交改动的实际运行结果回写进度；STAGE2-RQ-001 从 `M1` 推进到 `M2`，并记录银灰样例已完成图片卡片验证。
 - 2026-04-14：新增 STAGE2-RQ-002，承接干员查询统一结构化结果与 CLI JSON / Markdown 输出的后续工作。
 - 2026-04-14：完成 STAGE2-RQ-002 第一轮实现，并回写为 `done`；当前剩余主线重新收口到 STAGE2-RQ-001 的多样本验证。
+- 2026-08-13：登记 STAGE2-RQ-003（干员材料页面复刻），完成首轮范围冻结，状态 `todo`，实现排在 RQ-001 收尾之后。
+- 2026-08-13：STAGE2-RQ-003 首轮实现落地并通过数据链路与视觉渲染验证，状态推进为 `in-progress`；剩余真实环境端到端验证。
+- 2026-08-13：STAGE2-RQ-001 收尾完成，状态置为 `done`；STAGE2-RQ-003 具备启动条件。

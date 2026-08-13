@@ -1,6 +1,6 @@
 # MCP 工具说明
 
-本服务对外暴露 5 个 MCP 工具，通过 SSE 协议提供。干员查询流程为 `search_operator` → `get_operator_card`（推荐）/ `get_operator_basic_data`，技能查询流程为 `search_operator` → `get_operator_skill`。
+本服务对外暴露 6 个 MCP 工具，通过 SSE 协议提供。干员查询流程为 `search_operator` → `get_operator_card`（推荐）/ `get_operator_basic_data`，技能查询流程为 `search_operator` → `get_operator_skill`，材料查询流程为 `search_operator` → `get_operator_material`。
 
 ---
 
@@ -150,7 +150,52 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ---
 
-## 5. get_glossary — 游戏术语
+## 5. get_operator_material — 干员材料
+
+根据干员 ID 获取干员精英化与技能升级材料，同时返回材料卡片图片与结构化数据。
+
+### 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `operator_id` | `str` | 是 | 干员 ID，由 `search_operator` 返回 |
+
+### 返回值
+
+**成功** — 同时携带 `image_url`（材料卡片图片）、`image_path`（本地路径，本地场景）与 `data`（结构化材料数据）：
+```json
+{
+  "data": {
+    "名称": { "干员id": "char_172_svrash", "中文名": "银灰", "英文名": "SilverAsh", "星级": 6 },
+    "精英化材料": [
+      { "阶段": "精英一", "材料": [ { "名称": "酯原料", "数量": 5, "图标": "3221" } ] },
+      { "阶段": "精英二", "材料": [ { "名称": "聚合剂", "数量": 4, "图标": "3223" } ] }
+    ],
+    "技能升级材料": {
+      "通用升级": [ { "等级": 2, "材料": [ { "名称": "...", "数量": 3, "图标": "..." } ] } ],
+      "专精": [ { "技能名": "强力击·γ型", "专精一": [ ... ], "专精二": [ ... ], "专精三": [ ... ] } ]
+    }
+  },
+  "image_url": "https://..."
+}
+```
+
+说明：
+- 精英化材料覆盖精英一 / 精英二；通用升级覆盖 Lv2–7；专精覆盖 Lv8–10（专精一/二/三）。
+- 材料条目中的「图标」为 `iconId` 语义标识，不包含图片 URL。
+- 1–2 星干员无需材料升级，返回 `{"message": "博士，干员xxx不需要消耗材料进行升级哦~"}`。
+
+**失败**：
+```json
+{"message": "未找到干员ID: xxx"}
+```
+```json
+{"message": "查询干员材料信息时发生错误."}
+```
+
+---
+
+## 6. get_glossary — 游戏术语
 
 获取明日方舟游戏数据中指定术语的解释和计算公式。
 
@@ -194,11 +239,14 @@ search_operator(query="银灰")
     ├── 用户选择 "银灰" → get_operator_card(operator_id="char_172_svrash")   ← 推荐
     │       → {"image_url": "https://..."}
     │
-    └── 用户选择 "银灰" → get_operator_basic_data(operator_id="char_172_svrash")
+    ├── 用户选择 "银灰" → get_operator_basic_data(operator_id="char_172_svrash")
     │       → {"data": {"名称": {...}, "分类": {...}, ...}}
     │
-    └── 用户选择 "银灰" → get_operator_skill(operator_id="char_172_svrash", index=1, level=7)
-            → {"data": "干员：银灰 ... 技能：强力击·γ型 ..."}
+    ├── 用户选择 "银灰" → get_operator_skill(operator_id="char_172_svrash", index=1, level=7)
+    │       → {"data": "干员：银灰 ... 技能：强力击·γ型 ..."}
+    │
+    └── 用户选择 "银灰" → get_operator_material(operator_id="char_172_svrash")
+            → {"data": {"精英化材料": [...], ...}, "image_url": "https://..."}
 ```
 
 ---

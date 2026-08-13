@@ -5,16 +5,19 @@ import logging
 from pathlib import Path
 
 from src.app.context import AppContext
+from src.app.services.operator_material_output import build_operator_material_payload, render_operator_material_markdown
 from src.app.services.operator_output import build_operator_payload, render_operator_markdown
 from src.app.services.operator_skin_assets import SKIN_CACHE_PATH, resolve_operator_skin_artifact
 from src.domain.models.operator import Operator
 from src.domain.services.operator import build_operator_query_result, search_operator_by_name
+from src.domain.services.operator_material import build_operator_material_query_result
 from src.helpers.bundle import get_table
 from src.helpers.card_urls import build_card_url
 from src.helpers.gamedata.search import build_sources, search_source_spec
 
 logger = logging.getLogger(__name__)
 OPERATOR_INFO_CARD_REVISION = "card-v20"
+OPERATOR_MATERIAL_CARD_REVISION = "mat-v1"
 
 
 @dataclass(slots=True)
@@ -386,3 +389,116 @@ async def query_operator_skill(
     if isinstance(resolved, QueryExecutionResult):
         return resolved
     return await query_operator_skill_by_id(context, resolved.id, index=index, level=level)
+
+
+async def query_operator_material_by_id(
+    context: AppContext,
+    operator_id: str,
+) -> QueryExecutionResult:
+    try:
+        resolved = _resolve_operator_by_id(context, operator_id)
+        if isinstance(resolved, QueryExecutionResult):
+            return resolved
+
+        # 1–2 星干员不需要材料升级（对齐原插件）
+        if int(getattr(resolved, "rarity", 0) or 0) <= 2:
+            return QueryExecutionResult(
+                message=f"博士，干员{getattr(resolved, 'name', '') or operator_id}不需要消耗材料进行升级哦~"
+            )
+
+        result = build_operator_material_query_result(context, resolved)
+        structured_payload = build_operator_material_payload(result)
+
+        bundle = context.data_repository.get_bundle()
+        bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
+        payload_key = f"operator_material:{resolved.id}:{bundle_version}:{OPERATOR_MATERIAL_CARD_REVISION}"
+
+        image_url = None
+        image_path = None
+        skin_artifact = None
+        try:
+            try:
+                skin_artifact = await resolve_operator_skin_artifact(
+                    context,
+                    resolved,
+                    bundle.tables,
+                )
+            except Exception:
+                logger.warning(
+                    "准备干员立绘素材失败，将继续尝试生成材料卡片: operator_id=%s operator=%s",
+                    resolved.id,
+                    resolved.name,
+                    exc_info=True,
+                )
+
+            if skin_artifact is not None:
+                result.data["skin_url"] = skin_artifact.to_data_uri()
+
+            card_artifact = await context.card_service.get(
+                template="operator_material",
+                payload_key=payload_key,
+                payload=result,
+                format="png",
+                params=None,
+            )
+
+            image_url = build_card_url(
+                cfg=context.cfg,
+                template="operator_material",
+                payload_key=payload_key,
+                format="png",
+            )
+            image_path = _resolve_safe_local_artifact_path(
+                context,
+                card_artifact.path,
+                context.card_service.cache_root,
+            )
+        except Exception:
+            logger.warning(
+                "准备干员材料卡片失败，已降级为立绘直链或文本结果: operator_id=%s operator=%s payload_key=%s template=operator_material",
+                resolved.id,
+                resolved.name,
+                payload_key,
+                exc_info=True,
+            )
+            try:
+                if skin_artifact is None:
+                    skin_artifact = await resolve_operator_skin_artifact(
+                        context,
+                        resolved,
+                        bundle.tables,
+                    )
+                if skin_artifact is not None:
+                    image_url = skin_artifact.url
+                    image_path = _resolve_safe_local_artifact_path(
+                        context,
+                        skin_artifact.path,
+                        context.cfg.ResourcePath / SKIN_CACHE_PATH,
+                    )
+            except Exception:
+                logger.info("准备干员立绘回退结果失败: operator_id=%s operator=%s", resolved.id, resolved.name, exc_info=True)
+
+        return QueryExecutionResult(
+            data=structured_payload,
+            markdown=render_operator_material_markdown(
+                structured_payload,
+                image_url=image_url,
+                image_path=image_path,
+            ),
+            image_url=image_url,
+            image_path=image_path,
+        )
+    except Exception:
+        logger.exception("按 ID 查询干员材料信息失败: operator_id=%s", operator_id)
+        return QueryExecutionResult(message="查询干员材料信息时发生错误.")
+
+
+async def query_operator_material(
+    context: AppContext,
+    operator_name: str,
+    operator_name_prefix: str = "",
+) -> QueryExecutionResult:
+    resolved = _resolve_operator(context, operator_name, operator_name_prefix)
+    if isinstance(resolved, QueryExecutionResult):
+        return resolved
+    return await query_operator_material_by_id(context, resolved.id)

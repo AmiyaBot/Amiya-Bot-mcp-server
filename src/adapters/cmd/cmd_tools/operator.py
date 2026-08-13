@@ -11,7 +11,7 @@ from src.app.config import load_from_disk
 from src.app.config import resolve_merged_config_paths
 from src.app.context import AppContext
 from src.app.services.glossary_queries import query_glossary
-from src.app.services.operator_queries import query_operator_basic, query_operator_skill
+from src.app.services.operator_queries import query_operator_basic, query_operator_material, query_operator_skill
 from src.adapters.cmd.registery import register_command
 
 logger = logging.getLogger(__name__)
@@ -87,6 +87,39 @@ async def cmd_operator(ctx: AppContext, args: str) -> str:
 
     logger.info(f"查询干员: {operator_name}")
     result = await query_operator_basic(
+        ctx,
+        operator_name=operator_name,
+        operator_name_prefix=operator_name_prefix,
+    )
+    output_format = getattr(ctx, "output_format", "markdown") if ctx is not None else "markdown"
+    if output_format == "json":
+        return json.dumps(result.to_response(), ensure_ascii=False, indent=2)
+
+    if result.candidates:
+        return f"❌ {result.message}: {', '.join(result.candidates)}，请提供更精确的名称。"
+    if result.message:
+        return f"❌ {result.message}"
+
+    if result.markdown:
+        return result.markdown
+    return str(result.data or "")
+
+@register_command("material")
+async def cmd_operator_material(ctx: AppContext, args: str) -> str:
+    """
+    查询干员精英化与技能升级材料
+    用法: material <干员名>
+    例子: material 银灰
+    """
+    if not args:
+        return "❌ 请提供干员名称\n用法: material <干员名>"
+
+    parts = args.split(maxsplit=1)
+    operator_name = parts[0]
+    operator_name_prefix = parts[1] if len(parts) > 1 else ""
+
+    logger.info(f"查询干员材料: {operator_name}")
+    result = await query_operator_material(
         ctx,
         operator_name=operator_name,
         operator_name_prefix=operator_name_prefix,

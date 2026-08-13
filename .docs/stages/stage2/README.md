@@ -62,6 +62,7 @@
 1. 干员详情相关模板、渲染视口配置与展示布局调整。
 2. 干员详情相关的数据模型、仓储装载与领域组装逻辑。
 3. 当前已出现的资料补全项，包括基础档案、画师、真名、潜能列表、基建技能、`favorKeyFrames`。
+4. 干员材料页面复刻（2026-08-13 用户确认并入）：精英化材料 + 技能通用升级材料 + 专精材料，图片卡片与结构化数据双输出，CLI 与 MCP 双通道（STAGE2-RQ-003）。
 
 ### 非目标
 
@@ -76,12 +77,13 @@
 1. 对 STAGE2-RQ-001 补齐多样本回归验证，确认详情卡片与数据链路在不同干员上稳定可用。
 2. 对已落地的 STAGE2-RQ-002 做必要的多样本抽查，确认结构化 payload 在不同资料完整度下保持稳定。
 3. 继续收敛图片卡片链路与结构化输出链路的验证记录，避免阶段结项时口径分裂。
+4. STAGE2-RQ-003（材料页面复刻）首轮实现已落地：数据链路与 PNG 视觉验证、多样本回归通过；剩余真实环境下 MCP/CLI 端到端验证。
 
 ### 当前里程碑视图
 
 - M1：已完成。完成 stage2 初始化、首个需求登记与验收口径确认。
 - M2：进行中。当前代码已落下详情卡片重构与数据补全主干，并完成银灰样例验证；STAGE2-RQ-002 的统一输出契约也已完成第一轮实现。
-- M3：待开始。剩余重点是多样本回归验证与阶段收口，而不是继续扩展输出契约范围。
+- M3：待开始。重点是多样本回归验证与阶段收口，并承接 STAGE2-RQ-003（材料页面复刻）的实现。
 
 详细状态见 [requirements-index.md](requirements-index.md)。
 
@@ -103,6 +105,8 @@
    - 当前阶段的首个需求：干员详情展示重构与档案数据补全。
 7. [requirements/REQ-002-operator-query-output-contract.md](requirements/REQ-002-operator-query-output-contract.md)
    - 当前阶段的第二个需求：干员查询结构化结果契约与 CLI JSON / Markdown 输出。
+8. [requirements/REQ-003-operator-material-page.md](requirements/REQ-003-operator-material-page.md)
+   - 当前阶段的第三个需求：干员材料页面复刻（精英化与技能升级材料）。
 
 ### 单需求文档的职责
 
@@ -152,6 +156,7 @@
 - 全局 bug：[bugs.md](bugs.md)
 - 当前需求：[requirements/REQ-001-operator-detail-enhancement.md](requirements/REQ-001-operator-detail-enhancement.md)
 - 跟进需求：[requirements/REQ-002-operator-query-output-contract.md](requirements/REQ-002-operator-query-output-contract.md)
+- 待启动需求：[requirements/REQ-003-operator-material-page.md](requirements/REQ-003-operator-material-page.md)
 - 需求模板：[requirements/REQ-template.md](requirements/REQ-template.md)
 
 ### 当前阶段观察
@@ -163,6 +168,8 @@
 - 当前实现已在银灰样例上跑通端到端链路：命令可以输出结构化 JSON 与 Markdown，并生成新的详情卡片图片，卡片中可见潜能、真名、CV、基建技能与技能面板等内容。
 - `artifact.txt` 仍保留旧版模板产物，但 CLI 主输出已不再依赖该文件；统一输出契约已由 STAGE2-RQ-002 接管并落地。
 - STAGE2-RQ-002 已完成第一轮实现：`op` 命令支持 `--json`，MCP `get_operator_basic` 与 CLI JSON 共享同一份语义化 payload。
+- STAGE2-RQ-003（材料页面复刻）已登记：用户确认并入 stage2、图片卡片 + 结构化数据双输出、完全对齐原插件材料范围、新增独立 MCP 工具 `get_operator_material` 与独立 CLI 命令 `material`；首轮实现已落地并通过数据链路与视觉渲染验证，剩余真实环境端到端验证。
+- STAGE2-RQ-001 已于 2026-08-13 收尾，状态 `done`；下一主线需求为 STAGE2-RQ-003（材料页面复刻），当前状态 `todo` 待启动。
 
 ### 当前执行原则
 

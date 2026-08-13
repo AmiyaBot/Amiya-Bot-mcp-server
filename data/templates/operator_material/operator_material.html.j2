@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ op.name or "operator material" }}</title>
+  <style>
+    * {
+      font-size: 18px;
+      box-sizing: border-box;
+      font-family: "HarmonyOS Sans SC", "Noto Sans CJK SC", "Noto Sans SC", sans-serif;
+    }
+
+    body {
+      margin: 0;
+    }
+
+    #template {
+      width: 1280px;
+      height: 720px;
+      padding: 0 30px;
+      color: #fff;
+      text-shadow: 1px 2px 2px black;
+      overflow: hidden;
+      position: relative;
+      background: #000;
+    }
+
+    .background {
+      width: calc(100% + 20px);
+      height: calc(100% + 20px);
+      background: #000 center / 100% no-repeat;
+      filter: blur(10px);
+      position: absolute;
+      top: -10px;
+      left: -10px;
+      z-index: 0;
+    }
+
+    /* 全屏遮罩：压暗背景、统一前景对比度 */
+    .scrim {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, rgb(0 0 0 / 45%), rgb(0 0 0 / 65%));
+      z-index: 1;
+    }
+
+    .content {
+      position: relative;
+      z-index: 2;
+    }
+
+    .title {
+      border-bottom: 1px solid rgb(255, 255, 255);
+      padding: 10px 0;
+      margin: 20px 0 10px 0;
+      font-size: 30px;
+    }
+
+    .evolve-block {
+      display: flex;
+      align-items: center;
+    }
+
+    .evolve-detail {
+      display: flex;
+      margin-right: 100px;
+    }
+
+    .evolve-label {
+      font-size: 20px;
+      font-weight: bold;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-right: 20px;
+    }
+
+    .evolve-icon {
+      width: 100px;
+      height: 100px;
+      background: rgb(20 20 20 / 65%);
+      border-radius: 12px;
+    }
+
+    .evolve-costs {
+      display: flex;
+      align-items: center;
+    }
+
+    .skills-level-up {
+      display: flex;
+    }
+
+    .skills-level-up img {
+      width: 55px !important;
+      height: 55px !important;
+    }
+
+    .skills_cost {
+      display: flex;
+      flex-direction: column;
+      margin-right: 24px;
+    }
+
+    .common-items {
+      display: flex;
+      align-items: center;
+    }
+
+    .level-label {
+      font-size: 20px;
+      padding-right: 12px;
+      min-width: 80px;
+    }
+
+    .skills_mastery {
+      display: flex;
+    }
+
+    .mastery-group {
+      margin: 0 6px;
+    }
+
+    .mastery-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .skill-icon {
+      width: 60px !important;
+      height: 60px !important;
+      margin-right: 8px;
+      background: rgb(20 20 20 / 65%);
+      border-radius: 10px;
+    }
+
+    .cost-items {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+    }
+
+    .mastery-icon {
+      width: 55px;
+      height: 55px;
+      margin-right: 8px;
+      background: rgb(20 20 20 / 65%);
+      border-radius: 10px;
+    }
+
+    .mastery-label {
+      font-size: 16px;
+      margin-right: 8px;
+      min-width: 52px;
+    }
+
+    .materiel {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .materiel:after {
+      content: attr(data-use);
+      position: absolute;
+      right: 5px;
+      bottom: 5px;
+      background: rgb(0 0 0 / 80%);
+      padding: 0 8px;
+      border-radius: 6px;
+    }
+
+    .materiel > img {
+      width: 80px;
+      height: 80px;
+      background: rgb(20 20 20 / 65%);
+      border-radius: 10px;
+    }
+
+    .material-name {
+      display: inline-block;
+      background: rgb(0 0 0 / 70%);
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin: 0 6px;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+<div id="template">
+  <div class="background"{% if skin_url %} style="background-image: url('{{ skin_url }}');"{% endif %}></div>
+  <div class="scrim"></div>
+  <div class="content">
+    <div class="title">{{ op.name }} 的 精英化材料</div>
+    <div class="evolve-block">
+      {% for group in evolve_groups %}
+      <div class="evolve-detail">
+        <div class="evolve-label">
+          {% if group['阶段'] == '精英一' and evolve_badge_data.get('evolve1') %}
+          <img class="evolve-icon" src="{{ evolve_badge_data['evolve1'] }}" alt="精英一">
+          {% elif group['阶段'] == '精英二' and evolve_badge_data.get('evolve2') %}
+          <img class="evolve-icon" src="{{ evolve_badge_data['evolve2'] }}" alt="精英二">
+          {% endif %}
+          {{ group['阶段'] }}
+        </div>
+        <div class="evolve-costs">
+          {% for item in group['材料'] %}
+          <div class="materiel" data-use="{{ item['数量'] }}">
+            {% if material_icon_data.get(item['图标']) %}
+            <img src="{{ material_icon_data[item['图标']] }}" alt="{{ item['名称'] }}">
+            {% else %}
+            <span class="material-name">{{ item['名称'] }}</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="title">{{ op.name }} 的 技能升级材料</div>
+    <div class="skills-level-up">
+      <div class="skills_cost">
+        {% for level in common_levels %}
+        <div class="common-items">
+          <div class="level-label">等级{{ level['等级'] }}</div>
+          {% for item in level['材料'] %}
+          <div class="materiel" data-use="{{ item['数量'] }}">
+            {% if material_icon_data.get(item['图标']) %}
+            <img src="{{ material_icon_data[item['图标']] }}" alt="{{ item['名称'] }}">
+            {% else %}
+            <span class="material-name">{{ item['名称'] }}</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="skills_mastery">
+        {% for group in mastery_groups %}
+        <div class="mastery-group">
+          <div class="mastery-header">
+            {% if skill_icon_data.get(group['技能图标']) %}
+            <img class="skill-icon" src="{{ skill_icon_data[group['技能图标']] }}" alt="skill">
+            {% endif %}
+            {{ group['技能名'] }}
+          </div>
+          {% for name, badge in [('专精一', 'master1'), ('专精二', 'master2'), ('专精三', 'master3')] %}
+          {% if group.get(name) %}
+          <div class="cost-items">
+            {% if mastery_badge_data.get(badge) %}
+            <img class="mastery-icon" src="{{ mastery_badge_data[badge] }}" alt="{{ name }}">
+            {% endif %}
+            <span class="mastery-label">{{ name }}</span>
+            {% for item in group[name] %}
+            <div class="materiel" data-use="{{ item['数量'] }}">
+              {% if material_icon_data.get(item['图标']) %}
+              <img src="{{ material_icon_data[item['图标']] }}" alt="{{ item['名称'] }}">
+              {% else %}
+              <span class="material-name">{{ item['名称'] }}</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

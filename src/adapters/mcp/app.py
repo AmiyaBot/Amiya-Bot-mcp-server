@@ -14,6 +14,7 @@ from starlette.types import Send
 
 from src.adapters.mcp.mcp_tools.arknights_glossary import register_glossary_tool
 from src.adapters.mcp.mcp_tools.operator_basic import register_operator_basic_data_tool, register_operator_card_tool
+from src.adapters.mcp.mcp_tools.operator_material import register_operator_material_tool
 from src.adapters.mcp.mcp_tools.operator_search import register_operator_search_tool
 from src.adapters.mcp.mcp_tools.operator_skill import register_operator_skill_tool
 from src.app.config import Config
@@ -194,9 +195,10 @@ def register_asgi(app: FastAPI, cfg: Config):
     register_operator_basic_data_tool(mcp,app)
     register_operator_card_tool(mcp,app)
     register_operator_skill_tool(mcp,app)
+    register_operator_material_tool(mcp,app)
     logger.info(
         "MCP 工具注册完成: tools=%s",
-        ["get_glossary", "search_operator", "get_operator_basic_data", "get_operator_card", "get_operator_skill"],
+        ["get_glossary", "search_operator", "get_operator_basic_data", "get_operator_card", "get_operator_skill", "get_operator_material"],
     )
 
     app.mount("/mcp", mcp.sse_app())
