@@ -16,6 +16,7 @@ resources/
 # 忽略测试用代码
 test*.*
 test/
+!tests/test_cache_permissions.py
 
 # CLI/Web 运行产物
 data/local/command-service.log

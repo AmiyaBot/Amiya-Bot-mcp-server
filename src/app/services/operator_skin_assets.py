@@ -4,12 +4,14 @@ import asyncio
 import base64
 import json
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, urlparse, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from src.app.context import AppContext
+from src.app.cache_permissions import CACHE_FILE_MODE
 from src.domain.models.operator import Operator
 from src.helpers.bundle import get_table
 from src.helpers.card_urls import CHAR_SKIN_MOUNT_PATH, build_static_url
@@ -234,13 +236,51 @@ def _select_preferred_skin_id(operator_id: str, tables: dict) -> str | None:
 
 def _find_cached_skin_path(cache_root: Path, skin_id: str) -> Path | None:
     for candidate in sorted(cache_root.glob(f"{skin_id}.*")):
-        if candidate.is_file():
-            try:
-                if candidate.stat().st_size > 0:
-                    return candidate
-            except OSError:
+        try:
+            if candidate.is_symlink() or not candidate.is_file():
                 continue
+        except OSError:
+            continue
+
+        if _is_nonempty_readable_file(candidate):
+            return candidate
+
+        # Historical NFS cache entries may have mode 000. Repair once and
+        # verify with an actual read instead of trusting st_size.
+        try:
+            candidate.chmod(CACHE_FILE_MODE)
+        except OSError:
+            pass
+        if _is_nonempty_readable_file(candidate):
+            return candidate
+
+        try:
+            candidate.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("删除无效皮肤缓存失败: %s", candidate, exc_info=True)
     return None
+
+
+def _is_nonempty_readable_file(path: Path) -> bool:
+    try:
+        if not path.is_file() or path.stat().st_size <= 0:
+            return False
+        with path.open("rb") as file:
+            return bool(file.read(1))
+    except OSError:
+        return False
+
+
+def _write_cache_file(temp_path: Path, target_path: Path, payload: bytes) -> None:
+    try:
+        temp_path.write_bytes(payload)
+        temp_path.chmod(CACHE_FILE_MODE)
+        os.replace(temp_path, target_path)
+        # Some network filesystems do not preserve the temporary file's mode
+        # across rename, so normalize the final path as well.
+        target_path.chmod(CACHE_FILE_MODE)
+    finally:
+        temp_path.unlink(missing_ok=True)
 
 
 def _download_skin_file(cache_root: Path, skin_id: str, remote_url: str) -> Path:
@@ -256,18 +296,13 @@ def _download_skin_file(cache_root: Path, skin_id: str, remote_url: str) -> Path
     extension = _guess_extension(content_type, remote_url)
     target_path = cache_root / f"{skin_id}{extension}"
     temp_path = cache_root / f".{skin_id}.download"
-    temp_path.write_bytes(payload)
+    _write_cache_file(temp_path, target_path, payload)
 
-    try:
-        for candidate in cache_root.glob(f"{skin_id}.*"):
-            if candidate == target_path:
-                continue
-            if candidate.is_file():
-                candidate.unlink(missing_ok=True)
-        temp_path.replace(target_path)
-    finally:
-        if temp_path.exists():
-            temp_path.unlink(missing_ok=True)
+    for candidate in cache_root.glob(f"{skin_id}.*"):
+        if candidate == target_path:
+            continue
+        if candidate.is_file():
+            candidate.unlink(missing_ok=True)
 
     return target_path
 

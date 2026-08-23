@@ -10,6 +10,7 @@ from typing import Any
 import logging
 from jinja2 import TemplateNotFound
 
+from src.app.cache_permissions import CACHE_FILE_MODE
 from src.app.config import Config
 from src.app.renderers.jinja_html_renderer import JinjaHtmlRenderer
 from src.app.renderers.jinja_json_renderer import JinjaJsonRenderer
@@ -286,10 +287,20 @@ class CardService:
 
     async def _atomic_write_text(self, path: Path, content: str, *, encoding: str = "utf-8") -> None:
         tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(content, encoding=encoding)
-        os.replace(tmp, path)
+        try:
+            tmp.write_text(content, encoding=encoding)
+            tmp.chmod(CACHE_FILE_MODE)
+            os.replace(tmp, path)
+            path.chmod(CACHE_FILE_MODE)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     async def _atomic_write_bytes(self, path: Path, content: bytes) -> None:
         tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_bytes(content)
-        os.replace(tmp, path)
+        try:
+            tmp.write_bytes(content)
+            tmp.chmod(CACHE_FILE_MODE)
+            os.replace(tmp, path)
+            path.chmod(CACHE_FILE_MODE)
+        finally:
+            tmp.unlink(missing_ok=True)
