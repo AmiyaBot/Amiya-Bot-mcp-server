@@ -1,6 +1,9 @@
 from __future__ import annotations
-from typing import List
-from src.app.context import AppContext
+
+from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+    from src.app.context import AppContext
 
 # 直接把你原来的实现挪过来（这里假设函数体不变）
 def mark_glossary_used_terms(context: AppContext, text: str) -> List[str]:
@@ -20,9 +23,10 @@ def mark_glossary_used_terms(context: AppContext, text: str) -> List[str]:
 
     used_terms = set()
     all_glossary_terms = list(glossary.keys())
+    normalized_text = text.casefold()
 
     for g in all_glossary_terms:
-        if g in text:
+        if g.casefold() in normalized_text:
             used_terms.add(g)
 
     return list(used_terms)

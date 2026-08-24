@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import List, Union
+from typing import TYPE_CHECKING, List, Union
 
-from src.app.context import AppContext
+if TYPE_CHECKING:
+    from src.app.context import AppContext
 
 
 def split_terms(raw_value: str) -> List[str]:
@@ -34,21 +35,42 @@ def query_glossary(context: AppContext, glossary_name: Union[List[str], str]) ->
     else:
         return {}
 
-    matched = set()
+    matched: set[str] = set()
     all_glossary_terms = list(glossary.keys())
+    normalized_explanations = {
+        glossary_term: str(glossary.get(glossary_term, "") or "").casefold()
+        for glossary_term in all_glossary_terms
+    }
 
     for query_term in terms:
+        normalized_query = query_term.casefold()
+
+        # 名称匹配优先，避免常见关键词因出现在大量解释中而扩大初始结果集。
+        name_matches = {
+            glossary_term
+            for glossary_term in all_glossary_terms
+            if normalized_query in glossary_term.casefold()
+            or glossary_term.casefold() in normalized_query
+        }
+        if name_matches:
+            matched.update(name_matches)
+            continue
+
+        # 名称没有命中时再查解释，用于兼容“法抗”“魔法抗性”等别名。
         for glossary_term in all_glossary_terms:
-            if glossary_term in query_term or query_term in glossary_term:
+            if normalized_query in normalized_explanations[glossary_term]:
                 matched.add(glossary_term)
 
     changed = True
     while changed:
         changed = False
         for term in list(matched):
-            explain = glossary.get(term, "") or ""
+            normalized_explain = normalized_explanations[term]
             for glossary_term in all_glossary_terms:
-                if glossary_term in explain and glossary_term not in matched:
+                if (
+                    glossary_term.casefold() in normalized_explain
+                    and glossary_term not in matched
+                ):
                     matched.add(glossary_term)
                     changed = True
 

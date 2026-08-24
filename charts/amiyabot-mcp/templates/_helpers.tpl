@@ -23,7 +23,7 @@
 helm.sh/chart: {{ include "amiyabot-mcp.chart" . }}
 app.kubernetes.io/name: {{ include "amiyabot-mcp.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/version: {{ include "amiyabot-mcp.imageTag" . | quote }}
+app.kubernetes.io/version: {{ include "amiyabot-mcp.appVersion" . | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
@@ -36,18 +36,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- required "values.config.baseUrl is required" .Values.config.baseUrl -}}
 {{- end -}}
 
-{{- define "amiyabot-mcp.imageTag" -}}
-{{- if .Values.image.tag -}}
-{{- .Values.image.tag -}}
-{{- else if .Chart.AppVersion -}}
-{{- .Chart.AppVersion -}}
-{{- else -}}
-latest
-{{- end -}}
+{{- define "amiyabot-mcp.appVersion" -}}
+{{- required "Chart.appVersion is required" .Chart.AppVersion -}}
 {{- end -}}
 
 {{- define "amiyabot-mcp.image" -}}
-{{- printf "%s:%s" .Values.image.repository (include "amiyabot-mcp.imageTag" .) -}}
+{{- printf "%s:%s" .Values.image.repository (include "amiyabot-mcp.appVersion" .) -}}
 {{- end -}}
 
 {{- define "amiyabot-mcp.ingressHost" -}}

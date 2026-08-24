@@ -3,8 +3,6 @@ replicaCount: 1
 image:
   repository: hsyhhssyy/amiyabot-mcp
   pullPolicy: IfNotPresent
-  tag: ""
-  gitSha: ""
 
 imagePullSecrets: []
 nameOverride: ""

@@ -15,18 +15,18 @@ logger = logging.getLogger("mcp_tool")
 
 def register_glossary_tool(mcp,app):
     @mcp.tool(
-        description='获取明日方舟游戏数据中指定术语的解释和计算公式。例如你可以查询特定术语如"攻击力"来获取关于如何计算具体伤害的公式。',
+        description='获取明日方舟游戏术语的简要解释及相关机制。例如查询"DPS"时，会级联返回攻击间隔、伤害类型等相关术语。',
     )
     def get_glossary(
-        glossary_name: Annotated[Union[List[str], str], Field(description='要查询的术语名列表，可以是术语字符串、逗号/顿号分隔的术语字符串、或字符串数组')],
+        glossary_name: Annotated[Union[List[str], str], Field(description='查询关键词，可以是单个字符串、逗号/顿号分隔的字符串、或字符串数组；优先匹配术语名称，名称未命中时匹配解释')],
     ) -> str:
         """
         输入:
-            - glossary_name: 可以是术语字符串、逗号/顿号分隔的术语字符串、或字符串数组
+            - glossary_name: 可以是关键词字符串、逗号/顿号分隔的字符串、或字符串数组
         输出:
             - JSON 字符串: { "术语名": "术语解释", ... }
         规则:
-            1) 只要用户查询的术语中“包含” glossary 的术语（或反向包含以增强召回），就算匹配
+            1) 优先匹配术语名称；名称未命中时再匹配解释文本
             2) 如果某个术语解释文本中包含了其它 glossary 术语名，则级联把这些术语也加入返回结果
         """
         tool_name = "get_glossary"

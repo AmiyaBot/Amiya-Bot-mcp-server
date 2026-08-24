@@ -100,6 +100,45 @@ docker run -d \
 
 `BaseUrl` 用于生成图片和静态资源链接，应包含协议、域名以及必要的路径前缀，并建议以 `/` 结尾。
 
+### DeepSeek Harness
+
+DeepSeek Harness 官方的 `@deepseek-ai/dsh-mcp-client` 已随 `dsh` CLI 提供，但默认 profile 不会启用任何 MCP 服务器。需要在 profile 的 `cordis.patch.yml` 中插入一个 MCP client 实例；这一行配置会同时启用官方 MCP 插件并连接 AmiyaBot MCP Server。
+
+先运行一次 Harness 以初始化 `web` profile：
+
+```bash
+dsh web
+```
+
+默认配置文件位于 `~/.dsh/profiles/web/cordis.patch.yml`。如果设置了 `DSH_HOME`，则位于 `$DSH_HOME/profiles/web/cordis.patch.yml`；使用其他 profile 时，将路径中的 `web` 换成对应名称。
+
+如果文件不存在，创建并写入以下内容；如果已有其他配置，将下面的 `insert` 项追加到现有顶层 YAML 数组中，不要覆盖原配置：
+
+```yaml
+- insert:
+    - id: mcp-amiyabot
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: amiyabot
+        transport: streamable-http
+        url: http://127.0.0.1:9000/mcp
+        toolCallTimeoutMs: 120000
+```
+
+保存后重启 Harness：
+
+```bash
+dsh web
+```
+
+Harness 会将 MCP 工具注册为带服务器命名空间的原生工具，例如 `search` 会显示为 `mcp__amiyabot__search`。可以用以下命令检查最终合并后的 profile 配置：
+
+```bash
+dsh --profile web --dump-config
+```
+
+如果 Harness 与 MCP 服务器不在同一台主机或同一个容器网络中，需要将 `url` 替换为 Harness 能够访问的最终地址，不能使用 MCP 服务器自己的 `127.0.0.1`。更多配置项参见 [DeepSeek Harness 官方 MCP client 文档](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md)。
+
 ### Helm
 
 准备 `values.yaml`：
