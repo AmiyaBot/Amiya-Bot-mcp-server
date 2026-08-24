@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 from src.app.config import Config
 from src.data.models.bundle import DataBundle
 from src.data.models._operator_impl import OperatorImpl
+from src.domain.models.enemy import Enemy
 from src.domain.models.operator import Operator
 from src.domain.models.skin import Skin
 from src.domain.models.stage import Stage
@@ -52,6 +53,7 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
         ("stage_table", "excel"),
         ("zone_table", "excel"),
         ("enemy_handbook_table", "excel"),
+        ("enemy_database", "levels/enemydata"),
         ("range_table", "excel"),
         ("skill_table", "excel"),
         ("skin_table", "excel"),
@@ -81,6 +83,7 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
     skins, skin_name_to_id = _build_skin_index(operators)
     materials, material_name_to_id = _build_materials(tables)
     stages, stage_alias_to_ids = _build_stages(tables, game_root)
+    enemies, enemy_alias_to_ids = _build_enemies(tables)
 
     return DataBundle(
         version=version,
@@ -93,10 +96,196 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
         material_name_to_id=material_name_to_id,
         stages=stages,
         stage_alias_to_ids=stage_alias_to_ids,
+        enemies=enemies,
+        enemy_alias_to_ids=enemy_alias_to_ids,
         skins=skins,
         skin_name_to_id=skin_name_to_id,
         tables=tables,
     )
+
+
+_ENEMY_ATTRIBUTE_PATHS = {
+    "max_hp": ("attributes", "maxHp"),
+    "attack": ("attributes", "atk"),
+    "defense": ("attributes", "def"),
+    "magic_resistance": ("attributes", "magicResistance"),
+    "move_speed": ("attributes", "moveSpeed"),
+    "attack_speed": ("attributes", "attackSpeed"),
+    "attack_interval": ("attributes", "baseAttackTime"),
+    "hp_recovery_per_sec": ("attributes", "hpRecoveryPerSec"),
+    "mass_level": ("attributes", "massLevel"),
+    "range_radius": ("rangeRadius",),
+    "life_point_reduce": ("lifePointReduce",),
+    "apply_way": ("applyWay",),
+    "motion": ("motion",),
+}
+_ENEMY_IMMUNITY_PATHS = {
+    "stun": ("attributes", "stunImmune"),
+    "silence": ("attributes", "silenceImmune"),
+    "sleep": ("attributes", "sleepImmune"),
+    "frozen": ("attributes", "frozenImmune"),
+    "levitate": ("attributes", "levitateImmune"),
+    "disarmed_combat": ("attributes", "disarmedCombatImmune"),
+    "feared": ("attributes", "fearedImmune"),
+    "palsy": ("attributes", "palsyImmune"),
+    "attract": ("attributes", "attractImmune"),
+}
+
+
+def _enemy_database_map(tables) -> dict[str, list[dict[str, Any]]]:
+    raw = get_table(tables, "enemy_database", source="gamedata", default={})
+    entries = raw.get("enemies") or []
+    result: dict[str, list[dict[str, Any]]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        enemy_id = str(entry.get("Key") or entry.get("key") or "").strip()
+        values = entry.get("Value") if "Value" in entry else entry.get("value")
+        if enemy_id and isinstance(values, list):
+            result[enemy_id] = [item for item in values if isinstance(item, dict)]
+    return result
+
+
+def _enemy_wrapper(enemy_data: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any] | None:
+    value: Any = enemy_data
+    for key in path:
+        if not isinstance(value, dict) or key not in value:
+            return None
+        value = value[key]
+    return value if isinstance(value, dict) else None
+
+
+def _build_enemy_attributes(raw_levels: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    """解析 enemy_database 的 m_defined 继承语义并返回等级属性和种族标签。"""
+    carried: dict[str, Any] = {}
+    carried_immunities: dict[str, bool] = {}
+    carried_races: list[str] = []
+    collected_races: list[str] = []
+    levels: list[dict[str, Any]] = []
+
+    def level_number(item: dict[str, Any]) -> int:
+        try:
+            return int(item.get("level") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    for raw_level in sorted(raw_levels, key=level_number):
+        enemy_data = raw_level.get("enemyData") or {}
+        if not isinstance(enemy_data, dict):
+            continue
+
+        current: dict[str, Any] = {"level": level_number(raw_level)}
+        for public_key, path in _ENEMY_ATTRIBUTE_PATHS.items():
+            wrapper = _enemy_wrapper(enemy_data, path)
+            if wrapper is not None and wrapper.get("m_defined") is True:
+                carried[public_key] = wrapper.get("m_value")
+            current[public_key] = carried.get(public_key)
+
+        immunities: dict[str, bool] = {}
+        for public_key, path in _ENEMY_IMMUNITY_PATHS.items():
+            wrapper = _enemy_wrapper(enemy_data, path)
+            if wrapper is not None and wrapper.get("m_defined") is True:
+                carried_immunities[public_key] = bool(wrapper.get("m_value"))
+            immunities[public_key] = carried_immunities.get(public_key, False)
+        current["immunities"] = immunities
+
+        race_wrapper = _enemy_wrapper(enemy_data, ("enemyTags",))
+        if race_wrapper is not None and race_wrapper.get("m_defined") is True:
+            value = race_wrapper.get("m_value")
+            carried_races = [str(item).strip() for item in (value or []) if str(item).strip()]
+        for race_id in carried_races:
+            if race_id not in collected_races:
+                collected_races.append(race_id)
+
+        levels.append(current)
+
+    return levels, collected_races
+
+
+def _enemy_aliases(enemy: Enemy) -> list[str]:
+    values = {
+        enemy.id,
+        enemy.id.lower(),
+        enemy.id.upper(),
+        enemy.name,
+        enemy.name.lower(),
+        enemy.name.upper(),
+        remove_punctuation(enemy.name),
+    }
+    if enemy.index and enemy.index != "-":
+        values.update({enemy.index, enemy.index.lower(), enemy.index.upper()})
+    return sorted(item.strip() for item in values if item and item.strip())
+
+
+def _build_enemies(tables) -> tuple[dict[str, Enemy], dict[str, list[str]]]:
+    handbook_table = get_table(tables, "enemy_handbook_table", source="gamedata", default={})
+    handbook = handbook_table.get("enemyData") or {}
+    race_table = handbook_table.get("raceData") or {}
+    database = _enemy_database_map(tables)
+    enemies: dict[str, Enemy] = {}
+
+    for raw_id, raw in handbook.items():
+        if not isinstance(raw, dict):
+            continue
+        enemy_id = str(raw.get("enemyId") or raw_id or "").strip()
+        name = str(raw.get("name") or "").strip()
+        if not enemy_id or not name or name == "-":
+            continue
+
+        attributes, race_ids = _build_enemy_attributes(database.get(enemy_id) or [])
+        races: list[dict[str, str]] = []
+        for race_id in race_ids:
+            race = race_table.get(race_id) or {}
+            races.append(
+                {
+                    "id": race_id,
+                    "name": str(race.get("raceName") or race_id).strip(),
+                }
+            )
+
+        abilities: list[dict[str, str]] = []
+        for ability in raw.get("abilityList") or []:
+            if not isinstance(ability, dict):
+                continue
+            raw_text = str(ability.get("text") or "").strip()
+            if not raw_text:
+                continue
+            abilities.append(
+                {
+                    "text": html_tag_format(raw_text).replace("\\n", "\n").strip(),
+                    "raw_text": raw_text,
+                    "text_format": str(ability.get("textFormat") or "NORMAL").strip(),
+                }
+            )
+
+        enemies[enemy_id] = Enemy(
+            id=enemy_id,
+            index=str(raw.get("enemyIndex") or "").strip(),
+            name=name,
+            enemy_level=str(raw.get("enemyLevel") or "NORMAL").strip(),
+            description=html_tag_format(raw.get("description") or "").replace("\\n", "\n").strip(),
+            attack_type=str(raw.get("attackType") or "").strip(),
+            damage_types=[str(item).strip() for item in (raw.get("damageType") or []) if str(item).strip()],
+            races=races,
+            abilities=abilities,
+            attributes=attributes,
+            linked_enemy_ids=[str(item).strip() for item in (raw.get("linkEnemies") or []) if str(item).strip()],
+            sort_id=int(raw.get("sortId") or 0),
+            hide_in_handbook=bool(raw.get("hideInHandbook")),
+            hide_in_stage=bool(raw.get("hideInStage")),
+            raw=raw,
+        )
+
+    aliases: dict[str, list[str]] = {}
+    for enemy in sorted(enemies.values(), key=lambda item: (item.sort_id, item.id)):
+        if enemy.hide_in_handbook:
+            continue
+        for alias in _enemy_aliases(enemy):
+            bucket = aliases.setdefault(alias, [])
+            if enemy.id not in bucket:
+                bucket.append(enemy.id)
+
+    return enemies, aliases
 
 
 _STAGE_TYPE_NAMES = {
@@ -477,4 +666,3 @@ def _build_skin_index(operators: Dict[str, Operator]) -> tuple[Dict[str, Skin], 
             if not skin.is_evolve and skin.name:
                 name_to_id[skin.name] = skin.skin_id
     return skins, name_to_id
-

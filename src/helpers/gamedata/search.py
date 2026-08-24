@@ -412,6 +412,17 @@ def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) ->
             continue_after_exact=False,
             allow_fuzzy=True,
         ),
+        SourceSpec(
+            key="enemy",
+            candidates=lambda: list((bundle.enemy_alias_to_ids or {}).keys()),
+            resolve=lambda k: [
+                bundle.enemies[enemy_id]
+                for enemy_id in (bundle.enemy_alias_to_ids or {}).get(k, [])
+                if enemy_id in (bundle.enemies or {})
+            ],
+            continue_after_exact=False,
+            allow_fuzzy=True,
+        ),
     ]
 
     if source_key:

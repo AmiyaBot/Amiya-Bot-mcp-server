@@ -144,6 +144,8 @@ def build_resource_check_payload(
         "tokens_count": len(getattr(bundle, "tokens", {}) or {}),
         "operator_name_index_count": len(getattr(bundle, "operator_name_to_id", {}) or {}),
         "operator_index_count": len(getattr(bundle, "operator_index_to_id", {}) or {}),
+        "enemies_count": len(getattr(bundle, "enemies", {}) or {}),
+        "enemy_alias_index_count": len(getattr(bundle, "enemy_alias_to_ids", {}) or {}),
     }
 
     operator_checks: list[dict[str, Any]] = []

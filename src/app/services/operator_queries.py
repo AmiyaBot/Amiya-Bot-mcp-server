@@ -81,7 +81,7 @@ def _dedupe_names(matches) -> list[str]:
 
 
 # 原函数名 _build_operator_search_items（2026-08-13 起重构为 _build_search_items，
-# 统一构建干员与召唤物候选条目；干员条目与旧逻辑一致）。
+# 统一构建所有资源候选条目；干员条目与旧逻辑一致）。
 # AI-CORRECTION 2026-08-13: 已支持皮肤条目（key=skin），返回 {"id", "name",
 # "type": "皮肤", "operator_id", "operator_name"}，其中 operator_* 为皮肤归属干员。
 def _build_search_items(
@@ -96,6 +96,7 @@ def _build_search_items(
     无主召唤物（未挂靠在任何干员下）不进入候选。
     皮肤条目：{"id", "name", "type": "皮肤", "operator_id", "operator_name"}，
     其中 operator_id/operator_name 为皮肤归属干员。
+    敌人条目：{"id", "name", "type": "敌人", "enemy_index", "enemy_level"}。
     """
     items: list[dict[str, str]] = []
     seen_ids: set[str] = set()
@@ -189,6 +190,27 @@ def _build_search_items(
                         "CAMPAIGN": "剿灭",
                         "CLIMB_TOWER": "保全派驻",
                     }.get(stage_type, stage_type),
+                })
+        elif match.key == "enemy":
+            enemy_values = value if isinstance(value, (list, tuple)) else [value]
+            for enemy in enemy_values:
+                enemy_id = str(getattr(enemy, "id", "") or "").strip()
+                enemy_name = str(getattr(enemy, "name", "") or match.matched_text).strip()
+                if not enemy_id or not enemy_name or enemy_id in seen_ids:
+                    continue
+
+                seen_ids.add(enemy_id)
+                enemy_level = str(getattr(enemy, "enemy_level", "") or "").strip()
+                items.append({
+                    "id": enemy_id,
+                    "name": enemy_name,
+                    "type": "敌人",
+                    "enemy_index": str(getattr(enemy, "index", "") or "").strip(),
+                    "enemy_level": {
+                        "NORMAL": "普通",
+                        "ELITE": "精英",
+                        "BOSS": "BOSS",
+                    }.get(enemy_level, enemy_level),
                 })
 
     return items
@@ -619,7 +641,7 @@ def _resolve_operator_by_id(
 
 
 # 原函数名 search_operator（2026-08-13 起重命名为 search，
-# 升级为资源统一搜索：干员 + 干员的召唤物；未来扩展其他资源类型时在此收敛）。
+# 升级为资源统一搜索：干员、召唤物、皮肤、材料、关卡和敌人。
 def search(
     context: AppContext,
     query: str,
@@ -642,14 +664,16 @@ def search(
     skin_name_index_size = len(bundle.skin_name_to_id) if bundle.skin_name_to_id else 0
     material_name_index_size = len(bundle.material_name_to_id) if bundle.material_name_to_id else 0
     stage_alias_index_size = len(bundle.stage_alias_to_ids) if bundle.stage_alias_to_ids else 0
+    enemy_alias_index_size = len(bundle.enemy_alias_to_ids) if bundle.enemy_alias_to_ids else 0
     logger.debug(
-        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s",
+        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s",
         bundle_operators,
         name_index_size,
         token_name_index_size,
         skin_name_index_size,
         material_name_index_size,
         stage_alias_index_size,
+        enemy_alias_index_size,
     )
     if bundle_operators == 0 or name_index_size == 0:
         logger.warning(
@@ -658,7 +682,7 @@ def search(
             name_index_size,
         )
 
-    search_sources = build_sources(bundle, source_key=["name", "token_name", "skin", "material", "stage"])
+    search_sources = build_sources(bundle, source_key=["name", "token_name", "skin", "material", "stage", "enemy"])
     logger.debug("search: build_sources 返回 %s 个 source", len(search_sources))
 
     search_results = search_source_spec(normalized_query, sources=search_sources, n=max(limit, 1))
@@ -678,7 +702,7 @@ def search(
 
     if not items:
         logger.warning(
-            "search: 未找到干员、召唤物、皮肤、材料或关卡 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s",
+            "search: 未找到干员、召唤物、皮肤、材料、关卡或敌人 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s",
             normalized_query,
             bundle_operators,
             name_index_size,
@@ -686,8 +710,9 @@ def search(
             skin_name_index_size,
             material_name_index_size,
             stage_alias_index_size,
+            enemy_alias_index_size,
         )
-        return QueryExecutionResult(message=f"未找到匹配的干员、召唤物、皮肤、材料或关卡: {normalized_query}")
+        return QueryExecutionResult(message=f"未找到匹配的干员、召唤物、皮肤、材料、关卡或敌人: {normalized_query}")
 
     return QueryExecutionResult(data={"items": items})
 

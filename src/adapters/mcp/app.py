@@ -32,6 +32,7 @@ from src.adapters.mcp.mcp_tools.operator_skins import register_operator_skins_to
 from src.adapters.mcp.mcp_tools.operator_skill import register_operator_skill_tool
 from src.adapters.mcp.mcp_tools.material import register_material_tool
 from src.adapters.mcp.mcp_tools.stage import register_stage_tool
+from src.adapters.mcp.mcp_tools.enemy import register_enemy_tool
 from src.app.config import Config
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,7 @@ class MCPRequestLoggingMiddleware:
 server_instructions = """
 本服务器是一个游戏<明日方舟>的知识库查询助手，专注于为用户提供准确的干员信息数据和游戏资料。
 你可以使用注册的工具来回答明日方舟游戏内的问题。
-任何查询都请先调用 search 获取候选实体的 id（干员、召唤物、皮肤、材料或关卡），再用该 id 调用对应的详情工具（干员：get_operator_basic_data / get_operator_skill / get_operator_material / get_operator_modules；召唤物：get_token_detail；皮肤：get_operator_skins；材料：get_material；关卡：get_stage_data）。
+任何查询都请先调用 search 获取候选实体的 id（干员、召唤物、皮肤、材料、关卡或敌人），再用该 id 调用对应的详情工具（干员：get_operator_basic_data / get_operator_skill / get_operator_material / get_operator_modules；召唤物：get_token_detail；皮肤：get_operator_skins；材料：get_material；关卡：get_stage_data；敌人：get_enemy_data）。
 """
 
 
@@ -224,9 +225,10 @@ def register_asgi(app: FastAPI, cfg: Config):
     register_operator_skins_tool(mcp,app)
     register_material_tool(mcp,app)
     register_stage_tool(mcp,app)
+    register_enemy_tool(mcp,app)
     logger.info(
         "MCP 工具注册完成: tools=%s",
-        ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins", "get_material", "get_stage_data"],
+        ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins", "get_material", "get_stage_data", "get_enemy_data"],
     )
 
     app.mount("/mcp", mcp.sse_app())

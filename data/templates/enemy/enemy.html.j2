@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ enemy.name | e }}</title>
+  <style>
+    @font-face {
+      font-family: "Harmony";
+      {% if template_font_url %}
+      src: url("{{ template_font_url }}") format("truetype");
+      {% else %}
+      src: local("HarmonyOS Sans SC"), local("Noto Sans CJK SC"), sans-serif;
+      {% endif %}
+    }
+    * { box-sizing: border-box; font-family: "Harmony", sans-serif; }
+    html, body { margin: 0; background: #1b2024; color: #fff; }
+    #template {
+      width: 1280px;
+      min-height: 720px;
+      padding: 24px 30px 38px;
+      background: {% if template_bg_data %}linear-gradient(rgb(9 14 18 / 24%), rgb(9 14 18 / 48%)), url("{{ template_bg_data }}"){% else %}linear-gradient(135deg, #38434a, #11171b){% endif %} center / cover no-repeat;
+    }
+    .header { display: flex; align-items: center; gap: 24px; min-height: 170px; }
+    .avatar { width: 180px; height: 180px; object-fit: contain; flex: 0 0 180px; filter: drop-shadow(0 6px 8px rgb(0 0 0 / 48%)); }
+    .name-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+    h1 { margin: 0; font-size: 42px; line-height: 1.2; text-shadow: 0 2px 5px #000; }
+    .tag { display: inline-block; padding: 4px 11px; border-radius: 4px; font-size: 18px; }
+    .tag.NORMAL { background: #3b9d22; }
+    .tag.ELITE { background: #7200ad; }
+    .tag.BOSS { background: #bd1920; }
+    .tag.index { background: #5c6368; }
+    .tag.race { background: #187cba; }
+    .tag.attack { background: #d75c1c; }
+    .description { max-width: 920px; margin-top: 13px; color: #e3e9ec; font-size: 19px; font-style: italic; line-height: 1.55; text-shadow: 0 1px 3px #000; }
+    .section-title { display: inline-block; margin: 25px 0 12px; padding: 3px 50px 3px 11px; color: #111; background: #fff; font-size: 22px; font-weight: 800; }
+    .links { display: flex; flex-wrap: wrap; gap: 13px; }
+    .link-item { display: flex; align-items: center; min-width: 245px; padding: 8px 12px; gap: 11px; background: rgb(20 27 31 / 78%); border-radius: 8px; }
+    .link-item img { width: 82px; height: 82px; object-fit: contain; }
+    .link-name { margin-top: 7px; font-size: 18px; font-weight: 700; }
+    .abilities { padding: 14px 18px; background: rgb(19 25 29 / 80%); border-radius: 8px; font-size: 18px; line-height: 1.55; }
+    .ability { margin: 5px 0; }
+    .ability-TITLE { margin: 12px 0 5px; color: #ff8a46; font-size: 21px; font-weight: 800; }
+    .ability-SILENCE::before { content: "可沉默"; display: inline-block; margin-right: 8px; padding: 0 6px; border-radius: 3px; color: #24170f; background: #ffb37d; font-size: 13px; vertical-align: 2px; }
+    .mark { color: #ff853f; }
+    .empty { color: #aeb8bd; }
+    .level-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+    .level-panel { padding: 14px; background: rgb(17 23 27 / 82%); border: 1px solid rgb(255 255 255 / 18%); border-radius: 8px; }
+    .level-title { margin-bottom: 9px; color: #ff9a60; font-size: 20px; font-weight: 800; }
+    .attrs { display: grid; grid-template-columns: 1fr 1fr; }
+    .attr { min-height: 29px; border: 1px solid rgb(255 255 255 / 55%); font-size: 16px; }
+    .attr::before { content: attr(data-title); display: inline-block; width: 94px; margin-right: 9px; padding: 3px 8px; color: #111; background: #fff; }
+    .immunities { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 10px; }
+    .immunity { padding: 4px 6px; border: 1px solid rgb(255 255 255 / 45%); font-size: 14px; }
+    .immunity.on { color: #ff9b5b; border-color: #ff9b5b; background: rgb(255 123 45 / 10%); }
+    .footer { margin-top: 25px; color: #a8b1b6; font-size: 14px; }
+  </style>
+</head>
+<body>
+<main id="template">
+  <header class="header">
+    <img class="avatar" src="{{ enemy_icon_data.get(enemy.id) or fallback_enemy_icon_data }}" alt="{{ enemy.name | e }}">
+    <div>
+      <div class="name-line">
+        <h1>{{ enemy.name | e }}</h1>
+        <span class="tag {{ enemy.enemy_level | e }}">{{ enemy.enemy_level_name | e }}</span>
+        {% if enemy.enemy_index %}<span class="tag index">{{ enemy.enemy_index | e }}</span>{% endif %}
+        {% for race in enemy.races %}<span class="tag race">{{ race.name | e }}</span>{% endfor %}
+        {% if enemy.attack_type and enemy.attack_type != "-" %}<span class="tag attack">{{ enemy.attack_type | e }}</span>{% endif %}
+      </div>
+      {% if enemy.description %}<div class="description">「{{ enemy.description | e }}」</div>{% endif %}
+    </div>
+  </header>
+
+  {% if enemy.linked_enemies %}
+  <div class="section-title">关联单位</div>
+  <section class="links">
+    {% for linked in enemy.linked_enemies %}
+    <article class="link-item">
+      <img src="{{ enemy_icon_data.get(linked.id) or fallback_enemy_icon_data }}" alt="{{ linked.name | e }}">
+      <div>
+        <span class="tag {{ linked.enemy_level | e }}">{{ linked.enemy_level_name | e }}</span>
+        <span class="tag index">{{ linked.enemy_index | e }}</span>
+        <div class="link-name">{{ linked.name | e }}</div>
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <div class="section-title">能力</div>
+  <section class="abilities">
+    {% for ability in ability_items %}
+    <div class="ability ability-{{ ability.text_format | e }}">{{ ability.html | safe }}</div>
+    {% else %}
+    <div class="empty">暂无特殊能力</div>
+    {% endfor %}
+  </section>
+
+  <div class="section-title">属性</div>
+  <section class="level-grid">
+    {% for attr in enemy.attributes %}
+    <article class="level-panel">
+      <div class="level-title">等级 {{ attr.level }}</div>
+      <div class="attrs">
+        <div class="attr" data-title="生命值">{{ attr.max_hp if attr.max_hp is not none else "—" }}</div>
+        <div class="attr" data-title="攻击力">{{ attr.attack if attr.attack is not none else "—" }}</div>
+        <div class="attr" data-title="防御力">{{ attr.defense if attr.defense is not none else "—" }}</div>
+        <div class="attr" data-title="法术抗性">{{ attr.magic_resistance if attr.magic_resistance is not none else "—" }}</div>
+        <div class="attr" data-title="移动速度">{{ attr.move_speed if attr.move_speed is not none else "—" }}</div>
+        <div class="attr" data-title="攻击速度">{{ attr.attack_speed if attr.attack_speed is not none else "—" }}</div>
+        <div class="attr" data-title="攻击间隔">{{ attr.attack_interval if attr.attack_interval is not none else "—" }}</div>
+        <div class="attr" data-title="每秒回血">{{ attr.hp_recovery_per_sec if attr.hp_recovery_per_sec is not none else 0 }}</div>
+        <div class="attr" data-title="重量等级">{{ attr.mass_level if attr.mass_level is not none else "—" }}</div>
+        <div class="attr" data-title="攻击距离">{{ attr.range_radius if attr.range_radius is not none else "—" }}</div>
+        <div class="attr" data-title="进点损失">{{ attr.life_point_reduce if attr.life_point_reduce is not none else "—" }}</div>
+        <div class="attr" data-title="行动方式">{{ attr.motion_name or "—" }} / {{ attr.apply_way_name or "—" }}</div>
+      </div>
+      <div class="immunities">
+        {% for key, title in (("stun", "晕眩"), ("silence", "沉默"), ("sleep", "睡眠"), ("frozen", "冻结"), ("levitate", "浮空"), ("disarmed_combat", "缴械"), ("feared", "恐惧"), ("palsy", "麻痹"), ("attract", "诱导")) %}
+        <div class="immunity{% if attr.immunities.get(key) %} on{% endif %}">{{ title }}免疫：{{ "有" if attr.immunities.get(key) else "无" }}</div>
+        {% endfor %}
+      </div>
+    </article>
+    {% else %}
+    <div class="empty">暂无等级属性数据</div>
+    {% endfor %}
+  </section>
+  <div class="footer">数据来源：明日方舟本地解包资源</div>
+</main>
+</body>
+</html>

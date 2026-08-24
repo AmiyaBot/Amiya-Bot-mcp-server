@@ -109,11 +109,11 @@ class TestConnectivity:
         assert caps is not None, "服务器能力不应为空"
 
     async def test_list_tools(self, mcp_session: Any) -> None:
-        """工具列表应包含全部 8 个已注册工具。"""
+        """工具列表应包含全部已注册工具。"""
         result = await mcp_session.list_tools()
         tool_names = {t.name for t in result.tools}
 
-        expected = {"search", "get_operator_basic_data", "get_operator_skill", "get_glossary", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins"}
+        expected = {"search", "get_operator_basic_data", "get_operator_skill", "get_glossary", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins", "get_material", "get_stage_data", "get_enemy_data"}
         missing = expected - tool_names
         assert not missing, f"缺少工具: {missing}"
 
@@ -175,6 +175,17 @@ class TestSearch:
             assert item.get("operator_id"), f"皮肤条目应携带 operator_id: {item}"
             assert item.get("operator_name"), f"皮肤条目应携带 operator_name: {item}"
 
+    async def test_search_known_enemy(self, mcp_session: Any) -> None:
+        """搜索敌人名称应返回敌人条目和敌人编号。"""
+        result = await mcp_session.call_tool("search", {"query": "源石虫"})
+        assert result.isError is False, f"工具返回错误: {result.content}"
+
+        data = json.loads(_extract_text(result))
+        items = data.get("data", {}).get("items", [])
+        enemy_items = [item for item in items if item.get("type") == "敌人"]
+        assert enemy_items, f"搜索 '源石虫' 应返回敌人条目: {items}"
+        assert enemy_items[0].get("enemy_index") == "B1"
+
     async def test_search_empty_query(self, mcp_session: Any) -> None:
         """空查询应正常返回（不崩溃）。"""
         result = await mcp_session.call_tool("search", {"query": ""})
@@ -221,6 +232,26 @@ class TestGetOperatorSkins:
         text = _extract_text(result)
         data = json.loads(text)
         assert "未找到干员ID" in (data.get("message") or ""), f"应返回未找到提示: {data}"
+
+
+class TestGetEnemyData:
+    """测试 get_enemy_data 工具的结构化数据与卡片输出。"""
+
+    async def test_get_enemy_data(self, mcp_session: Any) -> None:
+        result = await mcp_session.call_tool(
+            "get_enemy_data",
+            {"enemy_id": "enemy_1007_slime"},
+        )
+        assert result.isError is False, f"工具返回错误: {result.content}"
+
+        payload = json.loads(_extract_text(result))
+        data = payload.get("data", {})
+        assert data.get("id") == "enemy_1007_slime"
+        assert data.get("name") == "源石虫"
+        assert data.get("enemy_index") == "B1"
+        assert data.get("attributes"), f"敌人等级属性不应为空: {payload}"
+        assert payload.get("card_image_url"), f"应返回敌人卡片 URL: {payload}"
+        assert payload.get("data_url"), f"应返回敌人 JSON URL: {payload}"
 
 
 class TestGetTokenDetail:

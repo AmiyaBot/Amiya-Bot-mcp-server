@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping
 
 from src.domain.models.operator import Operator
+from src.domain.models.enemy import Enemy
 from src.domain.models.skin import Skin
 from src.domain.models.stage import Stage
 from src.helpers.bundle import *
@@ -33,6 +34,11 @@ class DataBundle:
     """关卡元数据字典，key 为 stage_id；level JSON 由详情查询按需读取。"""
     stage_alias_to_ids: Dict[str, list[str]]
     """关卡代号/名称/难度别名 -> stage_id 列表，允许同名或同代号关卡并存。"""
+
+    enemies: Dict[str, Enemy]
+    """敌方单位字典，key 为 enemy_id；包含手册资料和已解析的等级属性。"""
+    enemy_alias_to_ids: Dict[str, list[str]]
+    """敌人名称/编号/ID/去标点名称 -> enemy_id 列表，允许重名敌人并存。"""
 
     skins: Dict[str, Skin]
     """皮肤字典，key 为 skin_id（含精英化立绘与具名皮肤）"""

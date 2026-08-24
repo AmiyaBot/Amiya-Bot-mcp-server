@@ -19,6 +19,7 @@ test/
 !tests/test_cache_permissions.py
 !tests/test_operator_skin_selection.py
 !tests/test_operator_modules.py
+!tests/test_enemy.py
 
 # CLI/Web 运行产物
 data/local/command-service.log
