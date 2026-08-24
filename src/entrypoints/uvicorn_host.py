@@ -269,19 +269,26 @@ def uvicorn_main():
             log.exception("应用上下文初始化失败")
             raise
 
-        task = asyncio.create_task(_periodic_update_loop(app, interval_seconds=15 * 60))
-        log.info("后台资源刷新任务已创建")
+        session_manager = getattr(app.state, "mcp_session_manager", None)
+        if session_manager is None:
+            raise RuntimeError("MCP Streamable HTTP session manager 未注册")
 
-        try:
-            yield
-        finally:
-            log.info("Web 服务进入关闭流程")
-            task.cancel()
+        log.info("正在启动 MCP Streamable HTTP session manager")
+        async with session_manager.run():
+            task = asyncio.create_task(_periodic_update_loop(app, interval_seconds=15 * 60))
+            log.info("后台资源刷新任务已创建")
+
             try:
-                await task
-            except asyncio.CancelledError:
-                pass
-            log.info("后台资源刷新任务已停止")
+                yield
+            finally:
+                log.info("Web 服务进入关闭流程")
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                log.info("后台资源刷新任务已停止")
+        log.info("MCP Streamable HTTP session manager 已停止")
 
     app = FastAPI(lifespan=lifespan)
 
@@ -291,13 +298,11 @@ def uvicorn_main():
         allow_credentials=False,  # 用 "*" 时必须 False
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["Content-Length", "Content-Type"],
+        expose_headers=["Content-Length", "Content-Type", "Mcp-Session-Id"],
         max_age=86400,
     )
 
     register_cardserver_asgi(app, cfg=cfg)
-    register_asgi(app, cfg=cfg)
-    log.info("ASGI 路由注册完成")
 
     @app.get("/rest/status")
     async def status():
@@ -415,6 +420,10 @@ def uvicorn_main():
             sorted(response_payload.keys()),
         )
         return response_payload
+
+    # Mount("/") 是兜底路由，必须在 REST 和静态资源路由之后注册。
+    register_asgi(app, cfg=cfg)
+    log.info("ASGI 路由注册完成")
 
     log.info("开始监听 HTTP 服务: host=0.0.0.0 port=9000")
     uvicorn.run(app, host="0.0.0.0", port=9000)

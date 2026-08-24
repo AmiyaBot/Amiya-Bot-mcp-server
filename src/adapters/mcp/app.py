@@ -3,9 +3,11 @@ from time import perf_counter
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI
+from fastapi import Request
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.datastructures import Headers
+from starlette.responses import RedirectResponse
 from starlette.types import ASGIApp
 from starlette.types import Message
 from starlette.types import Receive
@@ -176,7 +178,7 @@ def _register_mcp_request_logging(app: FastAPI) -> None:
     app.state._mcp_request_logging_registered = True
 
 
-def register_asgi(app: FastAPI, cfg: Config):
+def register_asgi(app: FastAPI, cfg: Config) -> FastMCP:
     _register_mcp_request_logging(app)
 
     transport_security = _build_transport_security(
@@ -195,14 +197,17 @@ def register_asgi(app: FastAPI, cfg: Config):
         getattr(transport_security, "allowed_origins", None),
     )
 
-    # 挂载 FastMCP 的 SSE 应用到 FastAPI 的 /mcp 路径下
+    # Streamable HTTP 对外使用单一 /mcp 端点。这个挂载必须放在
+    # FastAPI 其他路由之后，因为 Mount("/") 会匹配所有剩余路径。
     # "amiya-mcp": {
-    #   "transport":"sse",
-    #   "url": "http://localhost:9000/mcp/sse"
+    #   "transport":"streamable-http",
+    #   "url": "http://localhost:9000/mcp"
     # }
     mcp = FastMCP(
         "明日方舟知识库",
         instructions=server_instructions,
+        mount_path="/mcp/sse",
+        sse_path="/",
         transport_security=transport_security,
     )
 
@@ -231,5 +236,18 @@ def register_asgi(app: FastAPI, cfg: Config):
         ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins", "get_material", "get_stage_data", "get_enemy_data"],
     )
 
-    app.mount("/mcp", mcp.sse_app())
-    logger.info("MCP ASGI 挂载完成: mount_path=/mcp sse_path=/mcp/sse")
+    streamable_http_app = mcp.streamable_http_app()
+    app.state.mcp_session_manager = mcp.session_manager
+    # 保留旧 SSE URL 作为迁移期兼容入口。子应用的根路由会使
+    # /mcp/sse 重定向到 /mcp/sse/，官方客户端会跟随该重定向。
+    @app.get("/mcp/sse", include_in_schema=False)
+    async def redirect_legacy_sse(request: Request) -> RedirectResponse:
+        root_path = str(request.scope.get("root_path") or "").rstrip("/")
+        return RedirectResponse(f"{root_path}{request.url.path}/", status_code=307)
+
+    app.mount("/mcp/sse", mcp.sse_app(), name="mcp-legacy-sse")
+    app.mount("/", streamable_http_app, name="mcp-streamable-http")
+    logger.info(
+        "MCP ASGI 挂载完成: streamable_http_endpoint=/mcp legacy_sse_endpoint=/mcp/sse"
+    )
+    return mcp

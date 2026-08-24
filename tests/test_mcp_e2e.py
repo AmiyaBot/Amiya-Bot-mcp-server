@@ -1,21 +1,21 @@
 """
-端到端测试：连接固定远端 MCP SSE 服务器，验证所有工具。
+端到端测试：连接固定远端 MCP Streamable HTTP 服务器，验证所有工具。
 
 使用方式:
     # 使用默认远端服务器
     pytest tests/ -v
 
     # 针对本地开发服务器
-    MCP_SERVER_URL=http://localhost:9000/mcp/sse pytest tests/ -v
+    MCP_SERVER_URL=http://localhost:9000/mcp pytest tests/ -v
 
     # 针对其他远端部署服务器
-    MCP_SERVER_URL=https://amiya.example.com/mcp/sse pytest tests/ -v
+    MCP_SERVER_URL=https://amiya.example.com/mcp pytest tests/ -v
 
     # 跳过需要服务端资源的测试（仅验证 MCP 握手和工具列表）
     pytest tests/ -v -k "not data"
 
 环境变量:
-    MCP_SERVER_URL     MCP SSE 端点地址（默认 https://amiyabot-mcp.hsyhhssyy.net/mcp/sse）
+    MCP_SERVER_URL     MCP Streamable HTTP 端点地址（默认 https://amiyabot-mcp.hsyhhssyy.net/mcp）
     MCP_REQUEST_TIMEOUT 请求超时秒数（默认 30）
 """
 
@@ -52,12 +52,12 @@ def _require_env(name: str) -> str:
 
 
 # 端到端测试默认连接的固定远端服务器
-_DEFAULT_MCP_SERVER_URL = "https://amiyabot-mcp.hsyhhssyy.net/mcp/sse"
+_DEFAULT_MCP_SERVER_URL = "https://amiyabot-mcp.hsyhhssyy.net/mcp"
 
 
 @pytest.fixture(scope="session")
 def mcp_server_url() -> str:
-    """MCP SSE 服务端点地址。
+    """MCP Streamable HTTP 服务端点地址。
 
     优先从环境变量 MCP_SERVER_URL 读取，未设置时使用固定远端地址。
     """
@@ -77,23 +77,26 @@ def request_timeout() -> float:
 @pytest.fixture(scope="function")
 async def mcp_session(mcp_server_url: str, request_timeout: float):
     """
-    建立 MCP SSE 客户端会话，初始化并返回已就绪的 ClientSession。
+    建立 MCP Streamable HTTP 客户端会话，初始化并返回已就绪的 ClientSession。
     每个测试独立建立连接。
     """
+    import httpx
     from mcp.client.session import ClientSession
-    from mcp.client.sse import sse_client
+    from mcp.client.streamable_http import streamable_http_client
 
-    # sse_client 的 anyio task group 依赖同一 task 内完成 setup/teardown，
+    # Streamable HTTP 客户端的 anyio task group 依赖同一 task 内完成 setup/teardown，
     # 因此本套件必须由 anyio 的 pytest 插件运行（见模块级 pytestmark 说明）。
-    async with sse_client(url=mcp_server_url, timeout=request_timeout) as (
-        read_stream,
-        write_stream,
-    ):
-        session = ClientSession(read_stream, write_stream)
-        async with session:
-            init_result = await session.initialize()
-            print(f"\n[MCP] 已连接: server={init_result.serverInfo}")
-            yield session
+    timeout = httpx.Timeout(request_timeout, read=request_timeout)
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as http_client:
+        async with streamable_http_client(
+            url=mcp_server_url,
+            http_client=http_client,
+        ) as (read_stream, write_stream, _get_session_id):
+            session = ClientSession(read_stream, write_stream)
+            async with session:
+                init_result = await session.initialize()
+                print(f"\n[MCP] 已连接: server={init_result.serverInfo}")
+                yield session
 
 
 # ---------------------------------------------------------------------------

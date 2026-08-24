@@ -4,7 +4,10 @@
 2. 健康检查:
    {{ trimSuffix "/" (include "amiyabot-mcp.baseUrl" .) }}/rest/status
 
-3. MCP SSE:
+3. MCP Streamable HTTP:
+   {{ trimSuffix "/" (include "amiyabot-mcp.baseUrl" .) }}/mcp
+
+4. Legacy MCP SSE:
    {{ trimSuffix "/" (include "amiyabot-mcp.baseUrl" .) }}/mcp/sse
 
-4. 如果 values.config.baseUrl 带路径前缀，请确认你的 Ingress Controller 支持该路径转发策略。
+5. 如果 values.config.baseUrl 带路径前缀，请确认你的 Ingress Controller 支持该路径转发策略。

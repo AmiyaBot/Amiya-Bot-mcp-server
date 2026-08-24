@@ -1,121 +1,112 @@
 # AmiyaBot MCP Server
 
-该项目提供可安装的命令 amiyabot-cli。
+[![GitHub Release](https://img.shields.io/github/v/release/AmiyaBot/Amiya-Bot-mcp-server)](https://github.com/AmiyaBot/Amiya-Bot-mcp-server/releases)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
 
-## 安装
+AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它基于本地游戏资源提供结构化数据和图片卡片，并附带命令行工具 `amiyabot-cli`。
 
-### 一键安装
+1.0.0 版本支持查询干员、技能、精英化与技能升级材料、模组、召唤物、皮肤、材料、关卡、敌人和游戏术语。
 
-可以直接使用 GitHub 上的安装脚本：
+## 功能
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/master/install.sh | sh
-```
+- 通过统一搜索查找干员、召唤物、皮肤、材料、关卡和敌人
+- 返回结构化数据，并为适合展示的内容生成图片卡片
+- 通过 Streamable HTTP 提供 MCP 服务，可接入支持远程 MCP 的客户端
+- 提供 CLI、Docker 和 Helm 三种使用方式
+- 支持资源首次初始化、后台更新和版本查询
 
-这个脚本默认会：
+当前提供 11 个 MCP 工具：
 
-- 将程序安装到 `~/.local/share/amiyabot-cli/venv`
-- 在 `~/.local/bin/amiyabot-cli` 生成包装命令
-- 默认安装 Playwright 浏览器，以便直接具备完整图片渲染能力
+| 工具 | 用途 |
+| --- | --- |
+| `search` | 统一搜索入口，返回资源 ID 和类型 |
+| `get_operator_basic_data` | 查询干员详情和干员卡片 |
+| `get_operator_skill` | 查询指定技能和等级的数据 |
+| `get_operator_material` | 查询干员培养材料和材料卡片 |
+| `get_operator_modules` | 查询干员模组和模组卡片 |
+| `get_token_detail` | 查询召唤物详情和召唤物卡片 |
+| `get_operator_skins` | 查询干员皮肤和指定皮肤卡片 |
+| `get_material` | 查询材料详情、合成路线和关卡掉落 |
+| `get_stage_data` | 查询关卡、地图、敌人和掉落信息 |
+| `get_enemy_data` | 查询敌人能力、属性和关联单位 |
+| `get_glossary` | 查询游戏术语及计算公式 |
 
-如果 `~/.local/bin` 还没在 PATH 中，脚本会提示你把它加入 shell 配置。
+除术语查询外，建议先调用 `search`，再将返回的 ID 传给对应的详情工具。
 
-如果你不希望安装 Playwright 浏览器，可以显式传入 `--no-playwright`：
+## 快速开始
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/master/install.sh | sh -s -- --no-playwright
-```
+### Docker（推荐）
 
-### 手动安装
-
-建议在项目根目录使用虚拟环境安装：
-
-```bash
-python3 -m venv .venv
-./.venv/bin/pip install -e .
-```
-
-安装完成后，可以先验证命令是否已经生成：
-
-```bash
-./.venv/bin/amiyabot-cli --help
-```
-
-如果希望在当前 shell 里直接调用 amiyabot-cli，有两种常用方式：
-
-1. 激活虚拟环境
-
-```bash
-source .venv/bin/activate
-amiyabot-cli --help
-```
-
-2. 将当前项目的虚拟环境加入 PATH
-
-```bash
-export PATH="$PWD/.venv/bin:$PATH"
-amiyabot-cli --help
-```
-
-如果你想长期生效，可以把上面的 export 写入 shell 配置文件，例如 ~/.bashrc。
-
-如果需要完整的图片渲染能力，还需要额外安装 Playwright 浏览器：
-
-```bash
-./.venv/bin/playwright install chromium
-```
-
-### Docker 运行
+准备一个持久化目录并启动 1.0.0：
 
 ```bash
 mkdir -p ./amiyabot-resources
 
 docker run -d \
-	--name amiyabot-mcp \
-	-p 9000:9000 \
-	-v "$(pwd)/amiyabot-resources:/app/resources" \
-	hsyhhssyy/amiyabot-mcp:v0.1.0
+  --name amiyabot-mcp \
+  -p 9000:9000 \
+  -v "$(pwd)/amiyabot-resources:/app/resources" \
+  hsyhhssyy/amiyabot-mcp:v1.0.0
 ```
 
-说明：
+首次启动时，容器会自动把游戏资源下载到挂载目录；所需时间取决于网络和磁盘性能。建议为资源、缓存和日志预留至少 20 GiB 空间。
 
-- `./amiyabot-resources:/app/resources` 会把资源目录映射到宿主机，资源更新、缓存和日志都会持久化到这里
-- 如果挂载的是一个空目录，容器首次启动时会先自动拉取资源，再启动 Web 服务
-- 资源仓库默认使用程序内置配置：`https://gitee.com/amiya-bot/amiya-bot-assets.git`
-- 建议显式使用版本标签，例如 `v0.1.0`，避免因为可变标签导致实际运行版本不明确
+服务就绪后可以访问：
 
-如果你需要把对外访问地址改成自己的域名或反向代理地址，再额外挂载一个只覆盖 `BaseUrl` 的配置文件：
+- 健康检查：`http://127.0.0.1:9000/rest/status`
+- MCP Streamable HTTP：`http://127.0.0.1:9000/mcp`
+
+例如：
+
+```bash
+curl http://127.0.0.1:9000/rest/status
+```
+
+常见的 MCP 客户端配置如下；不同客户端使用的字段名可能略有不同：
 
 ```json
 {
-	"BaseUrl": "https://amiyabot.example.com/"
+  "mcpServers": {
+    "amiya-mcp": {
+      "transport": "streamable-http",
+      "url": "http://127.0.0.1:9000/mcp"
+    }
+  }
 }
 ```
 
-```bash
-docker run -d \
-	--name amiyabot-mcp \
-	-p 9000:9000 \
-	-v "$(pwd)/amiyabot-resources:/app/resources" \
-	-v "$(pwd)/config.json:/app/config.json:ro" \
-	hsyhhssyy/amiyabot-mcp:v0.1.0
+部分客户端将 `transport` 的值命名为 `http`，请以该客户端的配置格式为准；服务端 URL 均为 `/mcp`。
+
+迁移期内仍保留了旧 SSE 入口 `/mcp/sse`，新配置建议使用 Streamable HTTP。
+
+如果 MCP 客户端不在服务所在的机器上，需要把 `BaseUrl` 设置为客户端能够访问的最终地址。创建 `config.json`：
+
+```json
+{
+  "BaseUrl": "https://amiyabot.example.com/"
+}
 ```
 
-启动后可通过以下地址验证：
+然后挂载该配置：
 
-- 健康检查：`http://127.0.0.1:9000/rest/status`
-- MCP SSE：`http://127.0.0.1:9000/mcp/sse`
+```bash
+docker run -d \
+  --name amiyabot-mcp \
+  -p 9000:9000 \
+  -v "$(pwd)/amiyabot-resources:/app/resources" \
+  -v "$(pwd)/config.json:/app/config.json:ro" \
+  hsyhhssyy/amiyabot-mcp:v1.0.0
+```
 
-### Helm 部署
+`BaseUrl` 用于生成图片和静态资源链接，应包含协议、域名以及必要的路径前缀，并建议以 `/` 结尾。
 
-可直接通过 Helm 安装。通常只需要填写对外访问地址和存储配置；默认会使用与当前 chart 对应的镜像版本，一般不需要额外设置 `image.tag`。
+### Helm
 
-最小化的 values 示例：
+准备 `values.yaml`：
 
 ```yaml
 config:
   baseUrl: https://amiyabot.example.com/
-  mcpDnsRebindingProtectionEnabled: false
 
 persistence:
   storageClass: nfs-client
@@ -124,70 +115,169 @@ persistence:
 ingress:
   enabled: true
   className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  tls:
+    enabled: true
+    secretName: amiyabot-example-tls
 ```
 
-安装方式：
+安装 1.0.0：
 
 ```bash
 helm repo add amiyabot https://AmiyaBot.github.io/Amiya-Bot-mcp-server
 helm repo update
-helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp -f your-values.yaml
+helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp \
+  --version 1.0.0 \
+  -f values.yaml
 ```
 
-说明：
+Chart 默认创建 PVC 并将其挂载到 `/app/resources`。已有 PVC 可以通过 `persistence.existingClaim` 指定；不需要 Ingress 时，将 `ingress.enabled` 设置为 `false`。Streamable HTTP 包含长连接响应，使用 NGINX Ingress 时建议关闭响应缓冲并调大读写超时，如上例所示。
 
-- chart 会把资源目录挂载到 `/app/resources`
-- chart 默认创建 PVC；如果你已经有现成的 claim，可以设置 `persistence.existingClaim`
-- `config.baseUrl` 仍建议写最终对外访问地址，例如 `https://amiyabot.example.com/`；它主要用于生成图片和静态资源链接
-- `config.mcpDnsRebindingProtectionEnabled` 默认是 `false`，这样 `/mcp/sse` 不会再校验 Host，可在任意反向代理 URL 下工作；如果你显式打开它，`BaseUrl` 与实际访问域名不一致时才可能出现 `421 Invalid Host header`
-- 如果 `config.baseUrl` 包含路径前缀，chart 会按该路径生成 Ingress，但具体是否需要重写路径，取决于你的 Ingress Controller 配置
-- 如果你需要固定某个版本，再显式设置 `image.tag`
+如果 `config.baseUrl` 包含路径前缀，请同时确认 Ingress Controller 能正确转发该路径。Chart 默认关闭 MCP DNS rebinding protection，以兼容不同的反向代理地址；如需开启，可设置 `config.mcpDnsRebindingProtectionEnabled: true`，并确保 `baseUrl` 与实际访问域名一致。
 
-## 全局配置
+## 本地安装
 
-现在支持读取全局 JSON 配置。
+需要 Python 3.11 或更高版本、Git，以及用于图片渲染的 Playwright Chromium。
 
-- Linux 下默认位置遵循 XDG 规范：`$XDG_CONFIG_HOME/amiyabot-cli/config.json`
-- 如果没有设置 `XDG_CONFIG_HOME`，默认位置就是 `~/.config/amiyabot-cli/config.json`
-- 程序首次读取配置时，如果这个文件不存在，会自动创建一个空内容的 `{}`
+### 一键安装
 
-配置优先级从低到高依次是：
+下面的命令会将 1.0.0 安装到 `~/.local/share/amiyabot-cli/venv`，并在 `~/.local/bin` 创建 `amiyabot-cli`：
 
-- 安装包内置的 `data/config.json`
-- 全局配置文件
-- 项目内的 `resources/config.json`
-- 项目根目录的 `config.json`
+```bash
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.0/install.sh \
+  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.0" sh
+```
 
-其中 `BaseUrl` 会作为 MCP 服务器生成图片和静态资源链接的地址前缀。
-请确保 MCP 的使用方能够通过这个地址访问到当前服务；如果 MCP 客户端不在同一台机器上，就不要使用 `127.0.0.1`。
+如果 `~/.local/bin` 不在 `PATH` 中，安装脚本会显示需要加入 shell 配置的内容。
 
-如果你需要确认当前服务实例的版本，可以访问 `/rest/status`，其中 `git_sha` 字段可用于识别当前部署的代码版本。
+不需要图片渲染时，可以跳过 Chromium 安装：
 
-如果你只想给全局安装的 CLI 指定需要覆盖的 URL，可以在全局配置里只写相关字段，例如：
+```bash
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.0/install.sh \
+  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.0" sh -s -- --no-playwright
+```
+
+### 从源码安装
+
+```bash
+git clone --branch v1.0.0 --depth 1 https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git
+cd Amiya-Bot-mcp-server
+
+python3 -m venv .venv
+./.venv/bin/pip install -e .
+./.venv/bin/playwright install chromium
+```
+
+验证安装：
+
+```bash
+./.venv/bin/amiyabot-cli --help
+```
+
+## CLI 使用
+
+```bash
+# 启动 Web/MCP 服务
+amiyabot-cli web
+
+# 进入交互模式
+amiyabot-cli
+
+# 执行单次查询
+amiyabot-cli op 阿米娅
+amiyabot-cli material 银灰
+amiyabot-cli glossary 攻击力
+
+# 查看详细的命令服务连接过程
+amiyabot-cli --verbose op 阿米娅
+
+# 连接另一台 AmiyaBot MCP Server
+amiyabot-cli --url https://amiyabot.example.com/ op 阿米娅
+```
+
+常用管理命令：
+
+| 命令 | 用途 |
+| --- | --- |
+| `config-path` | 查看所有参与合并的配置文件路径 |
+| `resource-version` | 查看当前资源版本 |
+| `resource-update` | 在后台触发资源更新 |
+| `resource-update-status` | 查看最近一次资源更新的状态和结果 |
+
+如果本地没有资源数据，先执行：
+
+```bash
+amiyabot-cli resource-update
+amiyabot-cli resource-update-status
+```
+
+Web 服务运行期间还会定期检查资源更新。执行单次 CLI 查询时，如果本地命令服务尚未运行，CLI 会尝试自动在后台启动它。
+
+## 配置
+
+程序会按从低到高的优先级合并以下 JSON 配置：
+
+1. 安装包内置的 `data/config.json`
+2. 全局配置文件
+3. `resources/config.json`
+4. 项目根目录的 `config.json`
+
+Linux 全局配置默认位于 `~/.config/amiyabot-cli/config.json`；设置了 `XDG_CONFIG_HOME` 时，则位于 `$XDG_CONFIG_HOME/amiyabot-cli/config.json`。文件不存在时，程序会尝试自动创建 `{}`。
+
+可用配置项：
+
+| 配置项 | 用途 |
+| --- | --- |
+| `BaseUrl` | Web 服务的最终访问地址，用于生成卡片和静态资源 URL |
+| `CommandServiceUrl` | CLI 执行单次命令时连接的服务地址 |
+| `ResourcePath` | 游戏资源、缓存和日志所在目录 |
+| `GameDataRepo` | 资源仓库地址 |
+| `McpDnsRebindingProtectionEnabled` | 是否启用 MCP DNS rebinding protection |
+
+只覆盖本机 CLI 的服务地址时，可以使用：
 
 ```json
 {
-	"BaseUrl": "http://127.0.0.1:9000/",
-	"CommandServiceUrl": "http://127.0.0.1:9000/"
+  "BaseUrl": "http://127.0.0.1:9000/",
+  "CommandServiceUrl": "http://127.0.0.1:9000/"
 }
 ```
 
-## 使用
+## 升级
 
-常用方式：
+- Docker：拉取目标版本镜像后，用相同的端口、配置和资源目录重新创建容器。`/app/resources` 已正确挂载时，资源和缓存会保留。
+- Helm：更新仓库后执行 `helm upgrade`，并通过 `--version` 固定目标 Chart 版本。
+- 一键安装：将命令中的版本号替换为目标版本后重新执行，安装脚本会升级现有虚拟环境。
 
-- 启动 Web 服务：amiyabot-cli web
-- 进入交互式 CLI：amiyabot-cli
-- 执行单次 CLI 指令：amiyabot-cli glossary 攻击力
-- 查看执行流程：amiyabot-cli --verbose glossary 攻击力
-- 查看所有参与合并的配置路径：amiyabot-cli config-path
-- 查询当前资源版本：amiyabot-cli resource-version
-- 查询最近一次资源更新时间和结果：amiyabot-cli resource-update-status
-- 手动触发一次后台资源更新：amiyabot-cli resource-update
-- 指定命令服务地址：amiyabot-cli --url http://127.0.0.1:9000 glossary 攻击力
+建议始终使用明确的版本号，不要依赖可变镜像标签。
 
-如果本地还没有任何资源数据，`op`、`skill`、`glossary` 和 `resource-version` 会立即提示先执行 `resource-update`，不会再等待首次初始化完成。
+## 常见问题
 
-安装当前仓库后，amiyabot-cli 会进入环境的 PATH，可直接调用。
+### 图片链接无法访问
 
-https://github.com/hsyhhssyy/Amiya-Bot-mcp-server
+检查 `BaseUrl` 是否为 MCP 客户端可访问的地址。远程客户端不能使用服务端自己的 `127.0.0.1`。
+
+### 返回 `421 Invalid Host header`
+
+启用了 `McpDnsRebindingProtectionEnabled` 时，访问域名需要与 `BaseUrl` 一致。也可以在可信的反向代理环境中关闭该选项。
+
+### 没有生成图片卡片
+
+检查 `/rest/status` 返回的 `playwright.ready`。本地安装还可以重新执行：
+
+```bash
+playwright install chromium
+```
+
+结构化数据不依赖卡片生成，Playwright 不可用时仍可查询。
+
+### 可以直接暴露到公网吗
+
+服务本身不提供访问认证。公网部署时，请通过反向代理、访问控制或防火墙限制访问，并启用 HTTPS。
+
+## 项目地址
+
+<https://github.com/AmiyaBot/Amiya-Bot-mcp-server>
