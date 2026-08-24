@@ -1,6 +1,6 @@
 # MCP 工具说明
 
-本服务对外暴露 7 个 MCP 工具，通过 SSE 协议提供。`search` 是资源统一搜索入口（任何查询都应从它开始），干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`。
+本服务对外暴露 8 个 MCP 工具，通过 SSE 协议提供。`search` 是资源统一搜索入口（任何查询都应从它开始），干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`。
 
 ---
 
@@ -262,7 +262,80 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ---
 
-## 6. get_glossary — 游戏术语
+## 6. get_operator_modules — 干员模组
+
+根据干员 ID 获取该干员的全部模组（含初始证章与专属模组），返回模组卡片与结构化数据。数据包含解锁条件、解锁任务、三级属性、分支特性/天赋更新和升级材料。
+
+> ⚠️ 注意：除非用户指明需要精确的某项模组数据，否则应优先且只展示 `card_image_url` 所指示的模组卡片。卡片生成失败时，再使用 `data` 中的结构化数据。
+
+### 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `operator_id` | `str` | 是 | 干员 ID，由 `search` 返回 |
+
+### 返回值
+
+**成功**：
+```json
+{
+  "card_image_url": "https://.../cards/operator_module/.../artifact.png",
+  "data": {
+    "干员": {"id": "char_172_svrash", "中文名": "银灰", "英文名": "SilverAsh"},
+    "模组": [
+      {
+        "id": "uniequip_002_svrash",
+        "名称": "雪境羽兽护理套组",
+        "类型": {"类别": "专属模组", "代码": "LOR-X", "原始类型": "ADVANCED"},
+        "图标URL": "https://.../uniequip_002_svrash.png",
+        "描述": "...",
+        "解锁条件": {
+          "精英阶段": "精英二",
+          "等级": 60,
+          "信赖": 0,
+          "任务": [{"id": "uniequip_002_svrash_1", "描述": "..."}]
+        },
+        "等级数据": [
+          {
+            "等级": 1,
+            "信赖要求": 0,
+            "属性提升": [{"属性": "最大生命值", "数值": 190, "原始键": "max_hp"}],
+            "分支特性更新": [{"作用目标": "干员", "描述": "...", "潜能要求": 1}],
+            "天赋更新": [],
+            "升级材料": [{"名称": "模组数据块", "数量": 4, "图标": "mod_unlock_token"}]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+说明：
+- `模组` 按游戏数据中的 `charEquipOrder` 排序；初始证章通常只有描述，不包含 `等级数据`。
+- `等级数据` 通常为 Lv.1–Lv.3；含召唤物加成的模组会额外返回 `召唤物属性提升`。
+- 同一天赋的不同潜能候选会在结构化数据中分别返回；卡片为避免重复，只展示最高潜能候选。
+- 模组解锁本身不再要求正信赖，因此 `解锁条件.信赖` 通常为 `0`；信赖要求按模组等级返回在 `等级数据[].信赖要求`中，常见为 Lv.1 `0%`、Lv.2 `50%`、Lv.3 `100%`。
+- 信赖值使用解包数据 `favor_table` 将 `unlockFavors` 的信赖点数映射为百分比，不直接对点数做除法换算。
+- 未配置 `BaseUrl` 时 `card_image_url` 缺省；本地模式可返回 `image_path`。
+
+**失败**：
+```json
+{"message": "operator_id 不能为空"}
+```
+```json
+{"message": "未找到干员ID: xxx"}
+```
+```json
+{"message": "干员 xxx 尚未拥有模组"}
+```
+```json
+{"message": "查询干员模组信息时发生错误."}
+```
+
+---
+
+## 7. get_glossary — 游戏术语
 
 获取明日方舟游戏数据中指定术语的解释和计算公式。
 
@@ -291,11 +364,11 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 
 ---
 
-## 7. get_operator_skins — 干员皮肤
+## 8. get_operator_skins — 干员皮肤
 
-根据干员 ID 获取该干员的皮肤列表（含精英化立绘与具名皮肤），返回结构化数据与每个皮肤的立绘卡片图片 URL。
+根据干员 ID 获取该干员的皮肤列表（含精英化立绘与具名皮肤），返回一张皮肤选择卡、结构化数据，以及每个皮肤各自的详情卡与立绘原图 URL。
 
-> ⚠️ 注意：除非用户指明了需要精确的某项皮肤数据，否则在用户要求查询干员皮肤时应当优先，并且只向用户展示各皮肤条目 card_url 所指示的图片，里面包含了更加丰富的信息。
+> ⚠️ 展示规则：首次响应应优先且只展示顶层 `card_image_url` 指向的皮肤选择卡，不要一次展示 `skins` 中的多张大图。用户回复选择卡上的序号或皮肤名后，再展示对应条目的 `card_url`（资料卡）或 `立绘URL`（原图）。选择卡生成失败时，才回退为文本列表供用户选择。
 
 ### 参数
 
@@ -308,11 +381,14 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 **成功**：
 ```json
 {
+  "card_image_url": "https://.../cards/operator_skin_selection/.../artifact.png",
   "data": {
     "operator": { "id": "char_210_stward", "name": "史都华德" },
+    "selection_card_url": "https://.../cards/operator_skin_selection/.../artifact.png",
     "skins": [
       {
         "id": "char_210_stward#1",
+        "序号": 1,
         "名称": "初始",
         "立绘键": "stage0",
         "画师": "一立里子",
@@ -324,6 +400,7 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
       },
       {
         "id": "char_210_stward@sale#6",
+        "序号": 2,
         "名称": "风雪邀请",
         "立绘键": "skin1",
         "画师": "一立里子",
@@ -342,8 +419,11 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 ```
 
 说明：
+- 顶层 `card_image_url` 是应首先展示的皮肤选择卡；`data.selection_card_url` 是同一 URL 的显式语义别名，便于非通用卡片客户端读取。
 - `skins` 为皮肤列表，按上线时间（`getTime`）排序；包含精英化立绘（`立绘键` 为 `stage0/stage1/stage2`）与具名皮肤（`立绘键` 为 `skin1..skinN`）。
+- 每条目 `序号` 与选择卡上的序号一一对应，从 1 开始。
 - 每条目 `card_url` 为该皮肤立绘卡片图片 URL；`立绘URL` 为皮肤立绘原图 URL。若对应皮肤在立绘索引中缺失或卡片生成失败（如本地场景无 `BaseUrl`），`card_url`/`立绘URL` 为空字符串，其余结构化字段仍返回。
+- 若选择卡生成失败，顶层 `card_image_url` 与 `data.selection_card_url` 缺省，但皮肤列表和可用的单项 URL 仍会返回。
 
 **失败**：
 ```json
@@ -379,8 +459,11 @@ search(query="银灰")
     ├── 用户选择 "银灰" → get_operator_skill(operator_id="char_172_svrash", index=1, level=7)
     │       → {"data": "干员：银灰 ... 技能：强力击·γ型 ..."}
     │
-    └── 用户选择 "银灰" → get_operator_material(operator_id="char_172_svrash")
-            → {"data": {"精英化材料": [...], ...}, "card_image_url": "https://..."}
+    ├── 用户选择 "银灰" → get_operator_material(operator_id="char_172_svrash")
+    │       → {"data": {"精英化材料": [...], ...}, "card_image_url": "https://..."}
+    │
+    └── 用户选择 "银灰" → get_operator_modules(operator_id="char_172_svrash")
+            → {"data": {"干员": {...}, "模组": [...]}, "card_image_url": "https://..."}
 ```
 
 ```

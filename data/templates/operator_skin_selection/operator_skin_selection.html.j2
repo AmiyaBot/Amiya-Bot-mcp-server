@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ op.name }}的皮肤</title>
+  <style>
+    @font-face {
+      font-family: "Harmony";
+      {% if template_font_url %}
+      src: url("{{ template_font_url }}") format("truetype");
+      {% else %}
+      src: local("HarmonyOS Sans SC"), local("Noto Sans CJK SC"), local("Noto Sans SC");
+      {% endif %}
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: "Harmony", sans-serif !important;
+    }
+
+    html,
+    body {
+      width: 1200px;
+      margin: 0;
+      background: #f2f3f5;
+      color: #22252a;
+    }
+
+    #template {
+      width: 1200px;
+      min-height: 680px;
+      padding: 54px 58px 64px;
+      background:
+        linear-gradient(135deg, rgb(0 169 224 / 8%) 0, transparent 38%),
+        linear-gradient(315deg, rgb(34 37 42 / 7%) 0, transparent 32%),
+        #f2f3f5;
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 32px;
+      margin-bottom: 34px;
+      border-bottom: 3px solid #22252a;
+      padding-bottom: 22px;
+    }
+
+    .title {
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      line-height: 1.16;
+    }
+
+    .title .operator-name {
+      color: #009fce;
+    }
+
+    .hint {
+      flex: none;
+      color: #62676f;
+      font-size: 20px;
+      line-height: 1.45;
+      text-align: right;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 28px 24px;
+    }
+
+    .skin-card {
+      min-width: 0;
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid rgb(34 37 42 / 12%);
+      border-radius: 8px;
+      box-shadow: 0 8px 18px rgb(18 26 32 / 14%);
+    }
+
+    .preview {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 2;
+      overflow: hidden;
+      background:
+        linear-gradient(145deg, rgb(0 159 206 / 16%), rgb(34 37 42 / 9%)),
+        #e3e6e9;
+    }
+
+    .preview-image {
+      width: 100%;
+      height: 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: cover;
+    }
+
+    .preview-image.contain {
+      background-size: contain;
+    }
+
+    .preview-empty {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      color: rgb(34 37 42 / 42%);
+      font-size: 18px;
+      letter-spacing: 2px;
+    }
+
+    .index {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      min-width: 48px;
+      padding: 7px 13px 6px;
+      background: #009fce;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1;
+      text-align: center;
+      box-shadow: 5px -5px 0 rgb(255 255 255 / 82%);
+    }
+
+    .info {
+      min-height: 108px;
+      padding: 16px 17px 18px;
+    }
+
+    .name {
+      overflow: hidden;
+      color: #22252a;
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.28;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      margin-top: 8px;
+      color: #747a82;
+      font-size: 16px;
+      line-height: 1.25;
+    }
+
+    .skin-key {
+      flex: none;
+      padding: 3px 7px;
+      background: #edf8fb;
+      color: #007fa7;
+      border-radius: 3px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .group {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <main id="template">
+    <header class="header">
+      <div class="title"><span class="operator-name">{{ op.name }}</span> 的皮肤</div>
+      <div class="hint">回复序号或皮肤名<br>查看对应大图与资料</div>
+    </header>
+
+    <section class="grid">
+      {% for item in items %}
+      <article class="skin-card">
+        <div class="preview">
+          {% if item.preview_data %}
+          <div class="preview-image{% if item.preview_contain %} contain{% endif %}" style="background-image: url('{{ item.preview_data }}')"></div>
+          {% else %}
+          <div class="preview-empty">暂无预览</div>
+          {% endif %}
+          <div class="index">{{ item.index }}</div>
+        </div>
+        <div class="info">
+          <div class="name">{{ item.skin.name }}</div>
+          <div class="meta">
+            <span class="skin-key">{{ item.skin.skin_key }}</span>
+            {% if item.skin.group %}<span class="group">{{ item.skin.group }}</span>{% endif %}
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </section>
+  </main>
+</body>
+</html>

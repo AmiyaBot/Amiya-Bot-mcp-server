@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>{{ op.name | e }} 的模组</title>
+  <style>
+    @font-face {
+      font-family: "Harmony";
+      {% if template_font_url %}
+      src: url("{{ template_font_url }}") format("truetype");
+      {% else %}
+      src: local("HarmonyOS Sans SC"), local("Noto Sans CJK SC"), local("Noto Sans SC");
+      {% endif %}
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: "Harmony", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      color: #171717;
+      background: #4f5358;
+    }
+
+    #template {
+      width: 1600px;
+      min-height: 1000px;
+      padding: 34px;
+      position: relative;
+      overflow: hidden;
+      background: {% if template_bg_data %}url("{{ template_bg_data }}"){% elif template_bg_url %}url("{{ template_bg_url }}"){% else %}linear-gradient(145deg, #7b7f83, #4b4f53){% endif %} center / cover fixed;
+    }
+
+    #template::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(120deg, rgb(0 0 0 / 14%), transparent 38%),
+        repeating-linear-gradient(135deg, rgb(255 255 255 / 3%) 0 2px, transparent 2px 18px);
+      pointer-events: none;
+    }
+
+    .page-header {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin: 0 0 26px;
+      color: #fff;
+    }
+
+    .page-title {
+      padding: 10px 24px 12px;
+      border-left: 14px solid #ff9800;
+      background: linear-gradient(90deg, rgb(20 20 20 / 96%), rgb(20 20 20 / 68%));
+      font-size: 38px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .page-subtitle {
+      font-size: 19px;
+      letter-spacing: 3px;
+      opacity: .78;
+      padding-bottom: 8px;
+    }
+
+    .module-list {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .module-card {
+      --accent: #ff9800;
+      overflow: hidden;
+      border-radius: 4px;
+      box-shadow: 0 12px 28px rgb(0 0 0 / 28%);
+      break-inside: avoid;
+    }
+
+    .module-header {
+      min-height: 68px;
+      padding: 8px 22px 8px 12px;
+      border-left: 14px solid var(--accent);
+      background: linear-gradient(90deg, #383a3d, #111214);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .module-heading {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .module-name {
+      font-size: 31px;
+      font-weight: 750;
+      line-height: 1.2;
+    }
+
+    .type-badge {
+      flex: none;
+      padding: 5px 12px;
+      border-radius: 4px;
+      background: #f0522d;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .type-mark {
+      min-width: 190px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .type-symbol {
+      width: 76px;
+      height: 48px;
+      position: relative;
+      flex: none;
+    }
+
+    .type-symbol img {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 88px;
+      height: 46px;
+      object-fit: contain;
+    }
+
+    .type-code {
+      position: relative;
+      z-index: 2;
+      font-size: 15px;
+      font-weight: 750;
+      color: rgb(255 255 255 / 72%);
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .module-body {
+      position: relative;
+      padding: 24px;
+      background: linear-gradient(145deg, rgb(242 243 244 / 96%), rgb(194 197 200 / 97%));
+    }
+
+    .intro-grid {
+      min-height: 190px;
+      padding-right: 238px;
+      display: grid;
+      grid-template-columns: 1fr 1.5fr;
+      gap: 24px;
+    }
+
+    .module-icon {
+      width: 220px;
+      height: 220px;
+      position: absolute;
+      top: 6px;
+      right: 12px;
+      object-fit: contain;
+      filter: drop-shadow(0 8px 8px rgb(0 0 0 / 25%));
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 11px;
+      font-size: 21px;
+      font-weight: 800;
+      color: #171717;
+    }
+
+    .section-title::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      flex: none;
+      background: #a52323;
+    }
+
+    .section-title.purple::before {
+      background: #7d2ba0;
+    }
+
+    .section-title.blue::before {
+      background: #315cbb;
+    }
+
+    .unlock-line,
+    .mission {
+      margin: 0 0 7px 20px;
+      font-size: 18px;
+      font-weight: 650;
+      line-height: 1.52;
+    }
+
+    .mark {
+      color: #7d2ba0;
+      font-weight: 800;
+    }
+
+    .summary {
+      white-space: pre-line;
+      margin-left: 20px;
+      font-size: 17px;
+      line-height: 1.55;
+      color: #3d4145;
+      display: -webkit-box;
+      -webkit-line-clamp: 5;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .stage-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 20px;
+    }
+
+    .stage {
+      min-height: 390px;
+      padding: 15px 15px 70px;
+      position: relative;
+      overflow: hidden;
+      border-top: 4px solid rgb(125 43 160 / 75%);
+      background: rgb(255 255 255 / 48%);
+    }
+
+    .stage-level {
+      position: absolute;
+      right: 12px;
+      bottom: -7px;
+      color: rgb(44 44 44 / 13%);
+      font-size: 58px;
+      font-weight: 900;
+      letter-spacing: -3px;
+    }
+
+    .stage-section {
+      margin-bottom: 17px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .stage-requirement {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      margin: 0 0 14px;
+      padding: 3px 9px;
+      border-radius: 3px;
+      background: rgb(125 43 160 / 12%);
+      color: #6f218d;
+      font-size: 15px;
+      font-weight: 750;
+    }
+
+    .option,
+    .effect {
+      margin: 5px 0 0 20px;
+      font-size: 17px;
+      line-height: 1.48;
+    }
+
+    .option {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .effect-name {
+      display: inline-block;
+      margin-right: 5px;
+      color: #315cbb;
+      font-weight: 800;
+    }
+
+    .target-tag {
+      display: inline-block;
+      margin-right: 5px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: #315cbb;
+      color: #fff;
+      font-size: 13px;
+      vertical-align: 2px;
+    }
+
+    .material-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-left: 18px;
+    }
+
+    .material {
+      width: 64px;
+      height: 64px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .material img {
+      width: 62px;
+      height: 62px;
+      object-fit: contain;
+    }
+
+    .material-name {
+      max-width: 62px;
+      padding: 3px;
+      background: rgb(30 30 30 / 82%);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.2;
+      text-align: center;
+    }
+
+    .material-count {
+      position: absolute;
+      right: -1px;
+      bottom: -1px;
+      min-width: 27px;
+      padding: 1px 5px;
+      border-radius: 5px;
+      background: rgb(0 0 0 / 86%);
+      color: #fff;
+      font-size: 13px;
+      text-align: center;
+      box-shadow: 0 0 0 1px rgb(255 255 255 / 45%);
+    }
+
+    .story {
+      min-height: 180px;
+      padding: 26px 270px 26px 28px;
+      white-space: pre-line;
+      font-size: 19px;
+      line-height: 1.68;
+      color: #202326;
+    }
+
+    .story .module-icon {
+      top: 10px;
+    }
+  </style>
+</head>
+<body>
+<main id="template">
+  <header class="page-header">
+    <div class="page-title">{{ op.name | e }} 的模组</div>
+    <div class="page-subtitle">OPERATOR MODULE ARCHIVE · {{ modules | length }}</div>
+  </header>
+
+  <div class="module-list">
+    {% for module in modules %}
+    <section class="module-card" style="--accent: {{ module.accent_color | e }};">
+      <div class="module-header">
+        <div class="module-heading">
+          <span class="module-name">{{ module.name | e }}</span>
+          <span class="type-badge">{{ module.type_code | e }}</span>
+        </div>
+        <div class="type-mark">
+          <span class="type-code">{{ module.type_name | e }}</span>
+          <span class="type-symbol">
+            {% if module.shining_url %}<img src="{{ module.shining_url | e }}" alt="" onerror="this.style.display='none'">{% endif %}
+            {% if module.type_icon_url %}<img src="{{ module.type_icon_url | e }}" alt="" onerror="this.style.display='none'">{% endif %}
+          </span>
+        </div>
+      </div>
+
+      {% if module.phases %}
+      <div class="module-body">
+        <img class="module-icon" src="{{ module.module_icon_url | e }}" alt="" onerror="this.style.display='none'">
+        <div class="intro-grid">
+          <div>
+            <div class="section-title">解锁条件</div>
+            <div class="unlock-line">
+              干员达到 <span class="mark">{{ module.unlock_condition.phase | e }}</span>
+              等级 <span class="mark">{{ module.unlock_condition.level }}</span>
+              {% if module.unlock_condition.favor %}，信赖值 <span class="mark">{{ module.unlock_condition.favor }}%</span>{% endif %}
+            </div>
+            {% for mission in module.unlock_condition.missions %}
+            <div class="mission">{{ loop.index }}. {{ mission.description | e }}</div>
+            {% endfor %}
+          </div>
+          <div>
+            <div class="section-title purple">模组记录</div>
+            <div class="summary">{{ module.description | e }}</div>
+          </div>
+        </div>
+
+        <div class="stage-list">
+          {% for stage in module.phases %}
+          <article class="stage">
+            <div class="stage-level">LV.0{{ stage.level }}</div>
+
+            {% if stage.favor_percent %}
+            <div class="stage-requirement">升级要求 · 信赖 {{ stage.favor_percent }}%</div>
+            {% endif %}
+
+            {% if stage.attributes %}
+            <div class="stage-section">
+              <div class="section-title purple">基础属性更新</div>
+              {% for attr in stage.attributes %}
+              <div class="option"><span>{{ attr.name | e }}</span><span class="mark">{{ '%+g' | format(attr.value) }}</span></div>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if stage.token_attributes %}
+            <div class="stage-section">
+              <div class="section-title blue">召唤物属性更新</div>
+              {% for token in stage.token_attributes %}
+              {% for attr in token.attributes %}
+              <div class="option"><span>{{ token.token_name | e }} · {{ attr.name | e }}</span><span class="mark">{{ '%+g' | format(attr.value) }}</span></div>
+              {% endfor %}
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if stage.trait_updates %}
+            <div class="stage-section">
+              <div class="section-title purple">分支特性更新</div>
+              {% for item in stage.trait_updates %}
+              <div class="effect">{% if item.target == '召唤物' %}<span class="target-tag">召唤物</span>{% endif %}{{ item.description | e }}</div>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if stage.card_talent_updates %}
+            <div class="stage-section">
+              <div class="section-title blue">天赋更新</div>
+              {% for item in stage.card_talent_updates %}
+              <div class="effect">
+                {% if item.target == '召唤物' %}<span class="target-tag">召唤物</span>{% endif %}
+                {% if item.name %}<span class="effect-name">{{ item.name | e }}</span>{% endif %}
+                {{ item.description | e }}
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if stage.materials %}
+            <div class="stage-section">
+              <div class="section-title">升级材料消耗</div>
+              <div class="material-list">
+                {% for item in stage.materials %}
+                <div class="material">
+                  {% if material_icon_data.get(item['图标']) %}
+                  <img src="{{ material_icon_data[item['图标']] }}" alt="{{ item['名称'] | e }}">
+                  {% else %}
+                  <span class="material-name">{{ item['名称'] | e }}</span>
+                  {% endif %}
+                  <span class="material-count">{{ item['数量'] }}</span>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+          </article>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <div class="module-body story">
+        <img class="module-icon" src="{{ module.module_icon_url | e }}" alt="" onerror="this.style.display='none'">
+        {{ module.description | e }}
+      </div>
+      {% endif %}
+    </section>
+    {% endfor %}
+  </div>
+</main>
+</body>
+</html>

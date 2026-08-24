@@ -25,6 +25,7 @@ from src.adapters.mcp.mcp_tools.arknights_glossary import register_glossary_tool
 # from src.adapters.mcp.mcp_tools.operator_basic import register_operator_basic_data_tool, register_operator_card_tool
 from src.adapters.mcp.mcp_tools.operator_basic import register_operator_basic_data_tool
 from src.adapters.mcp.mcp_tools.operator_material import register_operator_material_tool
+from src.adapters.mcp.mcp_tools.operator_modules import register_operator_modules_tool
 from src.adapters.mcp.mcp_tools.search import register_search_tool
 from src.adapters.mcp.mcp_tools.token_detail import register_token_detail_tool
 from src.adapters.mcp.mcp_tools.operator_skins import register_operator_skins_tool
@@ -105,7 +106,7 @@ class MCPRequestLoggingMiddleware:
 server_instructions = """
 本服务器是一个游戏<明日方舟>的知识库查询助手，专注于为用户提供准确的干员信息数据和游戏资料。
 你可以使用注册的工具来回答明日方舟游戏内的问题。
-任何查询都请先调用 search 获取候选实体的 id（干员、召唤物或皮肤），再用该 id 调用对应的详情工具（干员：get_operator_basic_data / get_operator_skill / get_operator_material；召唤物：get_token_detail；皮肤：get_operator_skins）。
+任何查询都请先调用 search 获取候选实体的 id（干员、召唤物或皮肤），再用该 id 调用对应的详情工具（干员：get_operator_basic_data / get_operator_skill / get_operator_material / get_operator_modules；召唤物：get_token_detail；皮肤：get_operator_skins）。
 """
 
 
@@ -216,11 +217,12 @@ def register_asgi(app: FastAPI, cfg: Config):
     # register_operator_card_tool(mcp,app)
     register_operator_skill_tool(mcp,app)
     register_operator_material_tool(mcp,app)
+    register_operator_modules_tool(mcp,app)
     register_token_detail_tool(mcp,app)
     register_operator_skins_tool(mcp,app)
     logger.info(
         "MCP 工具注册完成: tools=%s",
-        ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_token_detail", "get_operator_skins"],
+        ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins"],
     )
 
     app.mount("/mcp", mcp.sse_app())

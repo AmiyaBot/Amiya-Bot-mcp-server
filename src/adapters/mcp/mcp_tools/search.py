@@ -1,5 +1,6 @@
 # 原文件 operator_search.py、原工具名 search_operator（2026-08-13 起重命名为 search.py / search）：
 # 升级为资源统一搜索（干员 + 干员的召唤物），作为任何查询的统一入口。
+# AI-CORRECTION 2026-08-24: 搜索范围现已包含干员皮肤；干员候选也可用于模组查询。
 import logging
 from typing import Annotated
 
@@ -15,9 +16,10 @@ from src.app.services.operator_queries import search as search_query
 logger = logging.getLogger(__name__)
 
 _SEARCH_TOOL_DESC = """本工具是资源统一搜索入口，任何查询都应先调用本工具。
-支持按名称模糊搜索「干员」与「干员的召唤物」，返回候选的 id、name、type（干员 / 召唤物）以及召唤物所属干员的 operator_id。
-- 干员：用返回的 id 调用 get_operator_basic_data（推荐，返回结构化数据 + card_image_url 卡片图片）/ get_operator_skill / get_operator_material；
+支持按名称模糊搜索「干员」「干员的召唤物」与「干员皮肤」，返回候选的 id、name、type；召唤物和皮肤条目额外返回所属干员的 operator_id / operator_name。
+- 干员：用返回的 id 调用 get_operator_basic_data（推荐，返回结构化数据 + card_image_url 卡片图片）/ get_operator_skill / get_operator_material / get_operator_modules；
 - 召唤物：用返回的 id 调用 get_token_detail 查看召唤物详情；也可以用 operator_id 查看所属干员。
+- 皮肤：用返回的 operator_id 调用 get_operator_skins 查看所属干员的皮肤。
 
 提示：若搜不到结果，可能是用户使用了干员外号（非正式称呼）。此时可先联网搜索该外号对应的干员正式名称，再用正式名称重新调用本工具。
 """
@@ -26,7 +28,7 @@ _SEARCH_TOOL_DESC = """本工具是资源统一搜索入口，任何查询都应
 def register_search_tool(mcp, app):
     @mcp.tool(description=_SEARCH_TOOL_DESC)
     async def search(
-        query: Annotated[str, Field(description="搜索关键词（干员名称或召唤物名称），支持模糊搜索")],
+        query: Annotated[str, Field(description="搜索关键词（干员、召唤物或皮肤名称），支持模糊搜索")],
     ) -> dict:
         tool_name = "search"
         started_at = log_tool_start(

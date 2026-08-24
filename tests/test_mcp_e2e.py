@@ -109,11 +109,11 @@ class TestConnectivity:
         assert caps is not None, "服务器能力不应为空"
 
     async def test_list_tools(self, mcp_session: Any) -> None:
-        """工具列表应包含全部 7 个已注册工具。"""
+        """工具列表应包含全部 8 个已注册工具。"""
         result = await mcp_session.list_tools()
         tool_names = {t.name for t in result.tools}
 
-        expected = {"search", "get_operator_basic_data", "get_operator_skill", "get_glossary", "get_operator_material", "get_token_detail", "get_operator_skins"}
+        expected = {"search", "get_operator_basic_data", "get_operator_skill", "get_glossary", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins"}
         missing = expected - tool_names
         assert not missing, f"缺少工具: {missing}"
 
@@ -183,7 +183,7 @@ class TestSearch:
 
 
 class TestGetOperatorSkins:
-    """测试 get_operator_skins 工具 — 干员皮肤列表（结构化数据 + 皮肤卡片）。"""
+    """测试 get_operator_skins 工具 — 皮肤选择卡 + 结构化列表 + 单项图片 URL。"""
 
     async def test_get_operator_skins(self, mcp_session: Any) -> None:
         """按干员 ID 查询应返回皮肤列表，且条目携带皮肤字段。"""
@@ -205,6 +205,11 @@ class TestGetOperatorSkins:
             assert item.get("id"), f"皮肤条目应携带 id: {item}"
             assert item.get("名称"), f"皮肤条目应携带名称: {item}"
             assert "card_url" in item, f"皮肤条目应携带 card_url 字段: {item}"
+
+        selection_card_url = data.get("card_image_url")
+        if selection_card_url:
+            assert payload.get("selection_card_url") == selection_card_url
+            assert [item.get("序号") for item in skins] == list(range(1, len(skins) + 1))
 
     async def test_get_operator_skins_invalid_id(self, mcp_session: Any) -> None:
         """不存在的干员 ID 应返回提示。"""
@@ -316,6 +321,38 @@ class TestGetOperatorBasicData:
         """无效 ID 应返回错误信息而非崩溃。"""
         result = await mcp_session.call_tool("get_operator_basic_data", {"operator_id": "nonexistent_999"})
         assert result is not None
+
+
+class TestGetOperatorModules:
+    """测试 get_operator_modules 工具 — 模组卡片与完整结构化数据。"""
+
+    async def test_get_operator_modules(self, mcp_session: Any) -> None:
+        result = await mcp_session.call_tool(
+            "get_operator_modules",
+            {"operator_id": "char_172_svrash"},
+        )
+        assert result.isError is False, f"工具返回错误: {result.content}"
+
+        data = json.loads(_extract_text(result))
+        if "message" in data and "data" not in data:
+            pytest.fail(f"服务端返回错误: {data['message']}")
+
+        payload = data.get("data", {})
+        assert payload.get("干员", {}).get("中文名") == "银灰"
+        modules = payload.get("模组", [])
+        assert modules, f"应至少返回一个模组: {payload}"
+        advanced = next(item for item in modules if item.get("等级数据"))
+        assert len(advanced["等级数据"]) == 3
+        assert advanced.get("解锁条件", {}).get("任务")
+
+    async def test_get_operator_modules_invalid_id(self, mcp_session: Any) -> None:
+        result = await mcp_session.call_tool(
+            "get_operator_modules",
+            {"operator_id": "char_9999_not_exist"},
+        )
+        assert result.isError is False
+        data = json.loads(_extract_text(result))
+        assert "未找到干员ID" in (data.get("message") or "")
 
 
 # AI-REMOVED 2026-08-13:

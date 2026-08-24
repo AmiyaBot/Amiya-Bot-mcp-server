@@ -44,6 +44,7 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
         ("character_table", "excel"),
         ("uniequip_table", "excel"),
         ("battle_equip_table", "excel"),
+        ("favor_table", "excel"),
         ("handbook_team_table", "excel"),
         ("handbook_info_table", "excel"),
         ("item_table", "excel"),
@@ -239,7 +240,6 @@ def _build_skin_index(operators: Dict[str, Operator]) -> tuple[Dict[str, Skin], 
             if not skin.is_evolve and skin.name:
                 name_to_id[skin.name] = skin.skin_id
     return skins, name_to_id
-
 
 
 

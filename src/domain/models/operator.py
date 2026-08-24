@@ -310,6 +310,7 @@ class OperatorModule:
     type_icon: str = ""
     type_name1: str = ""
     type_name2: Optional[str] = None
+    shining_color: str = ""
 
     show_evolve_phase: str = ""
     unlock_evolve_phase: str = ""
@@ -371,6 +372,7 @@ class OperatorModule:
             type_icon=str(base.get("typeIcon") or ""),
             type_name1=str(base.get("typeName1") or ""),
             type_name2=base.get("typeName2"),
+            shining_color=str(base.get("equipShiningColor") or ""),
 
             show_evolve_phase=str(base.get("showEvolvePhase") or ""),
             unlock_evolve_phase=str(base.get("unlockEvolvePhase") or ""),

@@ -98,7 +98,7 @@ def build_badge_data(badge_names: tuple[str, ...], project_root: Path) -> dict[s
     return result
 
 
-def _item_lookup(tables: dict):
+def build_item_lookup(tables: dict):
     item_table = get_table(tables, "item_table", source="gamedata", default={})
     items = item_table.get("items") or {}
 
@@ -119,7 +119,7 @@ def _item_lookup(tables: dict):
     return lookup
 
 
-def _cost_to_material_item(cost, lookup) -> dict | None:
+def cost_to_material_item(cost, lookup) -> dict | None:
     cost_type = str(getattr(cost, "type", "") or "")
     if isinstance(cost, GoldCost) or cost_type == "GOLD":
         material_id = GOLD_ITEM_ID
@@ -151,7 +151,7 @@ def build_evolve_groups(op: Operator, lookup) -> list[dict]:
         items = [
             item
             for cost in (phase.evolve_cost or [])
-            if (item := _cost_to_material_item(cost, lookup)) is not None
+            if (item := cost_to_material_item(cost, lookup)) is not None
         ]
         if items:
             groups.append({"阶段": name, "材料": items})
@@ -169,7 +169,7 @@ def build_common_levels(op: Operator, lookup) -> list[dict]:
             items = [
                 item
                 for cost in (lev.costs or [])
-                if (item := _cost_to_material_item(cost, lookup)) is not None
+                if (item := cost_to_material_item(cost, lookup)) is not None
             ]
             levels[level_no] = items
 
@@ -199,7 +199,7 @@ def build_mastery_groups(op: Operator, lookup) -> list[dict]:
             items = [
                 item
                 for cost in (lev.costs or [])
-                if (item := _cost_to_material_item(cost, lookup)) is not None
+                if (item := cost_to_material_item(cost, lookup)) is not None
             ]
             if items:
                 entry[mastery_name] = items
@@ -232,7 +232,7 @@ def _collect_material_icon_ids(*groups_lists) -> set[str]:
 def build_operator_material_query_result(ctx: AppContext, op: Operator) -> QueryResult:
     """基于已解析的 Operator 构建材料 QueryResult，不做名称搜索。"""
     bundle = ctx.data_repository.get_bundle()
-    lookup = _item_lookup(bundle.tables)
+    lookup = build_item_lookup(bundle.tables)
 
     evolve_groups = build_evolve_groups(op, lookup)
     common_levels = build_common_levels(op, lookup)

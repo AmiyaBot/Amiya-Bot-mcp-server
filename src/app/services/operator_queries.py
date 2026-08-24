@@ -7,6 +7,7 @@ from pathlib import Path
 
 from src.app.context import AppContext
 from src.app.services.operator_material_output import build_operator_material_payload, render_operator_material_markdown
+from src.app.services.operator_module_output import build_operator_module_payload, render_operator_module_markdown
 from src.app.services.operator_output import (
     build_operator_payload,
     build_skin_payload,
@@ -28,6 +29,7 @@ from src.domain.services.operator import (
     build_operator_template_font_url,
 )
 from src.domain.services.operator_material import build_operator_material_query_result
+from src.domain.services.operator_module import build_operator_module_query_result
 from src.domain.types import QueryResult
 from src.helpers.bundle import get_table
 from src.helpers.card_urls import build_card_url
@@ -36,8 +38,10 @@ from src.helpers.gamedata.search import build_sources, search_source_spec
 logger = logging.getLogger(__name__)
 OPERATOR_INFO_CARD_REVISION = "card-v20"
 OPERATOR_MATERIAL_CARD_REVISION = "mat-v1"
+OPERATOR_MODULE_CARD_REVISION = "module-v2"
 OPERATOR_TOKEN_CARD_REVISION = "token-v4"
 OPERATOR_SKIN_CARD_REVISION = "skin-v1"
+OPERATOR_SKIN_SELECTION_CARD_REVISION = "skin-selection-v2"
 
 
 @dataclass(slots=True)
@@ -405,14 +409,61 @@ async def _render_operator_skin_card(
     )
 
 
+def _build_skin_portrait_data_uri(resource_root: Path, skin_id: str) -> str | None:
+    """读取 180×360 皮肤半身像作为选择卡预览；缺失时由调用方回退到立绘。"""
+    if not resource_root or not skin_id:
+        return None
+    return _build_png_data_uri(resource_root / "assets" / "portrait" / f"{skin_id}.png")
+
+
+async def _render_operator_skin_selection_card(
+    context: AppContext,
+    operator: Operator,
+    selection_items: list[dict],
+    bundle_version: str,
+) -> str | None:
+    """渲染一个干员的皮肤选择卡，并返回卡片 URL。"""
+    if not selection_items:
+        return None
+
+    payload_key = (
+        f"operator_skin_selection:{operator.id}:{bundle_version}:"
+        f"{OPERATOR_SKIN_SELECTION_CARD_REVISION}"
+    )
+    payload = QueryResult(
+        type="operator_skin_selection",
+        key=operator.name,
+        title=f"{operator.name} 的皮肤",
+        data={
+            "op": operator,
+            "items": selection_items,
+            "template_font_url": build_operator_template_font_url(context.cfg.ProjectRoot),
+        },
+    )
+
+    await context.card_service.get(
+        template="operator_skin_selection",
+        payload_key=payload_key,
+        payload=payload,
+        format="png",
+    )
+    return build_card_url(
+        cfg=context.cfg,
+        template="operator_skin_selection",
+        payload_key=payload_key,
+        format="png",
+    )
+
+
 async def query_operator_skins(
     context: AppContext,
     operator_id: str,
 ) -> QueryExecutionResult:
-    """根据干员 ID 获取皮肤列表（结构化数据 + 每个皮肤的立绘卡片 URL）。
+    """根据干员 ID 获取皮肤选择卡、结构化列表与每个皮肤的图片 URL。
 
     条目结构复用 build_skin_payload；逐皮肤按 skin_id 精确取立绘并渲染
-    operator_skin 卡片，取图/渲染失败时该条目降级为无 card_url。
+    operator_skin 卡片。选择卡渲染失败时仍返回各皮肤 URL；单个皮肤取图或
+    渲染失败时，该条目降级为无 card_url/立绘URL。
     """
     try:
         resolved = _resolve_operator_by_id(context, operator_id)
@@ -427,22 +478,25 @@ async def query_operator_skins(
             return QueryExecutionResult(message=f"干员 {resolved.name} 没有皮肤数据")
 
         entries = build_skin_payload(resolved)
-        for entry, skin in zip(entries, skins):
+        selection_items: list[dict] = []
+        for index, (entry, skin) in enumerate(zip(entries, skins), start=1):
+            entry["序号"] = index
             entry["card_url"] = ""
             entry["立绘URL"] = ""
+            skin_artifact = None
             try:
                 skin_artifact = await resolve_skin_artifact_by_id(context, skin.skin_id)
                 if skin_artifact is None:
                     logger.debug("皮肤立绘索引缺失，跳过卡片渲染: skin_id=%s", skin.skin_id)
-                    continue
-                entry["立绘URL"] = skin_artifact.url or ""
-                entry["card_url"] = await _render_operator_skin_card(
-                    context,
-                    resolved,
-                    skin,
-                    skin_artifact,
-                    bundle_version=bundle_version,
-                )
+                else:
+                    entry["立绘URL"] = skin_artifact.url or ""
+                    entry["card_url"] = await _render_operator_skin_card(
+                        context,
+                        resolved,
+                        skin,
+                        skin_artifact,
+                        bundle_version=bundle_version,
+                    )
             except Exception:
                 logger.warning(
                     "准备皮肤卡片失败，已降级为无卡片: operator_id=%s skin_id=%s",
@@ -451,12 +505,50 @@ async def query_operator_skins(
                     exc_info=True,
                 )
 
-        return QueryExecutionResult(
-            data={
-                "operator": {"id": resolved.id, "name": resolved.name},
-                "skins": entries,
-            }
-        )
+            preview_data = _build_skin_portrait_data_uri(context.cfg.ResourcePath, skin.skin_id)
+            preview_contain = False
+            if preview_data is None and skin_artifact is not None:
+                try:
+                    preview_data = skin_artifact.to_data_uri()
+                    preview_contain = True
+                except Exception:
+                    logger.warning(
+                        "读取皮肤选择卡预览失败: operator_id=%s skin_id=%s",
+                        resolved.id,
+                        skin.skin_id,
+                        exc_info=True,
+                    )
+            selection_items.append(
+                {
+                    "index": index,
+                    "skin": skin,
+                    "preview_data": preview_data or "",
+                    "preview_contain": preview_contain,
+                }
+            )
+
+        selection_card_url = None
+        try:
+            selection_card_url = await _render_operator_skin_selection_card(
+                context,
+                resolved,
+                selection_items,
+                bundle_version,
+            )
+        except Exception:
+            logger.warning(
+                "准备皮肤选择卡失败，已降级为皮肤 URL 列表: operator_id=%s",
+                resolved.id,
+                exc_info=True,
+            )
+
+        data = {
+            "operator": {"id": resolved.id, "name": resolved.name},
+            "skins": entries,
+        }
+        if selection_card_url:
+            data["selection_card_url"] = selection_card_url
+        return QueryExecutionResult(data=data, image_url=selection_card_url)
     except Exception:
         logger.exception("查询干员皮肤列表失败: operator_id=%s", operator_id)
         return QueryExecutionResult(message="查询干员皮肤信息时发生错误.")
@@ -871,6 +963,77 @@ async def query_operator_material_by_id(
     except Exception:
         logger.exception("按 ID 查询干员材料信息失败: operator_id=%s", operator_id)
         return QueryExecutionResult(message="查询干员材料信息时发生错误.")
+
+
+async def query_operator_modules_by_id(
+    context: AppContext,
+    operator_id: str,
+) -> QueryExecutionResult:
+    try:
+        resolved = _resolve_operator_by_id(context, operator_id)
+        if isinstance(resolved, QueryExecutionResult):
+            return resolved
+
+        if not (getattr(resolved, "modules", None) or []):
+            return QueryExecutionResult(message=f"干员 {resolved.name} 尚未拥有模组")
+
+        result = build_operator_module_query_result(context, resolved)
+        structured_payload = build_operator_module_payload(result)
+
+        bundle = context.data_repository.get_bundle()
+        bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
+        payload_key = f"operator_module:{resolved.id}:{bundle_version}:{OPERATOR_MODULE_CARD_REVISION}"
+
+        image_url = None
+        image_path = None
+        try:
+            card_artifact = await context.card_service.get(
+                template="operator_module",
+                payload_key=payload_key,
+                payload=result,
+                format="png",
+                params=None,
+            )
+            image_path = _resolve_safe_local_artifact_path(
+                context,
+                card_artifact.path,
+                context.card_service.cache_root,
+            )
+            try:
+                image_url = build_card_url(
+                    cfg=context.cfg,
+                    template="operator_module",
+                    payload_key=payload_key,
+                    format="png",
+                )
+            except RuntimeError:
+                logger.info(
+                    "未配置 BaseUrl，模组卡片仅返回本地路径: operator_id=%s payload_key=%s",
+                    resolved.id,
+                    payload_key,
+                )
+        except Exception:
+            logger.warning(
+                "准备干员模组卡片失败，已降级为结构化数据: operator_id=%s operator=%s payload_key=%s",
+                resolved.id,
+                resolved.name,
+                payload_key,
+                exc_info=True,
+            )
+
+        return QueryExecutionResult(
+            data=structured_payload,
+            markdown=render_operator_module_markdown(
+                structured_payload,
+                image_url=image_url,
+                image_path=image_path,
+            ),
+            image_url=image_url,
+            image_path=image_path,
+        )
+    except Exception:
+        logger.exception("按 ID 查询干员模组信息失败: operator_id=%s", operator_id)
+        return QueryExecutionResult(message="查询干员模组信息时发生错误.")
 
 
 async def query_operator_material(
