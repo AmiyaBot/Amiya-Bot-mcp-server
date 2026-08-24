@@ -33,7 +33,9 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 
 除术语查询外，建议先调用 `search`，再将返回的 ID 传给对应的详情工具。
 
-## 快速开始
+## 运行 MCP 服务
+
+可以通过 Docker、Helm 或本地安装运行 AmiyaBot MCP Server。
 
 ### Docker（推荐）
 
@@ -51,16 +53,157 @@ docker run -d \
 
 首次启动时，容器会自动把游戏资源下载到挂载目录；所需时间取决于网络和磁盘性能。建议为资源、缓存和日志预留至少 20 GiB 空间。
 
-服务就绪后可以访问：
+### Helm
 
-- 健康检查：`http://127.0.0.1:9000/rest/status`
-- MCP Streamable HTTP：`http://127.0.0.1:9000/mcp`
+准备 `values.yaml`：
 
-例如：
+```yaml
+config:
+  baseUrl: https://amiyabot.example.com/
+
+persistence:
+  storageClass: nfs-client
+  size: 20Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  tls:
+    enabled: true
+    secretName: amiyabot-example-tls
+```
+
+安装 1.0.1：
+
+```bash
+helm repo add amiyabot https://AmiyaBot.github.io/Amiya-Bot-mcp-server
+helm repo update
+helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp \
+  --version 1.0.1 \
+  -f values.yaml
+```
+
+Chart 默认创建 PVC 并将其挂载到 `/app/resources`。已有 PVC 可以通过 `persistence.existingClaim` 指定；不需要 Ingress 时，将 `ingress.enabled` 设置为 `false`。Streamable HTTP 包含长连接响应，使用 NGINX Ingress 时建议关闭响应缓冲并调大读写超时，如上例所示。
+
+如果 `config.baseUrl` 包含路径前缀，请同时确认 Ingress Controller 能正确转发该路径。Chart 默认关闭 MCP DNS rebinding protection，以兼容不同的反向代理地址；如需开启，可设置 `config.mcpDnsRebindingProtectionEnabled: true`，并确保 `baseUrl` 与实际访问域名一致。
+
+### 本地安装
+
+需要 Python 3.11 或更高版本、Git，以及用于图片渲染的 Playwright Chromium。
+
+#### 一键安装
+
+下面的命令会将 1.0.1 安装到 `~/.local/share/amiyabot-cli/venv`，并在 `~/.local/bin` 创建 `amiyabot-cli`：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.1/install.sh \
+  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.1" sh
+```
+
+如果 `~/.local/bin` 不在 `PATH` 中，安装脚本会显示需要加入 shell 配置的内容。
+
+不需要图片渲染时，可以跳过 Chromium 安装：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.1/install.sh \
+  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.1" sh -s -- --no-playwright
+```
+
+#### 从源码安装
+
+```bash
+git clone --branch v1.0.1 --depth 1 https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git
+cd Amiya-Bot-mcp-server
+
+python3 -m venv .venv
+./.venv/bin/pip install -e .
+./.venv/bin/playwright install chromium
+```
+
+验证安装：
+
+```bash
+./.venv/bin/amiyabot-cli --help
+```
+
+### 启动与健康检查
+
+通过一键安装或源码安装时，使用以下命令启动 Web/MCP 服务：
+
+```bash
+amiyabot-cli web
+```
+
+Docker 和 Helm 部署会自动启动服务。服务就绪后，可以在服务所在机器上执行健康检查：
 
 ```bash
 curl http://127.0.0.1:9000/rest/status
 ```
+
+### 服务端配置
+
+程序会按从低到高的优先级合并以下 JSON 配置：
+
+1. 安装包内置的 `data/config.json`
+2. 全局配置文件
+3. `resources/config.json`
+4. 项目根目录的 `config.json`
+
+Linux 全局配置默认位于 `~/.config/amiyabot-cli/config.json`；设置了 `XDG_CONFIG_HOME` 时，则位于 `$XDG_CONFIG_HOME/amiyabot-cli/config.json`。文件不存在时，程序会尝试自动创建 `{}`。
+
+可用配置项：
+
+| 配置项 | 用途 |
+| --- | --- |
+| `BaseUrl` | Web 服务的最终访问地址，用于生成卡片和静态资源 URL |
+| `CommandServiceUrl` | CLI 执行单次命令时连接的服务地址 |
+| `ResourcePath` | 游戏资源、缓存和日志所在目录 |
+| `GameDataRepo` | 资源仓库地址 |
+| `McpDnsRebindingProtectionEnabled` | 是否启用 MCP DNS rebinding protection |
+
+只覆盖本机 CLI 的服务地址时，可以使用：
+
+```json
+{
+  "BaseUrl": "http://127.0.0.1:9000/",
+  "CommandServiceUrl": "http://127.0.0.1:9000/"
+}
+```
+
+服务通过域名或反向代理对外提供时，需要把 `BaseUrl` 设置为最终访问地址。`BaseUrl` 用于生成图片和静态资源链接，应包含协议、域名以及必要的路径前缀，并建议以 `/` 结尾。例如：
+
+```json
+{
+  "BaseUrl": "https://amiyabot.example.com/"
+}
+```
+
+使用 Docker 时，可以将该配置保存为 `config.json` 并挂载到容器中：
+
+```bash
+docker run -d \
+  --name amiyabot-mcp \
+  -p 9000:9000 \
+  -v "$(pwd)/amiyabot-resources:/app/resources" \
+  -v "$(pwd)/config.json:/app/config.json:ro" \
+  hsyhhssyy/amiyabot-mcp:v1.0.1
+```
+
+## 接入 MCP 服务
+
+新客户端建议通过 Streamable HTTP 连接单一 `/mcp` 端点。本机默认地址为：
+
+```text
+http://127.0.0.1:9000/mcp
+```
+
+如果 MCP 客户端与服务端不在同一台主机或同一个容器网络中，需要将 `127.0.0.1` 替换为客户端能够访问的最终域名或地址。迁移期内仍保留了旧 SSE 入口 `/mcp/sse`，新配置建议使用 Streamable HTTP。
+
+### 通用客户端配置
 
 常见的 MCP 客户端配置如下；不同客户端使用的字段名可能略有不同：
 
@@ -75,30 +218,20 @@ curl http://127.0.0.1:9000/rest/status
 }
 ```
 
-部分客户端将 `transport` 的值命名为 `http`，请以该客户端的配置格式为准；服务端 URL 均为 `/mcp`。
+部分客户端将 `transport` 的值命名为 `http` 或 `streamable_http`，请以该客户端的配置格式为准；服务端的端点路径均为 `/mcp`。
 
-迁移期内仍保留了旧 SSE 入口 `/mcp/sse`，新配置建议使用 Streamable HTTP。
+### AstrBot
 
-如果 MCP 客户端不在服务所在的机器上，需要把 `BaseUrl` 设置为客户端能够访问的最终地址。创建 `config.json`：
+AstrBot 将 Streamable HTTP 传输类型命名为 `streamable_http`（下划线），配置示例如下：
 
 ```json
 {
-  "BaseUrl": "https://amiyabot.example.com/"
+  "transport": "streamable_http",
+  "url": "http://127.0.0.1:9000/mcp"
 }
 ```
 
-然后挂载该配置：
-
-```bash
-docker run -d \
-  --name amiyabot-mcp \
-  -p 9000:9000 \
-  -v "$(pwd)/amiyabot-resources:/app/resources" \
-  -v "$(pwd)/config.json:/app/config.json:ro" \
-  hsyhhssyy/amiyabot-mcp:v1.0.1
-```
-
-`BaseUrl` 用于生成图片和静态资源链接，应包含协议、域名以及必要的路径前缀，并建议以 `/` 结尾。
+不要在 AstrBot 中将 `transport` 写成 `streamable-http`（连字符）。当 AstrBot 不能识别该传输类型时，连接测试可能会向 `/mcp` 误发 GET 请求，并收到 `400 Bad Request: Missing session ID`。此错误通常表示客户端传输配置不匹配，不是 MCP 端点不可用。
 
 ### DeepSeek Harness
 
@@ -139,89 +272,9 @@ dsh --profile web --dump-config
 
 如果 Harness 与 MCP 服务器不在同一台主机或同一个容器网络中，需要将 `url` 替换为 Harness 能够访问的最终地址，不能使用 MCP 服务器自己的 `127.0.0.1`。更多配置项参见 [DeepSeek Harness 官方 MCP client 文档](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md)。
 
-### Helm
-
-准备 `values.yaml`：
-
-```yaml
-config:
-  baseUrl: https://amiyabot.example.com/
-
-persistence:
-  storageClass: nfs-client
-  size: 20Gi
-
-ingress:
-  enabled: true
-  className: nginx
-  annotations:
-    nginx.ingress.kubernetes.io/proxy-buffering: "off"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-  tls:
-    enabled: true
-    secretName: amiyabot-example-tls
-```
-
-安装 1.0.1：
-
-```bash
-helm repo add amiyabot https://AmiyaBot.github.io/Amiya-Bot-mcp-server
-helm repo update
-helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp \
-  --version 1.0.1 \
-  -f values.yaml
-```
-
-Chart 默认创建 PVC 并将其挂载到 `/app/resources`。已有 PVC 可以通过 `persistence.existingClaim` 指定；不需要 Ingress 时，将 `ingress.enabled` 设置为 `false`。Streamable HTTP 包含长连接响应，使用 NGINX Ingress 时建议关闭响应缓冲并调大读写超时，如上例所示。
-
-如果 `config.baseUrl` 包含路径前缀，请同时确认 Ingress Controller 能正确转发该路径。Chart 默认关闭 MCP DNS rebinding protection，以兼容不同的反向代理地址；如需开启，可设置 `config.mcpDnsRebindingProtectionEnabled: true`，并确保 `baseUrl` 与实际访问域名一致。
-
-## 本地安装
-
-需要 Python 3.11 或更高版本、Git，以及用于图片渲染的 Playwright Chromium。
-
-### 一键安装
-
-下面的命令会将 1.0.1 安装到 `~/.local/share/amiyabot-cli/venv`，并在 `~/.local/bin` 创建 `amiyabot-cli`：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.1/install.sh \
-  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.1" sh
-```
-
-如果 `~/.local/bin` 不在 `PATH` 中，安装脚本会显示需要加入 shell 配置的内容。
-
-不需要图片渲染时，可以跳过 Chromium 安装：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.1/install.sh \
-  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.1" sh -s -- --no-playwright
-```
-
-### 从源码安装
-
-```bash
-git clone --branch v1.0.1 --depth 1 https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git
-cd Amiya-Bot-mcp-server
-
-python3 -m venv .venv
-./.venv/bin/pip install -e .
-./.venv/bin/playwright install chromium
-```
-
-验证安装：
-
-```bash
-./.venv/bin/amiyabot-cli --help
-```
-
 ## CLI 使用
 
 ```bash
-# 启动 Web/MCP 服务
-amiyabot-cli web
-
 # 进入交互模式
 amiyabot-cli
 
@@ -254,36 +307,6 @@ amiyabot-cli resource-update-status
 ```
 
 Web 服务运行期间还会定期检查资源更新。执行单次 CLI 查询时，如果本地命令服务尚未运行，CLI 会尝试自动在后台启动它。
-
-## 配置
-
-程序会按从低到高的优先级合并以下 JSON 配置：
-
-1. 安装包内置的 `data/config.json`
-2. 全局配置文件
-3. `resources/config.json`
-4. 项目根目录的 `config.json`
-
-Linux 全局配置默认位于 `~/.config/amiyabot-cli/config.json`；设置了 `XDG_CONFIG_HOME` 时，则位于 `$XDG_CONFIG_HOME/amiyabot-cli/config.json`。文件不存在时，程序会尝试自动创建 `{}`。
-
-可用配置项：
-
-| 配置项 | 用途 |
-| --- | --- |
-| `BaseUrl` | Web 服务的最终访问地址，用于生成卡片和静态资源 URL |
-| `CommandServiceUrl` | CLI 执行单次命令时连接的服务地址 |
-| `ResourcePath` | 游戏资源、缓存和日志所在目录 |
-| `GameDataRepo` | 资源仓库地址 |
-| `McpDnsRebindingProtectionEnabled` | 是否启用 MCP DNS rebinding protection |
-
-只覆盖本机 CLI 的服务地址时，可以使用：
-
-```json
-{
-  "BaseUrl": "http://127.0.0.1:9000/",
-  "CommandServiceUrl": "http://127.0.0.1:9000/"
-}
-```
 
 ## 升级
 
