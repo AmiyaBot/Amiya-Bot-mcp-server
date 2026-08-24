@@ -393,6 +393,25 @@ def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) ->
             continue_after_exact=False,
             allow_fuzzy=True,
         ),
+        SourceSpec(
+            key="material",
+            candidates=lambda: list((bundle.material_name_to_id or {}).keys()),
+            resolve=lambda k: bundle.materials[bundle.material_name_to_id[k]],
+            continue_after_exact=False,
+            allow_fuzzy=True,
+        ),
+        SourceSpec(
+            key="stage",
+            candidates=lambda: list((bundle.stage_alias_to_ids or {}).keys()),
+            # 同一代号/名称可能对应普通、突袭等多个 stage_id。
+            resolve=lambda k: [
+                bundle.stages[stage_id]
+                for stage_id in (bundle.stage_alias_to_ids or {}).get(k, [])
+                if stage_id in (bundle.stages or {})
+            ],
+            continue_after_exact=False,
+            allow_fuzzy=True,
+        ),
     ]
 
     if source_key:

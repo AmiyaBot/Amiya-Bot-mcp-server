@@ -8,6 +8,7 @@ from pathlib import Path
 from src.app.context import AppContext
 from src.app.services.operator_material_output import build_operator_material_payload, render_operator_material_markdown
 from src.app.services.operator_module_output import build_operator_module_payload, render_operator_module_markdown
+from src.app.services.material_output import build_material_payload
 from src.app.services.operator_output import (
     build_operator_payload,
     build_skin_payload,
@@ -30,6 +31,7 @@ from src.domain.services.operator import (
 )
 from src.domain.services.operator_material import build_operator_material_query_result
 from src.domain.services.operator_module import build_operator_module_query_result
+from src.domain.services.material import build_material_query_result
 from src.domain.types import QueryResult
 from src.helpers.bundle import get_table
 from src.helpers.card_urls import build_card_url
@@ -42,6 +44,7 @@ OPERATOR_MODULE_CARD_REVISION = "module-v2"
 OPERATOR_TOKEN_CARD_REVISION = "token-v4"
 OPERATOR_SKIN_CARD_REVISION = "skin-v1"
 OPERATOR_SKIN_SELECTION_CARD_REVISION = "skin-selection-v2"
+MATERIAL_CARD_REVISION = "material-v1"
 
 
 @dataclass(slots=True)
@@ -49,6 +52,7 @@ class QueryExecutionResult:
     data: str | dict | list[dict[str, str]] | None = None
     markdown: str | None = None
     image_url: str | None = None
+    data_url: str | None = None
     image_path: str | None = None
     message: str | None = None
     candidates: list[str] | None = None
@@ -61,6 +65,8 @@ class QueryExecutionResult:
         # CLI 与 MCP 共用本方法，均输出 card_image_url；内部字段名 image_url 保持不变。
         if self.image_url is not None:
             response["card_image_url"] = self.image_url
+        if self.data_url is not None:
+            response["data_url"] = self.data_url
         if self.image_path is not None:
             response["image_path"] = self.image_path
         if self.message is not None:
@@ -142,6 +148,48 @@ def _build_search_items(
                 "operator_id": operator_id,
                 "operator_name": operator_name,
             })
+        elif match.key == "material":
+            material_id = str(value.get("id") or "").strip() if isinstance(value, dict) else ""
+            material_name = str(value.get("name") or match.matched_text).strip() if isinstance(value, dict) else ""
+            if not material_id or not material_name or material_id in seen_ids:
+                continue
+
+            seen_ids.add(material_id)
+            items.append({
+                "id": material_id,
+                "name": material_name,
+                "type": "材料",
+            })
+        elif match.key == "stage":
+            stage_values = value if isinstance(value, (list, tuple)) else [value]
+            for stage in stage_values:
+                stage_id = str(getattr(stage, "id", "") or "").strip()
+                stage_name = str(getattr(stage, "name", "") or match.matched_text).strip()
+                if not stage_id or not stage_name or stage_id in seen_ids:
+                    continue
+
+                seen_ids.add(stage_id)
+                difficulty = str(getattr(stage, "difficulty", "") or "").strip()
+                stage_type = str(getattr(stage, "stage_type", "") or "").strip()
+                items.append({
+                    "id": stage_id,
+                    "name": stage_name,
+                    "type": "关卡",
+                    "code": str(getattr(stage, "code", "") or "").strip(),
+                    "difficulty": {
+                        "NORMAL": "普通",
+                        "FOUR_STAR": "突袭",
+                    }.get(difficulty, difficulty),
+                    "stage_type": {
+                        "MAIN": "主线",
+                        "SUB": "支线",
+                        "SPECIAL_STORY": "剧情",
+                        "DAILY": "日常",
+                        "ACTIVITY": "活动",
+                        "CAMPAIGN": "剿灭",
+                        "CLIMB_TOWER": "保全派驻",
+                    }.get(stage_type, stage_type),
+                })
 
     return items
 
@@ -592,12 +640,16 @@ def search(
     name_index_size = len(bundle.operator_name_to_id) if bundle.operator_name_to_id else 0
     token_name_index_size = len(bundle.token_name_to_id) if bundle.token_name_to_id else 0
     skin_name_index_size = len(bundle.skin_name_to_id) if bundle.skin_name_to_id else 0
+    material_name_index_size = len(bundle.material_name_to_id) if bundle.material_name_to_id else 0
+    stage_alias_index_size = len(bundle.stage_alias_to_ids) if bundle.stage_alias_to_ids else 0
     logger.debug(
-        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s",
+        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s",
         bundle_operators,
         name_index_size,
         token_name_index_size,
         skin_name_index_size,
+        material_name_index_size,
+        stage_alias_index_size,
     )
     if bundle_operators == 0 or name_index_size == 0:
         logger.warning(
@@ -606,7 +658,7 @@ def search(
             name_index_size,
         )
 
-    search_sources = build_sources(bundle, source_key=["name", "token_name", "skin"])
+    search_sources = build_sources(bundle, source_key=["name", "token_name", "skin", "material", "stage"])
     logger.debug("search: build_sources 返回 %s 个 source", len(search_sources))
 
     search_results = search_source_spec(normalized_query, sources=search_sources, n=max(limit, 1))
@@ -626,14 +678,16 @@ def search(
 
     if not items:
         logger.warning(
-            "search: 未找到干员、召唤物或皮肤 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s",
+            "search: 未找到干员、召唤物、皮肤、材料或关卡 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s",
             normalized_query,
             bundle_operators,
             name_index_size,
             token_name_index_size,
             skin_name_index_size,
+            material_name_index_size,
+            stage_alias_index_size,
         )
-        return QueryExecutionResult(message=f"未找到匹配的干员、召唤物或皮肤: {normalized_query}")
+        return QueryExecutionResult(message=f"未找到匹配的干员、召唤物、皮肤、材料或关卡: {normalized_query}")
 
     return QueryExecutionResult(data={"items": items})
 
@@ -861,6 +915,100 @@ async def query_operator_skill(
     if isinstance(resolved, QueryExecutionResult):
         return resolved
     return await query_operator_skill_by_id(context, resolved.id, index=index, level=level)
+
+
+async def query_material_by_id(
+    context: AppContext,
+    material_id: str,
+) -> QueryExecutionResult:
+    """根据本地解包中的材料 ID 返回结构化数据、PNG 卡片和 JSON 产物。"""
+    normalized_material_id = str(material_id or "").strip()
+    if not normalized_material_id:
+        return QueryExecutionResult(message="material_id 不能为空")
+
+    try:
+        bundle = context.data_repository.get_bundle()
+        if normalized_material_id not in bundle.materials:
+            return QueryExecutionResult(message=f"未找到材料ID: {normalized_material_id}")
+
+        result = build_material_query_result(context, normalized_material_id)
+        if result is None:
+            return QueryExecutionResult(message=f"材料数据为空: {normalized_material_id}")
+
+        structured_payload = build_material_payload(result)
+        bundle_version = getattr(bundle, "version", None) or "v0"
+        payload_key = f"material:{normalized_material_id}:{bundle_version}:{MATERIAL_CARD_REVISION}"
+
+        data_url = None
+        try:
+            await context.card_service.get(
+                template="material",
+                payload_key=payload_key,
+                payload=result,
+                format="json",
+            )
+            try:
+                data_url = build_card_url(
+                    cfg=context.cfg,
+                    template="material",
+                    payload_key=payload_key,
+                    format="json",
+                )
+            except RuntimeError:
+                logger.info("未配置 BaseUrl，材料 JSON 仅生成本地缓存: material_id=%s", normalized_material_id)
+        except Exception:
+            logger.warning(
+                "准备材料 JSON 产物失败: material_id=%s payload_key=%s",
+                normalized_material_id,
+                payload_key,
+                exc_info=True,
+            )
+
+        image_url = None
+        image_path = None
+        try:
+            card_artifact = await context.card_service.get(
+                template="material",
+                payload_key=payload_key,
+                payload=result,
+                format="png",
+                params={
+                    "viewport": {"width": 1280, "height": 900, "deviceScaleFactor": 1},
+                    "full_page": True,
+                    "wait_until": "load",
+                },
+            )
+            image_path = _resolve_safe_local_artifact_path(
+                context,
+                card_artifact.path,
+                context.card_service.cache_root,
+            )
+            try:
+                image_url = build_card_url(
+                    cfg=context.cfg,
+                    template="material",
+                    payload_key=payload_key,
+                    format="png",
+                )
+            except RuntimeError:
+                logger.info("未配置 BaseUrl，材料卡片仅返回本地路径: material_id=%s", normalized_material_id)
+        except Exception:
+            logger.warning(
+                "准备材料卡片失败，仍返回结构化数据和 JSON: material_id=%s payload_key=%s",
+                normalized_material_id,
+                payload_key,
+                exc_info=True,
+            )
+
+        return QueryExecutionResult(
+            data=structured_payload,
+            image_url=image_url,
+            data_url=data_url,
+            image_path=image_path,
+        )
+    except Exception:
+        logger.exception("按 ID 查询材料信息失败: material_id=%s", material_id)
+        return QueryExecutionResult(message="查询材料信息时发生错误.")
 
 
 async def query_operator_material_by_id(

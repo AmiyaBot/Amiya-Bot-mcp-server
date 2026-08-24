@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ stage.code }} {{ stage.name }}</title>
+  <style>
+    @font-face {
+      font-family: "Harmony";
+      {% if template_font_url %}
+      src: url("{{ template_font_url }}") format("truetype");
+      {% else %}
+      src: local("HarmonyOS Sans SC"), local("Noto Sans CJK SC"), sans-serif;
+      {% endif %}
+    }
+    * { box-sizing: border-box; font-family: "Harmony", sans-serif; }
+    html, body { margin: 0; background: #20252a; color: #fff; }
+    #template {
+      width: 1280px;
+      min-height: 720px;
+      padding: 28px 34px 38px;
+      background: {% if template_bg_data %}url("{{ template_bg_data }}"){% else %}linear-gradient(135deg, #26333c, #101417){% endif %} center / cover no-repeat;
+    }
+    .title { margin: 0 0 8px; font-size: 38px; letter-spacing: 1px; }
+    .subtitle { color: #aebbc4; font-size: 20px; margin-bottom: 22px; }
+    .top { display: grid; grid-template-columns: 1fr 390px; gap: 28px; }
+    .panel { padding: 20px; background: rgb(10 15 19 / 70%); border: 1px solid rgb(255 255 255 / 18%); border-radius: 10px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px 20px; font-size: 20px; }
+    .label { color: #9cc7df; }
+    .description { margin-top: 20px; color: #e6edf1; line-height: 1.65; font-size: 18px; }
+    .map-list { display: flex; min-height: 250px; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .map-list img { max-width: 100%; height: 245px; object-fit: contain; box-shadow: 0 0 16px #000; }
+    .empty { color: #89959d; font-size: 18px; }
+    .section-title { margin: 24px 0 12px; font-size: 28px; font-weight: 700; }
+    .enemy-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .enemy { display: flex; min-height: 96px; padding: 10px; gap: 10px; background: rgb(10 15 19 / 72%); border-radius: 8px; }
+    .enemy img, .drop img { width: 76px; height: 76px; object-fit: contain; }
+    .enemy-name { color: #ff9b5b; font-size: 18px; font-weight: 700; }
+    .enemy-detail { color: #d5dde1; font-size: 15px; line-height: 1.55; }
+    .tag { display: inline-block; padding: 1px 5px; margin-left: 4px; border-radius: 4px; background: #6f00b3; color: #fff; font-size: 13px; }
+    .drop-list { display: flex; flex-wrap: wrap; gap: 12px; }
+    .drop { display: flex; align-items: center; min-width: 245px; padding: 9px 12px; gap: 10px; background: rgb(10 15 19 / 72%); border-radius: 8px; }
+    .drop img { width: 58px; height: 58px; }
+    .drop-name { color: #7fc8ff; font-size: 18px; font-weight: 700; }
+    .drop-detail { color: #cbd5da; font-size: 14px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+<main id="template">
+  <h1 class="title">{{ stage.code }} {{ stage.name }}</h1>
+  <div class="subtitle">{{ stage.stage_type_name }} · {{ stage.difficulty_name }}{% if stage.zone.name %} · {{ stage.zone.name }}{% endif %}</div>
+
+  <div class="top">
+    <section class="panel">
+      <div class="info-grid">
+        <div><span class="label">推荐等级：</span>{{ stage.danger_level or "-" }}</div>
+        <div><span class="label">消耗理智：</span>{{ stage.ap_cost }}</div>
+        <div><span class="label">部署上限：</span>{{ stage.options.character_limit or "-" }}</div>
+        <div><span class="label">目标耐久：</span>{{ stage.options.max_life_point or "-" }}</div>
+        <div><span class="label">初始费用：</span>{{ stage.options.initial_cost or "-" }}</div>
+        <div><span class="label">费用上限：</span>{{ stage.options.max_cost or "-" }}</div>
+      </div>
+      {% if stage.description %}
+      <div class="description">
+        {% for line in stage.description.split("\n") %}<div>{{ line | e }}</div>{% endfor %}
+      </div>
+      {% endif %}
+    </section>
+    <section class="panel map-list">
+      {% for item in stage.maps %}
+        {% if map_data.get(item.id) %}<img src="{{ map_data[item.id] }}" alt="{{ item.id | e }}">{% endif %}
+      {% else %}
+        <div class="empty">暂无地图预览</div>
+      {% endfor %}
+    </section>
+  </div>
+
+  {% if stage.enemies %}
+  <div class="section-title" style="color:#ff8b45">敌方单位列表</div>
+  <section class="enemy-list">
+    {% for enemy in stage.enemies %}
+    <article class="enemy">
+      {% if enemy_icon_data.get(enemy.id) %}<img src="{{ enemy_icon_data[enemy.id] }}" alt="{{ enemy.name | e }}">{% endif %}
+      <div>
+        <div class="enemy-name">{{ enemy.name | e }}<span class="tag">{{ enemy.enemy_level_name | e }}</span></div>
+        <div class="enemy-detail">{{ enemy.attack_type | e }}</div>
+        <div class="enemy-detail">数量：{{ enemy.count }}</div>
+        {% if enemy.ref_level is not none %}<div class="enemy-detail">等级：{{ enemy.ref_level }}</div>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if stage.drops %}
+  <div class="section-title" style="color:#65baff">材料掉落详情</div>
+  <section class="drop-list">
+    {% for drop in stage.drops %}
+    <article class="drop">
+      {% if item_icon_data.get(drop.icon_id) %}<img src="{{ item_icon_data[drop.icon_id] }}" alt="{{ drop.name | e }}">{% endif %}
+      <div>
+        <div class="drop-name">{{ drop.name | e }}</div>
+        <div class="drop-detail">{{ drop.drop_type_name | e }} · {{ drop.occurrence_name | e }}</div>
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+  {% endif %}
+</main>
+</body>
+</html>

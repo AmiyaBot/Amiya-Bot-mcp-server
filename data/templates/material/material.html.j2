@@ -1,0 +1,115 @@
+{% macro recipe_tree(items) -%}
+  {% if items %}
+  <div class="recipe-list">
+    {% for item in items %}
+    <div class="recipe-node">
+      <div class="recipe-item">
+        {% if icon_data.get(item.icon_id) %}
+        <img src="{{ icon_data[item.icon_id] }}" alt="{{ item.name | e }}">
+        {% endif %}
+        <span class="recipe-name">{{ item.name | e }}</span>
+        <span class="recipe-count">×{{ item.count }}</span>
+        <span class="recipe-process">{{ "加工站" if item.process == "WORKSHOP" else "制造站" }}</span>
+      </div>
+      {{ recipe_tree(item.children) }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{%- endmacro %}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ material.name | e }}</title>
+  <style>
+    @font-face {
+      font-family: "Harmony";
+      {% if template_font_url %}
+      src: url("{{ template_font_url }}") format("truetype");
+      {% else %}
+      src: local("HarmonyOS Sans SC"), local("Noto Sans CJK SC"), sans-serif;
+      {% endif %}
+    }
+    * { box-sizing: border-box; font-family: "Harmony", sans-serif; }
+    html, body { margin: 0; background: #edf0f2; color: #252a2f; }
+    #template { width: 1280px; min-height: 900px; padding: 42px 52px 54px; background: linear-gradient(135deg, #f9fafb, #e8ecef); }
+    .header { display: flex; align-items: center; gap: 28px; padding-bottom: 26px; border-bottom: 3px solid #252a2f; }
+    .header img { width: 128px; height: 128px; object-fit: contain; background: #d9dee2; border-radius: 16px; padding: 10px; }
+    .header h1 { margin: 0 0 12px; font-size: 42px; line-height: 1.15; }
+    .header p { margin: 0; color: #626a72; font-size: 22px; line-height: 1.5; }
+    .badge { display: inline-block; margin-top: 14px; padding: 5px 13px; border-radius: 999px; color: #fff; background: #009fce; font-size: 18px; }
+    .section { margin-top: 28px; }
+    .section-title { margin-bottom: 14px; padding-left: 14px; border-left: 6px solid #009fce; font-size: 30px; font-weight: 800; }
+    .recipe-list { margin-left: 22px; padding-left: 22px; border-left: 2px solid #c7cdd2; }
+    .recipe-node { margin: 10px 0; }
+    .recipe-item { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 7px 14px; border-radius: 10px; background: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / 7%); }
+    .recipe-item img { width: 48px; height: 48px; object-fit: contain; }
+    .recipe-name { font-size: 22px; font-weight: 700; }
+    .recipe-count { margin-left: auto; color: #009fce; font-size: 24px; font-weight: 800; }
+    .recipe-process { color: #737b82; font-size: 16px; }
+    .source-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .source-box { padding: 18px; border-radius: 12px; background: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / 7%); }
+    .source-box h3 { margin: 0 0 12px; font-size: 23px; }
+    .stage { display: grid; grid-template-columns: 150px 1fr 100px; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e3e6e8; font-size: 18px; }
+    .stage:last-child { border-bottom: 0; }
+    .stage-code { color: #009fce; font-weight: 700; }
+    .stage-rate { color: #747c83; text-align: right; }
+    .empty { color: #858d94; font-size: 18px; }
+    .footer { margin-top: 30px; color: #858d94; font-size: 16px; }
+  </style>
+</head>
+<body>
+<main id="template">
+  <header class="header">
+    {% if icon_data.get(material.icon_id) %}
+    <img src="{{ icon_data[material.icon_id] }}" alt="{{ material.name | e }}">
+    {% endif %}
+    <div>
+      <h1>{{ material.name | e }}</h1>
+      <p>{{ (material.usage or material.description or "暂无描述") | e }}</p>
+      {% if material.rarity %}<span class="badge">{{ material.rarity }} 星材料</span>{% endif %}
+    </div>
+  </header>
+
+  {% if material.recipe %}
+  <section class="section">
+    <div class="section-title">加工站合成路线</div>
+    {{ recipe_tree(material.recipe) }}
+  </section>
+  {% endif %}
+
+  {% if material.source.main or material.source.act %}
+  <section class="section">
+    <div class="section-title">地图掉落信息</div>
+    <div class="source-grid">
+      {% for title, stages in (("主线掉落", material.source.main), ("活动及其他掉落", material.source.act)) %}
+      {% if stages %}
+      <div class="source-box">
+        <h3>{{ title }}</h3>
+        {% for stage in stages %}
+        <div class="stage">
+          <span class="stage-code">{{ stage.code | e }}</span>
+          <span>{{ stage.name | e }}</span>
+          <span class="stage-rate">{{ stage.rate | e }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if material.recommend %}
+  <section class="section">
+    <div class="section-title">推荐刷取地图</div>
+    <p class="empty">推荐数据来源：{{ material.recommend_source | e }}</p>
+  </section>
+  {% endif %}
+
+  <div class="footer">数据来源：明日方舟本地解包资源；未调用一图流数据。</div>
+</main>
+</body>
+</html>

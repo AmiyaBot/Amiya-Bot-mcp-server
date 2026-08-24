@@ -10,6 +10,7 @@ from src.app.config import Config
 
 DEFAULT_MOUNT_PATH = "/cards"
 CHAR_SKIN_MOUNT_PATH = "/char-skins"
+GAME_ASSETS_MOUNT_PATH = "/game-assets"
 
 
 def build_card_url(

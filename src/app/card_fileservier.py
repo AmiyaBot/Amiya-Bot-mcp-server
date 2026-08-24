@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from src.app.config import Config
-from src.helpers.card_urls import CHAR_SKIN_MOUNT_PATH, DEFAULT_MOUNT_PATH
+from src.helpers.card_urls import CHAR_SKIN_MOUNT_PATH, DEFAULT_MOUNT_PATH, GAME_ASSETS_MOUNT_PATH
 
 
 def _mount_static_dir(app: FastAPI, *, mount_path: str, root: Path, name: str) -> None:
@@ -29,6 +29,8 @@ def register_cardserver_asgi(app: FastAPI, *, cfg: Config) -> None:
     """
     card_cache_root: Path = cfg.ResourcePath / "cache" / "cards"
     skin_cache_root: Path = cfg.ResourcePath / "cache" / "char_skin"
+    game_assets_root: Path = cfg.ResourcePath / "assets"
 
     _mount_static_dir(app, mount_path=DEFAULT_MOUNT_PATH, root=card_cache_root, name="cards")
     _mount_static_dir(app, mount_path=CHAR_SKIN_MOUNT_PATH, root=skin_cache_root, name="char-skins")
+    _mount_static_dir(app, mount_path=GAME_ASSETS_MOUNT_PATH, root=game_assets_root, name="game-assets")
