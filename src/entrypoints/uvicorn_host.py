@@ -203,10 +203,14 @@ async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
 
         try:
             started_at = perf_counter()
-            log.info("开始执行后台资源刷新")
-            await ctx.data_repository.update_and_refresh()
+            log.info("开始执行后台资源更新检查")
+            changed = await ctx.data_repository.update_and_refresh()
             elapsed_ms = int((perf_counter() - started_at) * 1000)
-            log.info("后台资源刷新完成: elapsed_ms=%s", elapsed_ms)
+            log.info(
+                "后台资源更新检查完成: changed=%s elapsed_ms=%s",
+                changed,
+                elapsed_ms,
+            )
         except asyncio.CancelledError:
             log.info("后台资源刷新循环收到取消信号")
             raise
@@ -288,6 +292,9 @@ def uvicorn_main():
                 except asyncio.CancelledError:
                     pass
                 log.info("后台资源刷新任务已停止")
+                if ctx.data_repository:
+                    await ctx.data_repository.close()
+                    log.info("后台资源刷新子进程池已关闭")
         log.info("MCP Streamable HTTP session manager 已停止")
 
     app = FastAPI(lifespan=lifespan)
@@ -303,6 +310,24 @@ def uvicorn_main():
     )
 
     register_cardserver_asgi(app, cfg=cfg)
+
+    @app.get("/health/live", include_in_schema=False)
+    async def health_live():
+        """只验证 HTTP 事件循环存活，不触碰磁盘或外部依赖。"""
+        return {"status": "ok"}
+
+    @app.get("/health/ready", include_in_schema=False)
+    async def health_ready():
+        """旧 bundle 在后台更新期间仍可用，因此继续就绪。"""
+        ctx = getattr(app.state, "ctx", None)
+        repository = getattr(ctx, "data_repository", None)
+        if repository is None or not repository.is_ready():
+            raise HTTPException(status_code=503, detail="Game data bundle is not ready")
+        bundle = repository.get_bundle()
+        return {
+            "status": "ready",
+            "bundle_version": getattr(bundle, "version", None),
+        }
 
     @app.get("/rest/status")
     async def status():

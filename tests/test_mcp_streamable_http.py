@@ -75,17 +75,16 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
 
             assert initialize_response.status_code == 200
             assert _sse_json(initialize_response)["result"]["serverInfo"]["name"] == "明日方舟知识库"
+            assert "Mcp-Session-Id" not in initialize_response.headers
 
-            session_id = initialize_response.headers["Mcp-Session-Id"]
-            session_headers = {
+            request_headers = {
                 **common_headers,
-                "Mcp-Session-Id": session_id,
                 "Mcp-Protocol-Version": LATEST_PROTOCOL_VERSION,
             }
 
             initialized_response = await client.post(
                 "/mcp",
-                headers=session_headers,
+                headers=request_headers,
                 json={
                     "jsonrpc": "2.0",
                     "method": "notifications/initialized",
@@ -95,7 +94,7 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
 
             tools_response = await client.post(
                 "/mcp",
-                headers=session_headers,
+                headers=request_headers,
                 json={
                     "jsonrpc": "2.0",
                     "id": 2,
@@ -122,6 +121,3 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
                 "get_stage_data",
                 "get_enemy_data",
             } <= tool_names
-
-            delete_response = await client.delete("/mcp", headers=session_headers)
-            assert delete_response.status_code == 200

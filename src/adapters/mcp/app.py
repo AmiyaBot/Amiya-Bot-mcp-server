@@ -208,6 +208,9 @@ def register_asgi(app: FastAPI, cfg: Config) -> FastMCP:
         instructions=server_instructions,
         mount_path="/mcp/sse",
         sse_path="/",
+        # 工具调用不依赖跨请求的客户端状态。使用无状态 Streamable HTTP
+        # 可以避免服务重启后客户端继续携带已失效 Mcp-Session-Id 而持续 404。
+        stateless_http=True,
         transport_security=transport_security,
     )
 

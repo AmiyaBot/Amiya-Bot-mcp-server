@@ -3,6 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import multiprocessing
+import os
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -22,6 +26,70 @@ log = logging.getLogger(__name__)
 class DataNotReadyError(RuntimeError):
     """数据尚未准备好（内存中没有 bundle）"""
 
+
+@dataclass(frozen=True, slots=True)
+class PeriodicRefreshPreparation:
+    """子进程中的更新检查与 bundle 构建结果。"""
+
+    ok: bool
+    update_result: str
+    message: str
+    target_version: str | None = None
+    bundle: DataBundle | None = None
+
+
+def prepare_periodic_refresh(
+    cfg: Config,
+    has_current_bundle: bool,
+    current_version: str | None,
+) -> PeriodicRefreshPreparation:
+    """在隔离进程内检查、解包并按需构建新快照。"""
+    from src.app.services.resource_update import perform_resource_update
+
+    result = perform_resource_update(cfg, "periodic")
+    if not result.ok:
+        return PeriodicRefreshPreparation(
+            ok=False,
+            update_result=result.result,
+            message=result.message,
+            target_version=result.version,
+        )
+
+    version_changed = (
+        result.version is not None
+        and current_version != result.version
+    )
+    should_rebuild = (
+        result.result != "up_to_date"
+        or not has_current_bundle
+        or version_changed
+    )
+    if not should_rebuild:
+        return PeriodicRefreshPreparation(
+            ok=True,
+            update_result=result.result,
+            message=result.message,
+            target_version=result.version,
+        )
+
+    bundle = load_bundle_from_disk(cfg, version=result.version)
+    return PeriodicRefreshPreparation(
+        ok=True,
+        update_result=result.result,
+        message=result.message,
+        target_version=result.version,
+        bundle=bundle,
+    )
+
+
+def configure_periodic_worker() -> None:
+    """降低刷新 worker 的 CPU 调度优先级，优先保障 HTTP 主进程。"""
+    try:
+        os.nice(10)
+    except (AttributeError, OSError):
+        log.warning("Unable to lower periodic refresh worker priority", exc_info=True)
+
+
 @dataclass(slots=True)
 class DataRepository:
     """
@@ -38,6 +106,7 @@ class DataRepository:
 
     _ready_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
     _update_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
+    _periodic_executor: Optional[ProcessPoolExecutor] = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
         # 约定：cfg.ResourcePath 指向resources, 解包数据根目录（里面有 excel/character_table.json 等）
@@ -147,22 +216,48 @@ class DataRepository:
         return self._bundle
 
     async def update_and_refresh(self) -> bool:
+        """Check for resource updates and atomically publish a rebuilt bundle.
+
+        Returns ``True`` only when a new resource version was loaded.  The
+        existing bundle remains available to readers while update IO and bundle
+        construction run in an isolated worker process.
+        """
         if self._maintainer is None:
             log.warning("No maintainer configured; skip update.")
             return False
 
-        from src.app.services.resource_update import perform_resource_update
+        async with self._update_lock:
+            result = await self._prepare_periodic_refresh()
+            if not result.ok:
+                log.warning("Update gamedata on disk failed: %s", result.message)
+                return False
 
-        result = await asyncio.to_thread(perform_resource_update, self.cfg, "periodic")
-        if not result.ok:
-            log.warning("Update gamedata on disk failed: %s", result.message)
-            return False
+            if result.bundle is None:
+                log.info(
+                    "Game data is already up to date; keeping current bundle. version=%s",
+                    getattr(self._bundle, "version", None),
+                )
+                return False
 
-        log.info("Update ok. Reloading bundle into memory...")
-        bundle = await asyncio.to_thread(self._load_bundle)
-        self._bundle = bundle
-        log.info("Bundle reloaded after update. version=%s", getattr(bundle, "version", ""))
-        return True
+            # Python 对象引用赋值是原子的；只有完整新快照返回主进程后才切换。
+            self._bundle = result.bundle
+            log.info(
+                "Bundle reloaded after update. version=%s",
+                getattr(result.bundle, "version", ""),
+            )
+            return True
+
+    async def close(self) -> None:
+        """关闭延迟创建的周期刷新子进程池。"""
+        executor = self._periodic_executor
+        if executor is None:
+            return
+        self._periodic_executor = None
+        await asyncio.to_thread(
+            executor.shutdown,
+            wait=True,
+            cancel_futures=True,
+        )
 
     # ---------- internal ----------
 
@@ -186,3 +281,36 @@ class DataRepository:
         if self._maintainer is not None:
             version = self._maintainer.get_version(short=True, with_dirty=True)
         return load_bundle_from_disk(self.cfg, version=version)
+
+    async def _prepare_periodic_refresh(self) -> PeriodicRefreshPreparation:
+        executor = self._get_periodic_executor()
+        bundle = self._bundle
+        current_version = getattr(bundle, "version", None)
+        loop = asyncio.get_running_loop()
+        try:
+            return await loop.run_in_executor(
+                executor,
+                prepare_periodic_refresh,
+                self.cfg,
+                bundle is not None,
+                current_version,
+            )
+        except BrokenProcessPool:
+            # 子进程异常退出后丢弃已损坏的池，下次周期自动重建。
+            if self._periodic_executor is executor:
+                self._periodic_executor = None
+            executor.shutdown(wait=False, cancel_futures=True)
+            raise
+
+    def _get_periodic_executor(self) -> ProcessPoolExecutor:
+        executor = self._periodic_executor
+        if executor is None:
+            executor = ProcessPoolExecutor(
+                max_workers=1,
+                mp_context=multiprocessing.get_context("spawn"),
+                initializer=configure_periodic_worker,
+                # bundle 很大；每次任务后回收 worker，避免空闲子进程长期占用峰值内存。
+                max_tasks_per_child=1,
+            )
+            self._periodic_executor = executor
+        return executor

@@ -22,6 +22,7 @@ test/
 !tests/test_enemy.py
 !tests/test_glossary.py
 !tests/test_mcp_streamable_http.py
+!tests/test_data_repository_refresh.py
 
 # CLI/Web 运行产物
 data/local/command-service.log

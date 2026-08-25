@@ -1,11 +1,53 @@
+import ctypes
+import errno
 import logging
+import os
 import shutil
 import subprocess
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
 log = logging.getLogger("asset")
+
+_AT_FDCWD = -100
+_RENAME_EXCHANGE = 2
+
+
+def _exchange_directories(left: Path, right: Path) -> bool:
+    """在支持 renameat2 的 Linux 文件系统上原子交换两个目录。"""
+    if os.name != "posix":
+        return False
+
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        renameat2 = libc.renameat2
+    except (AttributeError, OSError):
+        return False
+
+    renameat2.argtypes = [
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    ]
+    renameat2.restype = ctypes.c_int
+    result = renameat2(
+        _AT_FDCWD,
+        os.fsencode(left),
+        _AT_FDCWD,
+        os.fsencode(right),
+        _RENAME_EXCHANGE,
+    )
+    if result == 0:
+        return True
+
+    error_number = ctypes.get_errno()
+    if error_number in {errno.ENOSYS, errno.EINVAL, errno.EXDEV, errno.EOPNOTSUPP}:
+        return False
+    raise OSError(error_number, os.strerror(error_number))
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,14 +177,47 @@ class GitGameDataMaintainer:
             log.warning("%s 不存在，无法解压", zip_path)
             return False
 
-        self.gamedata_dir.mkdir(parents=True, exist_ok=True)
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+        staging_dir = Path(
+            tempfile.mkdtemp(prefix=".gamedata-staging-", dir=self.base_dir)
+        )
         try:
             with zipfile.ZipFile(zip_path, "r") as z:
-                z.extractall(self.gamedata_dir)
+                z.extractall(staging_dir)
+
+            marker = staging_dir / "excel" / "character_table.json"
+            if not marker.is_file():
+                log.error("解压结果校验失败，缺少 %s", marker)
+                return False
+
+            self._publish_extracted_directory(staging_dir)
             return True
         except Exception:
             log.exception("解压失败")
             return False
+        finally:
+            if staging_dir.exists():
+                shutil.rmtree(staging_dir, ignore_errors=True)
+
+    def _publish_extracted_directory(self, staging_dir: Path) -> None:
+        """完整解包并校验后再切换在线目录。"""
+        if not self.gamedata_dir.exists():
+            os.replace(staging_dir, self.gamedata_dir)
+            return
+
+        if _exchange_directories(self.gamedata_dir, staging_dir):
+            # 交换后 staging_dir 指向旧数据，由 extract_zip() 的 finally 回收。
+            return
+
+        # 非 Linux 或文件系统不支持 RENAME_EXCHANGE 时的兼容路径。
+        backup_dir = staging_dir.with_name(f"{staging_dir.name}-previous")
+        os.replace(self.gamedata_dir, backup_dir)
+        try:
+            os.replace(staging_dir, self.gamedata_dir)
+        except Exception:
+            os.replace(backup_dir, self.gamedata_dir)
+            raise
+        shutil.rmtree(backup_dir, ignore_errors=True)
 
     def update(self) -> GameDataUpdateResult:
         """
