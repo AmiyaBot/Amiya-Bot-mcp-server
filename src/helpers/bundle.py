@@ -34,6 +34,39 @@ def integer(v: Any) -> Optional[int]:
     except Exception:
         return None
 
+
+def _number(v: Any) -> Optional[int | float]:
+    """Parse a template value without discarding its fractional part."""
+    try:
+        if v is None:
+            return None
+        if isinstance(v, str) and not v.strip():
+            return None
+
+        value = float(v)
+        if value.is_integer():
+            return int(value)
+        return value
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _format_template_value(value: Any, format_spec: str = "") -> str:
+    number = _number(value)
+    if number is None:
+        return "" if value is None else str(value)
+
+    # 游戏数据使用 0 / 0.0 / 0% / 0.0% 这一组数字格式。
+    match = re.fullmatch(r"0(?:\.(0+))?(%)?", format_spec)
+    if match:
+        precision = len(match.group(1) or "")
+        is_percentage = bool(match.group(2))
+        rendered_value = number * 100 if is_percentage else number
+        rendered = f"{rendered_value:.{precision}f}"
+        return f"{rendered}%" if is_percentage else rendered
+
+    return str(number)
+
 def find_most_similar(text: str, text_list: Sequence[str]) -> Optional[str]:
     res = find_similar_list(text, text_list)
     if res:
@@ -66,20 +99,26 @@ def parse_template(blackboard: list, description: str) -> str:
     """
     if not description:
         return ""
-    formatter = {"0%": lambda v: f"{round(v * 100)}%"}
-    data_dict = {item["key"]: item.get("valueStr") or item.get("value") for item in blackboard or []}
+    data_dict = {}
+    for item in blackboard or []:
+        if not isinstance(item, dict):
+            continue
+        item_key = str(item.get("key") or "").lower()
+        if not item_key:
+            continue
+        value_str = item.get("valueStr")
+        data_dict[item_key] = value_str if value_str not in (None, "") else item.get("value")
 
     desc = html_tag_format(description.replace(">-{", ">{"))
     format_str = re.findall(r"({(\S+?)})", desc)
     if format_str:
         for token, inner in format_str:
-            key = inner.split(":")
+            key = inner.split(":", 1)
             fd = key[0].lower().strip("-")
             if fd in data_dict:
-                value = integer(data_dict[fd])
-                if len(key) >= 2 and key[1] in formatter and value is not None:
-                    value = formatter[key[1]](value)
-                desc = desc.replace(token, str(value) if value is not None else "")
+                format_spec = key[1] if len(key) >= 2 else ""
+                value = _format_template_value(data_dict[fd], format_spec)
+                desc = desc.replace(token, value)
     return desc
 
 def build_range(grids: list) -> str:

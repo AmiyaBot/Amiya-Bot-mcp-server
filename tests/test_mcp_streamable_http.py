@@ -104,9 +104,10 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
             )
 
             assert tools_response.status_code == 200
+            tools = _sse_json(tools_response)["result"]["tools"]
             tool_names = {
                 tool["name"]
-                for tool in _sse_json(tools_response)["result"]["tools"]
+                for tool in tools
             }
             assert {
                 "search",
@@ -121,3 +122,9 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
                 "get_stage_data",
                 "get_enemy_data",
             } <= tool_names
+
+            skill_tool = next(tool for tool in tools if tool["name"] == "get_operator_skill")
+            assert set(skill_tool["inputSchema"]["properties"]) == {"operator_id"}
+            assert skill_tool["inputSchema"]["required"] == ["operator_id"]
+            assert "完整技能列表" in skill_tool["description"]
+            assert "全部等级数据" in skill_tool["description"]

@@ -140,30 +140,27 @@ async def cmd_operator_material(ctx: AppContext, args: str) -> str:
 @register_command("skill")
 async def cmd_operator_skill(ctx: AppContext, args: str) -> str:
     """
-    查询干员技能信息
-    用法: skill <干员名> [prefix] [index] [level]
-    例子: skill 阿米娅 1 10
+    查询干员的完整技能与全部等级信息
+    用法: skill <干员名>
+    例子: skill 阿米娅
     """
     if not args:
-        return "❌ 请提供干员名称\n用法: skill <干员名> [prefix] [index] [level]"
+        return "❌ 请提供干员名称\n用法: skill <干员名>"
 
-    parts = args.split()
-    operator_name = parts[0]
-    index = int(parts[2]) if len(parts) > 2 else 1
-    level = int(parts[3]) if len(parts) > 3 else 10
+    operator_name = args.strip()
 
-    logger.info(f"查询干员技能: {operator_name}, index={index}, level={level}")
+    logger.info("查询干员完整技能列表: %s", operator_name)
     result = await query_operator_skill(
         ctx,
         operator_name=operator_name,
-        index=index,
-        level=level,
     )
     if result.candidates:
         return f"❌ {result.message}: {', '.join(result.candidates)}，请提供更精确的名称。"
     if result.message:
         return f"❌ {result.message}"
-    return f"✅ 查询成功！\n\n{result.data}"
+    if result.markdown:
+        return f"✅ 查询成功！\n\n{result.markdown}"
+    return f"✅ 查询成功！\n\n{json.dumps(result.data, ensure_ascii=False, indent=2)}"
 
 @register_command("glossary")
 async def cmd_glossary(ctx: AppContext, args: str) -> str:

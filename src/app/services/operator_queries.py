@@ -11,6 +11,7 @@ from src.app.services.operator_module_output import build_operator_module_payloa
 from src.app.services.material_output import build_material_payload
 from src.app.services.operator_output import (
     build_operator_payload,
+    build_operator_skill_payload,
     build_skin_payload,
     build_token_entries,
     render_operator_markdown,
@@ -38,13 +39,14 @@ from src.helpers.card_urls import build_card_url
 from src.helpers.gamedata.search import build_sources, search_source_spec
 
 logger = logging.getLogger(__name__)
-OPERATOR_INFO_CARD_REVISION = "card-v20"
+OPERATOR_INFO_CARD_REVISION = "card-v21"
 OPERATOR_MATERIAL_CARD_REVISION = "mat-v1"
 OPERATOR_MODULE_CARD_REVISION = "module-v2"
-OPERATOR_TOKEN_CARD_REVISION = "token-v4"
+OPERATOR_TOKEN_CARD_REVISION = "token-v5"
 OPERATOR_SKIN_CARD_REVISION = "skin-v1"
 OPERATOR_SKIN_SELECTION_CARD_REVISION = "skin-selection-v2"
 MATERIAL_CARD_REVISION = "material-v1"
+OPERATOR_SKILL_TEXT_REVISION = "skill-v2"
 
 
 @dataclass(slots=True)
@@ -843,76 +845,39 @@ async def query_operator_basic_by_id(
 async def query_operator_skill_by_id(
     context: AppContext,
     operator_id: str,
-    index: int = 1,
-    level: int = 10,
 ) -> QueryExecutionResult:
-    if index < 1:
-        return QueryExecutionResult(message=f"技能序号 index 必须 >= 1（当前：{index}）")
-    if level < 1 or level > 10:
-        return QueryExecutionResult(message=f"技能等级 level 必须在 1~10 之间（当前：{level}）")
-
     try:
         resolved = _resolve_operator_by_id(context, operator_id)
         if isinstance(resolved, QueryExecutionResult):
             return resolved
 
         bundle = context.data_repository.get_bundle()
-        if not resolved.skills or len(resolved.skills) < index:
-            return QueryExecutionResult(message=f"干员{resolved.name}没有第{index}个技能")
-
-        skill = resolved.skills[index - 1]
-        if not skill.levels:
-            return QueryExecutionResult(message=f"干员{resolved.name}的技能“{skill.name}”没有等级数据")
-
-        chosen = next((item for item in skill.levels if int(item.level) == int(level)), None)
-        if not chosen:
-            return QueryExecutionResult(message=f"干员{resolved.name}的技能“{skill.name}”无法升级到等级{level}")
-
         sp_type_table = get_table(bundle.tables, "sp_type", source="local", default={})
         skill_type_table = get_table(bundle.tables, "skill_type", source="local", default={})
-        skill_level_table = get_table(bundle.tables, "skill_level", source="local", default={})
-
-        sp_data = getattr(chosen, "sp", None)
-        sp_type_raw = getattr(sp_data, "sp_type", "") if sp_data else ""
-        sp_type_text = sp_type_table.get(sp_type_raw, sp_type_table.get(str(sp_type_raw), str(sp_type_raw)))
-
-        skill_type_raw = getattr(chosen, "skill_type", "")
-        skill_type_text = skill_type_table.get(
-            skill_type_raw,
-            skill_type_table.get(str(skill_type_raw), str(skill_type_raw)),
+        structured_payload = build_operator_skill_payload(
+            resolved,
+            sp_type_name=sp_type_table,
+            skill_type_name=skill_type_table,
         )
 
-        level_text = skill_level_table[str(level)] if level >= 8 else str(level)
-        payload = {
-            "op": resolved,
-            "skill": {
-                "index": index,
-                "name": skill.name,
-            },
-            "meta": {
-                "level_text": level_text,
-                "range": getattr(chosen, "range", "") or "",
-                "sp_type_text": sp_type_text,
-                "skill_type_text": skill_type_text,
-                "sp_cost": getattr(sp_data, "sp_cost", 0) if sp_data else 0,
-                "init_sp": getattr(sp_data, "init_sp", 0) if sp_data else 0,
-                "duration": getattr(chosen, "duration", 0) or 0,
-                "description": getattr(chosen, "description", "") or "",
-            },
-        }
-
         bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
-        payload_key = f"operator_skill:{resolved.id}:{index}:{level}:{bundle_version}"
+        payload_key = (
+            f"operator_skill:{resolved.id}:all:"
+            f"{bundle_version}:{OPERATOR_SKILL_TEXT_REVISION}"
+        )
 
         text_artifact = await context.card_service.get(
             template="operator_skill",
             payload_key=payload_key,
-            payload=payload,
+            payload={"data": structured_payload},
             format="txt",
             params=None,
         )
 
-        return QueryExecutionResult(data=text_artifact.read_text())
+        return QueryExecutionResult(
+            data=structured_payload,
+            markdown=text_artifact.read_text(),
+        )
     except Exception:
         logger.exception("按 ID 查询干员技能信息失败: operator_id=%s", operator_id)
         return QueryExecutionResult(message="查询干员技能信息时发生错误.")
@@ -933,13 +898,11 @@ async def query_operator_skill(
     context: AppContext,
     operator_name: str,
     operator_name_prefix: str = "",
-    index: int = 1,
-    level: int = 10,
 ) -> QueryExecutionResult:
     resolved = _resolve_operator(context, operator_name, operator_name_prefix)
     if isinstance(resolved, QueryExecutionResult):
         return resolved
-    return await query_operator_skill_by_id(context, resolved.id, index=index, level=level)
+    return await query_operator_skill_by_id(context, resolved.id)
 
 
 async def query_material_by_id(

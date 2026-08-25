@@ -111,7 +111,7 @@ class MCPRequestLoggingMiddleware:
 server_instructions = """
 本服务器是一个游戏<明日方舟>的知识库查询助手，专注于为用户提供准确的干员信息数据和游戏资料。
 你可以使用注册的工具来回答明日方舟游戏内的问题。
-任何查询都请先调用 search 获取候选实体的 id（干员、召唤物、皮肤、材料、关卡或敌人），再用该 id 调用对应的详情工具（干员：get_operator_basic_data / get_operator_skill / get_operator_material / get_operator_modules；召唤物：get_token_detail；皮肤：get_operator_skins；材料：get_material；关卡：get_stage_data；敌人：get_enemy_data）。
+任何查询都请先调用 search 获取候选实体的 id（干员、召唤物、皮肤、材料、关卡或敌人），再用该 id 调用对应的详情工具（干员基础资料：get_operator_basic_data；干员完整技能列表及全部等级：get_operator_skill；干员培养材料：get_operator_material；干员模组：get_operator_modules；召唤物：get_token_detail；皮肤：get_operator_skins；材料：get_material；关卡：get_stage_data；敌人：get_enemy_data）。
 """
 
 

@@ -21,6 +21,8 @@ test/
 !tests/test_operator_modules.py
 !tests/test_enemy.py
 !tests/test_glossary.py
+!tests/test_skill_template.py
+!tests/test_operator_skill_levels.py
 !tests/test_mcp_streamable_http.py
 !tests/test_data_repository_refresh.py
 

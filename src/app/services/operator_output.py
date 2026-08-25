@@ -17,6 +17,7 @@ ATTRIBUTE_SPECS = [
     ("respawnTime", "再部署时间", "秒"),
 ]
 TRUST_ATTRIBUTE_KEYS = {"maxHp", "atk", "def"}
+MASTERY_LEVEL_NAMES = {8: "专精一", 9: "专精二", 10: "专精三"}
 
 # 召唤物/装置属性展示规格（与原版插件 operatorToken 卡片口径一致）
 TOKEN_ATTRIBUTE_SPECS = [
@@ -197,6 +198,7 @@ def build_operator_payload(
         "潜能提升": _build_potential_payload(data.get("potential_list") or []),
         "天赋": _build_talent_payload(data.get("talents_list") or []),
         "基建技能": _build_building_skill_payload(data.get("building_skills") or []),
+        "技能数据说明": _build_basic_skill_data_note(op),
         "技能": _build_skill_payload(
             skills=list(op.skills or []),
             sp_type_name=data.get("sp_type_name") or {},
@@ -220,6 +222,90 @@ def build_operator_payload(
             token_payload["卡片"] = token_card_url
         payload["召唤物"] = token_payload
     return _compact_value(payload)
+
+
+def format_skill_level(level: int) -> str:
+    """把解包中的 1~10 级转换为游戏内展示的 1~7 / 专精一~三。"""
+    normalized = int(level or 0)
+    return MASTERY_LEVEL_NAMES.get(normalized, str(normalized))
+
+
+def build_operator_skill_payload(
+    op: Any,
+    sp_type_name: dict[str, str],
+    skill_type_name: dict[str, str],
+) -> dict[str, Any]:
+    """构建一个干员全部技能、全部等级的结构化数据。"""
+    skills: list[dict[str, Any]] = []
+    for fallback_index, skill in enumerate(getattr(op, "skills", None) or [], start=1):
+        levels: list[dict[str, Any]] = []
+        for level in getattr(skill, "levels", None) or []:
+            unpacked_level = int(getattr(level, "level", 0) or 0)
+            mastery = int(getattr(level, "mastery", 0) or 0)
+            sp = getattr(level, "sp", None)
+            sp_type = getattr(sp, "sp_type", "") if sp else ""
+            skill_type = getattr(level, "skill_type", "") or ""
+
+            levels.append(
+                {
+                    "解包等级": unpacked_level,
+                    "游戏内等级": format_skill_level(unpacked_level),
+                    "专精等级": mastery,
+                    "升级归属": "当前技能独立专精" if mastery else "干员全部技能共用",
+                    "回复方式": sp_type_name.get(sp_type, sp_type),
+                    "技能类型": skill_type_name.get(skill_type, skill_type),
+                    "技力": {
+                        "初始": getattr(sp, "init_sp", 0) if sp else 0,
+                        "消耗": getattr(sp, "sp_cost", 0) if sp else 0,
+                        "最大充能次数": getattr(sp, "max_charge_time", 0) if sp else 0,
+                        "回复增量": getattr(sp, "increment", 0) if sp else 0,
+                    },
+                    "持续时间": getattr(level, "duration", 0) or 0,
+                    "持续时间类型": getattr(level, "duration_type", "") or "",
+                    "攻击范围": getattr(level, "range", "") or "",
+                    "描述": getattr(level, "description", "") or "",
+                }
+            )
+
+        skill_index = int(getattr(skill, "skill_index", 0) or fallback_index)
+        skill_payload: dict[str, Any] = {
+            "序号": skill_index,
+            "技能ID": getattr(skill, "skill_id", "") or "",
+            "名称": getattr(skill, "name", "") or "",
+            "图标": getattr(skill, "icon", "") or "",
+        }
+        if levels:
+            skill_payload["最高等级"] = {
+                "解包等级": levels[-1]["解包等级"],
+                "游戏内等级": levels[-1]["游戏内等级"],
+            }
+        skill_payload["等级"] = levels
+        skills.append(_compact_value(skill_payload))
+
+    payload = {
+        "干员": {
+            "ID": getattr(op, "id", "") or "",
+            "名称": getattr(op, "name", "") or "",
+            "英文名": getattr(op, "en_name", "") or "",
+            "稀有度": getattr(op, "rarity", 0) or 0,
+        },
+        "技能等级规则": {
+            "等级映射": {
+                "解包等级1~7": "游戏内技能等级1~7",
+                "解包等级8": "专精一（专一）",
+                "解包等级9": "专精二（专二）",
+                "解包等级10": "专精三（专三）",
+            },
+            "普通升级": "1~7级由干员的全部技能共用；未精英化最高4级，精英一后最高7级。",
+            "专精升级": "精英二后可以开始专精；每个技能的专精等级分别提升并分别消耗材料。",
+            "稀有度限制": "3星干员最高7级；2星及以下干员没有技能。",
+        },
+        "技能数量": len(skills),
+        "技能": skills,
+    }
+    if not skills:
+        payload["说明"] = "该干员没有技能。"
+    return payload
 
 
 def build_skin_payload(op: Any) -> list[dict[str, Any]]:
@@ -404,8 +490,13 @@ def render_operator_markdown(
         lines.append("")
         lines.append("## 技能")
         lines.append("")
+        if payload.get("技能数据说明"):
+            lines.append(str(payload["技能数据说明"]))
+            lines.append("")
         for skill in skills:
             lines.append(f"### S{skill['序号']} {skill['名称']}")
+            if skill.get("游戏内等级"):
+                lines.append(f"- 数据等级：{skill['游戏内等级']}")
             if skill.get("回复方式"):
                 lines.append(f"- 回复方式：{skill['回复方式']}")
             if skill.get("技能类型"):
@@ -558,6 +649,7 @@ def _build_skill_payload(
                 "序号": index,
                 "名称": getattr(skill, "name", "") or "",
                 "技能等级": getattr(last, "level", None),
+                "游戏内等级": format_skill_level(getattr(last, "level", 0)),
                 "回复方式": sp_type_name.get(getattr(sp, "sp_type", ""), getattr(sp, "sp_type", "") or ""),
                 "技能类型": skill_type_name.get(
                     getattr(last, "skill_type", ""),
@@ -573,6 +665,19 @@ def _build_skill_payload(
             }
         )
     return result
+
+
+def _build_basic_skill_data_note(op: Any) -> str:
+    skills = [skill for skill in (getattr(op, "skills", None) or []) if getattr(skill, "levels", None)]
+    if not skills:
+        return "该干员没有技能。"
+
+    max_levels = [int(skill.levels[-1].level) for skill in skills]
+    if all(level == 10 for level in max_levels):
+        return "以下每个技能均展示专精三数据；完整技能列表和全部等级数据请查询 get_operator_skill。"
+    if getattr(op, "rarity", 0) == 3 and all(level == 7 for level in max_levels):
+        return "该干员为3星干员，以下每个技能均展示7级数据；完整技能列表和全部等级数据请查询 get_operator_skill。"
+    return "以下每个技能均展示该技能最高可用等级的数据，具体等级见游戏内等级；完整技能列表和全部等级数据请查询 get_operator_skill。"
 
 
 def _split_names(value: Any) -> list[str]:

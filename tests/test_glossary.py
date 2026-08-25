@@ -102,7 +102,17 @@ def test_local_glossary_has_bounded_cascades() -> None:
         "物理穿透",
         "法术穿透",
     }
-    assert set(query_glossary(context, "DPS")) == set(glossary) - {"技力"}
+    assert set(query_glossary(context, "DPS")) == set(glossary) - {"技力", "专精"}
+
+
+def test_local_glossary_explains_mastery_levels_and_unlocks() -> None:
+    glossary = _local_glossary()
+
+    mastery = glossary["专精"]
+    assert "专精一、专精二、专精三" in mastery
+    assert "解包技能等级8、9、10" in mastery
+    assert "精英二" in mastery
+    assert "1~7级进度共用" in mastery
 
 
 def test_local_glossary_keeps_top_level_explanations_concise() -> None:

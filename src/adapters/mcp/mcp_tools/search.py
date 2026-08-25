@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 _SEARCH_TOOL_DESC = """本工具是资源统一搜索入口，任何查询都应先调用本工具。
 支持按名称或代号模糊搜索「干员」「干员的召唤物」「干员皮肤」「材料」「关卡」与「敌人」，返回候选的 id、name、type；召唤物、皮肤、关卡和敌人条目会附带下游详情查询所需的附加字段。
-- 干员：用返回的 id 调用 get_operator_basic_data（推荐，返回结构化数据 + card_image_url 卡片图片）/ get_operator_skill / get_operator_material / get_operator_modules；
+- 干员：用返回的 id 调用 get_operator_basic_data（推荐，返回结构化数据 + card_image_url 卡片图片）；需要完整技能列表及所有技能等级数据时调用 get_operator_skill；培养材料和模组分别调用 get_operator_material / get_operator_modules；
 - 召唤物：用返回的 id 调用 get_token_detail 查看召唤物详情；也可以用 operator_id 查看所属干员。
 - 皮肤：用返回的 operator_id 调用 get_operator_skins 查看所属干员的皮肤。
 - 材料：用返回的 id 调用 get_material 查看材料详情、合成路线、官方关卡掉落和材料卡片。

@@ -1,16 +1,29 @@
-干员：{{ op.name }}{% if op.en_name %}（{{ op.en_name }}）{% endif %}
-职业：{{ op.classes_sub }}（{{ op.classes }}）
-技能：第{{ skill.index }}个 · {{ skill.name }}
-等级：{{ meta.level_text }}
-技能范围：{{ meta.range }}
-技力类型：{{ meta.sp_type_text }}
-触发方式：{{ meta.skill_type_text }}
-{%- if meta.sp_cost %}
-技力：{{ meta.init_sp }}/{{ meta.sp_cost }}
-{%- endif %}
-{%- if meta.duration and meta.duration > 0 %}
-持续：{{ meta.duration }} 秒
-{%- endif %}
+干员：{{ data["干员"]["名称"] }}{% if data["干员"].get("英文名") %}（{{ data["干员"]["英文名"] }}）{% endif %}
+稀有度：{{ data["干员"]["稀有度"] }}星
+技能数量：{{ data["技能数量"] }}
 
-技能效果：
-{{ meta.description }}
+技能等级规则：
+- {{ data["技能等级规则"]["普通升级"] }}
+- {{ data["技能等级规则"]["专精升级"] }}
+- {{ data["技能等级规则"]["稀有度限制"] }}
+{% if not data["技能"] %}
+{{ data.get("说明", "该干员没有技能。") }}
+{% endif %}
+{% for skill in data["技能"] %}
+## S{{ skill["序号"] }} {{ skill["名称"] }}
+技能 ID：{{ skill["技能ID"] }}
+最高等级：{{ skill["最高等级"]["游戏内等级"] }}（解包等级 {{ skill["最高等级"]["解包等级"] }}）
+{% for level in skill["等级"] %}
+### {{ level["游戏内等级"] }}（解包等级 {{ level["解包等级"] }}）
+升级归属：{{ level["升级归属"] }}
+回复方式：{{ level.get("回复方式", "") }}
+技能类型：{{ level.get("技能类型", "") }}
+技力：{{ level["技力"]["初始"] }}/{{ level["技力"]["消耗"] }}{% if level["技力"].get("最大充能次数", 0) %}，最大充能 {{ level["技力"]["最大充能次数"] }} 次{% endif %}
+{% if level.get("持续时间", 0) > 0 %}持续时间：{{ level["持续时间"] }} 秒
+{% endif %}{% if level.get("攻击范围") %}攻击范围：
+{{ level["攻击范围"] }}
+{% endif %}技能效果：
+{{ level.get("描述", "") }}
+
+{% endfor %}
+{% endfor %}

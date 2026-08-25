@@ -21,7 +21,7 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 | --- | --- |
 | `search` | 统一搜索入口，返回资源 ID 和类型 |
 | `get_operator_basic_data` | 查询干员详情和干员卡片 |
-| `get_operator_skill` | 查询指定技能和等级的数据 |
+| `get_operator_skill` | 查询干员完整技能列表及所有等级数据 |
 | `get_operator_material` | 查询干员培养材料和材料卡片 |
 | `get_operator_modules` | 查询干员模组和模组卡片 |
 | `get_token_detail` | 查询召唤物详情和召唤物卡片 |

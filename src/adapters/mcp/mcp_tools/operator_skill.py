@@ -13,19 +13,21 @@ from src.app.services.operator_queries import query_operator_skill_by_id
 logger = logging.getLogger(__name__)
 
 def register_operator_skill_tool(mcp, app):
-    @mcp.tool(description="根据干员 ID 获取干员技能数据（默认第1个技能，等级10）。请先调用 search 获取 id。本工具不生成图片。")
+    @mcp.tool(
+        description=(
+            "根据干员 ID 一次性获取该干员的完整技能列表及每个技能实际可用的全部等级数据；普通等级按游戏内1~7显示，"
+            "支持专精的技能还会返回专精一、专精二、专精三。"
+            "需要完整技能列表或对比不同技能等级时请调用本工具；请先调用 search 获取 id。本工具不生成图片。"
+        )
+    )
     async def get_operator_skill(
         operator_id: Annotated[str, Field(description="干员ID，可先调用 search 获取")],
-        index: Annotated[int, Field(description="技能序号，从1开始")] = 1,
-        level: Annotated[int, Field(description="技能等级 1~10（8~10为专精一/二/三）")] = 10,
     ) -> dict:
         tool_name = "get_operator_skill"
         started_at = log_tool_start(
             logger,
             tool_name,
             operator_id=operator_id,
-            index=index,
-            level=level,
         )
 
         try:
@@ -39,8 +41,6 @@ def register_operator_skill_tool(mcp, app):
             result = await query_operator_skill_by_id(
                 context,
                 operator_id=operator_id,
-                index=index,
-                level=level,
             )
             result_payload = result.to_response()
             log_tool_end(logger, tool_name, started_at, result_payload)
@@ -51,11 +51,6 @@ def register_operator_skill_tool(mcp, app):
                 tool_name,
                 started_at,
                 operator_id=operator_id,
-                index=index,
-                level=level,
             )
             raise
-
-
-
 
