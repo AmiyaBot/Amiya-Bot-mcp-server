@@ -102,7 +102,7 @@ def test_local_glossary_has_bounded_cascades() -> None:
         "物理穿透",
         "法术穿透",
     }
-    assert set(query_glossary(context, "DPS")) == set(glossary) - {"技力", "专精"}
+    assert set(query_glossary(context, "DPS")) == set(glossary) - {"技力", "专精", "信赖"}
 
 
 def test_local_glossary_explains_mastery_levels_and_unlocks() -> None:
@@ -113,6 +113,20 @@ def test_local_glossary_explains_mastery_levels_and_unlocks() -> None:
     assert "解包技能等级8、9、10" in mastery
     assert "精英二" in mastery
     assert "1~7级进度共用" in mastery
+
+
+def test_local_glossary_explains_trust_scaling_from_game_data() -> None:
+    glossary = _local_glossary()
+    context = _context(glossary)
+
+    trust = glossary["信赖"]
+    assert query_glossary(context, "信赖") == {"信赖": trust}
+    assert "0%~200%" in trust
+    assert "favor_table" in trust
+    assert "favorKeyFrames" in trust
+    assert "battlePhase=floor(percent/2)" in trust
+    assert "100%达到上限" in trust
+    assert "100%~200%不再提高" in trust
 
 
 def test_local_glossary_keeps_top_level_explanations_concise() -> None:
