@@ -121,7 +121,21 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
                 "get_material",
                 "get_stage_data",
                 "get_enemy_data",
+                "get_integrated_strategy_collectible_detail",
             } <= tool_names
+
+            collectible_tool = next(
+                tool
+                for tool in tools
+                if tool["name"] == "get_integrated_strategy_collectible_detail"
+            )
+            assert set(collectible_tool["inputSchema"]["properties"]) == {
+                "collectible_id"
+            }
+            assert collectible_tool["inputSchema"]["required"] == [
+                "collectible_id"
+            ]
+            assert "唯一" in collectible_tool["description"]
 
             skill_tool = next(tool for tool in tools if tool["name"] == "get_operator_skill")
             assert set(skill_tool["inputSchema"]["properties"]) == {"operator_id"}

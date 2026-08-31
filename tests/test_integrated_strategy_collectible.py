@@ -7,11 +7,15 @@ from types import SimpleNamespace
 import pytest
 
 from src.app.config import Config
+from src.app.card_service import CardService
 from src.app.remote_download_manager import (
     RemoteDownloadManager,
     RemoteDownloadResult,
 )
 from src.app.services import integrated_strategy_collectible_assets
+from src.app.services.integrated_strategy_collectible_queries import (
+    query_integrated_strategy_collectible_by_id,
+)
 from src.app.services.operator_queries import search
 from src.data.repository.bundle.bundle_builder import load_bundle_from_disk
 
@@ -266,3 +270,139 @@ def test_icon_cache_failure_does_not_break_search_payload(monkeypatch):
     )
 
     assert "icon_url" not in payload["data"]["items"][0]
+
+
+def test_collectible_detail_returns_structured_data_and_card(
+    collectible_context,
+    tmp_path: Path,
+    monkeypatch,
+):
+    _, bundle = collectible_context
+    download_manager = RemoteDownloadManager(max_concurrency=2)
+    png_payload = integrated_strategy_collectible_assets.PNG_SIGNATURE + b"icon"
+
+    monkeypatch.setattr(
+        download_manager,
+        "_download_sync",
+        lambda request: RemoteDownloadResult(
+            payload=png_payload,
+            content_type="image/png",
+            final_url=request.url,
+        ),
+    )
+    integrated_strategy_collectible_assets._download_locks.clear()
+    integrated_strategy_collectible_assets._missing_icon_ids.clear()
+
+    class CaptureTransformer:
+        def __init__(self):
+            self.inputs = []
+
+        async def transform(self, *, input, cfg=None):
+            self.inputs.append((input, cfg))
+            return integrated_strategy_collectible_assets.PNG_SIGNATURE + b"card"
+
+    transformer = CaptureTransformer()
+    cfg = Config(
+        ProjectRoot=PROJECT_ROOT,
+        ResourcePath=tmp_path,
+        BaseUrl="https://example.test/",
+    )
+    context = SimpleNamespace(
+        cfg=cfg,
+        data_repository=SimpleNamespace(get_bundle=lambda: bundle),
+        card_service=CardService(cfg, html_to_png=transformer),
+        download_manager=download_manager,
+        prefer_local_artifact_path=True,
+    )
+
+    response = asyncio.run(
+        query_integrated_strategy_collectible_by_id(
+            context,
+            "rogue_5_relic_legacy_11",
+        )
+    ).to_response()
+
+    assert response["data"]["id"] == "rogue_5_relic_legacy_11"
+    assert response["data"]["name"] == "古旧铸物"
+    assert response["data"]["topic_name"] == "岁的界园志异"
+    assert response["data"]["obtain_approach"] == "在集成战略模式中获得"
+    assert response["data"]["icon_url"].endswith(
+        "/integrated-strategy-collectible-icons/rogue_5_relic_legacy_11.png"
+    )
+    assert response["card_image_url"].endswith("/artifact.png")
+    assert response["data_url"].endswith("/artifact.json")
+    assert Path(response["image_path"]).is_file()
+    assert len(transformer.inputs) == 1
+    rendered_html, render_cfg = transformer.inputs[0]
+    assert "古旧铸物" in rendered_html
+    assert "data:image/png;base64," in rendered_html
+    assert render_cfg["viewport"]["width"] == 1000
+
+
+def test_same_name_collectible_ids_generate_unique_detail_cards(
+    collectible_context,
+    tmp_path: Path,
+    monkeypatch,
+):
+    _, bundle = collectible_context
+    download_manager = RemoteDownloadManager(max_concurrency=2)
+    monkeypatch.setattr(
+        download_manager,
+        "_download_sync",
+        lambda request: RemoteDownloadResult(
+            payload=integrated_strategy_collectible_assets.PNG_SIGNATURE + b"icon",
+            content_type="image/png",
+            final_url=request.url,
+        ),
+    )
+    integrated_strategy_collectible_assets._download_locks.clear()
+    integrated_strategy_collectible_assets._missing_icon_ids.clear()
+
+    class StaticTransformer:
+        async def transform(self, *, input, cfg=None):
+            return integrated_strategy_collectible_assets.PNG_SIGNATURE + b"card"
+
+    cfg = Config(
+        ProjectRoot=PROJECT_ROOT,
+        ResourcePath=tmp_path,
+        BaseUrl="https://example.test/",
+    )
+    context = SimpleNamespace(
+        cfg=cfg,
+        data_repository=SimpleNamespace(get_bundle=lambda: bundle),
+        card_service=CardService(cfg, html_to_png=StaticTransformer()),
+        download_manager=download_manager,
+        prefer_local_artifact_path=False,
+    )
+
+    first = asyncio.run(
+        query_integrated_strategy_collectible_by_id(
+            context,
+            "rogue_1_relic_r01",
+        )
+    ).to_response()
+    second = asyncio.run(
+        query_integrated_strategy_collectible_by_id(
+            context,
+            "rogue_2_relic_grace_21",
+        )
+    ).to_response()
+
+    assert first["data"]["name"] == second["data"]["name"] == "热水壶"
+    assert first["data"]["topic_id"] == "rogue_1"
+    assert second["data"]["topic_id"] == "rogue_2"
+    assert first["card_image_url"] != second["card_image_url"]
+
+
+def test_collectible_detail_requires_an_existing_unique_id(collectible_context):
+    context, _ = collectible_context
+
+    empty = asyncio.run(
+        query_integrated_strategy_collectible_by_id(context, "")
+    ).to_response()
+    missing = asyncio.run(
+        query_integrated_strategy_collectible_by_id(context, "热水壶")
+    ).to_response()
+
+    assert empty == {"message": "collectible_id 不能为空"}
+    assert missing == {"message": "未找到集成战略藏品ID: 热水壶"}

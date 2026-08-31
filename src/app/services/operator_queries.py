@@ -6,6 +6,9 @@ import logging
 from pathlib import Path
 
 from src.app.context import AppContext
+from src.app.services.integrated_strategy_collectible_output import (
+    build_collectible_payload,
+)
 from src.app.services.operator_material_output import build_operator_material_payload, render_operator_material_markdown
 from src.app.services.operator_module_output import build_operator_module_payload, render_operator_module_markdown
 from src.app.services.material_output import build_material_payload
@@ -233,30 +236,7 @@ def _build_search_items(
                     continue
 
                 seen_ids.add(collectible_id)
-                items.append({
-                    "id": collectible_id,
-                    "name": collectible_name,
-                    "type": "集成战略藏品",
-                    "topic_id": str(collectible.get("topic_id") or "").strip(),
-                    "topic_name": str(collectible.get("topic_name") or "").strip(),
-                    "icon_id": str(collectible.get("icon_id") or "").strip(),
-                    "description": str(
-                        collectible.get("description") or ""
-                    ).strip(),
-                    "usage": str(collectible.get("usage") or "").strip(),
-                    "rarity": {
-                        "NORMAL": "普通",
-                        "RARE": "稀有",
-                        "SUPER_RARE": "超稀有",
-                    }.get(
-                        str(collectible.get("rarity") or "").strip(),
-                        str(collectible.get("rarity") or "").strip(),
-                    ),
-                    "unlock_condition": str(
-                        collectible.get("unlock_condition") or ""
-                    ).strip(),
-                    "can_sacrifice": bool(collectible.get("can_sacrifice")),
-                })
+                items.append(build_collectible_payload(collectible))
 
     return items
 

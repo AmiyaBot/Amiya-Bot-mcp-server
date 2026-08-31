@@ -15,7 +15,7 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 - 提供 CLI、Docker 和 Helm 三种使用方式
 - 支持资源首次初始化、后台更新和版本查询
 
-当前提供 11 个 MCP 工具：
+当前提供 12 个 MCP 工具：
 
 | 工具 | 用途 |
 | --- | --- |
@@ -29,6 +29,7 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 | `get_material` | 查询材料详情、合成路线和关卡掉落 |
 | `get_stage_data` | 查询关卡、地图、敌人和掉落信息 |
 | `get_enemy_data` | 查询敌人能力、属性和关联单位 |
+| `get_integrated_strategy_collectible_detail` | 按统一搜索返回的唯一 ID 查询集成战略藏品详情和卡片 |
 | `get_glossary` | 查询游戏术语及计算公式 |
 
 除术语查询外，建议先调用 `search`，再将返回的 ID 传给对应的详情工具。
