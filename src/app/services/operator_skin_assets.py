@@ -7,11 +7,15 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import quote, urlparse, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.parse import urlparse
 
 from src.app.context import AppContext
 from src.app.cache_permissions import CACHE_FILE_MODE
+from src.app.remote_download_manager import (
+    RemoteDownloadRequest,
+    RemoteDownloadResult,
+    get_context_download_manager,
+)
 from src.domain.models.operator import Operator
 from src.helpers.bundle import get_table
 from src.helpers.card_urls import CHAR_SKIN_MOUNT_PATH, build_static_url
@@ -21,7 +25,11 @@ logger = logging.getLogger(__name__)
 SKIN_URLS_INDEX_PATH = Path("assets") / "indexes" / "skinUrls.json"
 SKIN_CACHE_PATH = Path("cache") / "char_skin"
 DOWNLOAD_TIMEOUT_SECONDS = 60
-DOWNLOAD_USER_AGENT = "AmiyaBotMCPServer/0.1"
+DOWNLOAD_MAX_BYTES = 50 * 1024 * 1024
+PRTS_ASSET_HOSTS = frozenset({"media.prts.wiki"})
+SKIN_CONTENT_TYPES = frozenset(
+    {"image/png", "image/webp", "image/jpeg", "application/octet-stream"}
+)
 
 _index_cache_path: Path | None = None
 _index_cache_mtime_ns: int | None = None
@@ -107,11 +115,21 @@ async def _resolve_and_download(
         async with lock:
             cached_path = _find_cached_skin_path(cache_root, skin_id)
             if cached_path is None:
-                cached_path = await asyncio.to_thread(
-                    _download_skin_file,
+                downloaded = await get_context_download_manager(context).download(
+                    RemoteDownloadRequest(
+                        url=remote_url,
+                        timeout_seconds=DOWNLOAD_TIMEOUT_SECONDS,
+                        max_bytes=DOWNLOAD_MAX_BYTES,
+                        headers={"Accept": "image/png,image/webp,image/jpeg"},
+                        allowed_hosts=PRTS_ASSET_HOSTS,
+                        allowed_content_types=SKIN_CONTENT_TYPES,
+                    )
+                )
+                cached_path = _cache_skin_download(
                     cache_root,
                     skin_id,
                     remote_url,
+                    downloaded,
                 )
 
     image_url = None
@@ -283,20 +301,22 @@ def _write_cache_file(temp_path: Path, target_path: Path, payload: bytes) -> Non
         temp_path.unlink(missing_ok=True)
 
 
-def _download_skin_file(cache_root: Path, skin_id: str, remote_url: str) -> Path:
-    encoded_url = _encode_url_path(remote_url)
-    request = Request(encoded_url, headers={"User-Agent": DOWNLOAD_USER_AGENT})
-    with urlopen(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
-        payload = response.read()
-        content_type = response.headers.get_content_type()
-
-    if not payload:
+def _cache_skin_download(
+    cache_root: Path,
+    skin_id: str,
+    remote_url: str,
+    downloaded: RemoteDownloadResult,
+) -> Path:
+    if not downloaded.payload:
         raise RuntimeError(f"下载干员立绘失败，返回空内容: {skin_id}")
 
-    extension = _guess_extension(content_type, remote_url)
+    extension = _guess_extension(
+        downloaded.content_type,
+        downloaded.final_url or remote_url,
+    )
     target_path = cache_root / f"{skin_id}{extension}"
     temp_path = cache_root / f".{skin_id}.download"
-    _write_cache_file(temp_path, target_path, payload)
+    _write_cache_file(temp_path, target_path, downloaded.payload)
 
     for candidate in cache_root.glob(f"{skin_id}.*"):
         if candidate == target_path:
@@ -305,20 +325,6 @@ def _download_skin_file(cache_root: Path, skin_id: str, remote_url: str) -> Path
             candidate.unlink(missing_ok=True)
 
     return target_path
-
-
-def _encode_url_path(remote_url: str) -> str:
-    split_result = urlsplit(remote_url)
-    encoded_path = quote(split_result.path, safe="/%:@+$,;=-._~!()*[]")
-    return urlunsplit(
-        (
-            split_result.scheme,
-            split_result.netloc,
-            encoded_path,
-            split_result.query,
-            split_result.fragment,
-        )
-    )
 
 
 def _guess_extension(content_type: str | None, remote_url: str) -> str:

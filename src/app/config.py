@@ -14,6 +14,7 @@ CONFIG_FIELDS = (
     "BaseUrl",
     "CommandServiceUrl",
     "McpDnsRebindingProtectionEnabled",
+    "RemoteAssetDownloadConcurrency",
 )
 
 @dataclass
@@ -24,6 +25,7 @@ class Config:
     BaseUrl: Optional[str] = None
     CommandServiceUrl: Optional[str] = None
     McpDnsRebindingProtectionEnabled: bool = False
+    RemoteAssetDownloadConcurrency: int = 3
 
 
 @dataclass(frozen=True)
@@ -94,6 +96,14 @@ def _coerce_bool(value: object, default: bool = False) -> bool:
     return default
 
 
+def _coerce_positive_int(value: object, default: int) -> int:
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError):
+        return default
+    return normalized if normalized > 0 else default
+
+
 def inspect_config_state() -> ConfigState:
 
     project_root = FILE_PATH
@@ -143,6 +153,10 @@ def inspect_config_state() -> ConfigState:
             merged_config.get("McpDnsRebindingProtectionEnabled", False),
             default=False,
         ),
+        RemoteAssetDownloadConcurrency=_coerce_positive_int(
+            merged_config.get("RemoteAssetDownloadConcurrency", 3),
+            default=3,
+        ),
     )
 
     return ConfigState(
@@ -163,5 +177,4 @@ def resolve_merged_config_paths() -> tuple[Path, ...]:
 
 def load_from_disk() -> Config:
     return inspect_config_state().config
-
 

@@ -89,7 +89,7 @@ def _dedupe_names(matches) -> list[str]:
 def _build_search_items(
     matches,
     token_owner: dict[str, Operator],
-) -> list[dict[str, str]]:
+) -> list[dict[str, object]]:
     """将搜索命中结果组装为统一候选条目。
 
     干员条目：{"id", "name", "type": "干员"}。
@@ -99,8 +99,10 @@ def _build_search_items(
     皮肤条目：{"id", "name", "type": "皮肤", "operator_id", "operator_name"}，
     其中 operator_id/operator_name 为皮肤归属干员。
     敌人条目：{"id", "name", "type": "敌人", "enemy_index", "enemy_level"}。
+    集成战略藏品条目除 ID、名称和所属主题外，还直接附带描述、效果、
+    稀有度、解锁条件及是否可被牺牲，供统一搜索直接回答藏品问题。
     """
-    items: list[dict[str, str]] = []
+    items: list[dict[str, object]] = []
     seen_ids: set[str] = set()
 
     for match in matches:
@@ -213,6 +215,47 @@ def _build_search_items(
                         "ELITE": "精英",
                         "BOSS": "BOSS",
                     }.get(enemy_level, enemy_level),
+                })
+        elif match.key == "integrated_strategy_collectible":
+            collectible_values = value if isinstance(value, (list, tuple)) else [value]
+            for collectible in collectible_values:
+                if not isinstance(collectible, dict):
+                    continue
+                collectible_id = str(collectible.get("id") or "").strip()
+                collectible_name = str(
+                    collectible.get("name") or match.matched_text
+                ).strip()
+                if (
+                    not collectible_id
+                    or not collectible_name
+                    or collectible_id in seen_ids
+                ):
+                    continue
+
+                seen_ids.add(collectible_id)
+                items.append({
+                    "id": collectible_id,
+                    "name": collectible_name,
+                    "type": "集成战略藏品",
+                    "topic_id": str(collectible.get("topic_id") or "").strip(),
+                    "topic_name": str(collectible.get("topic_name") or "").strip(),
+                    "icon_id": str(collectible.get("icon_id") or "").strip(),
+                    "description": str(
+                        collectible.get("description") or ""
+                    ).strip(),
+                    "usage": str(collectible.get("usage") or "").strip(),
+                    "rarity": {
+                        "NORMAL": "普通",
+                        "RARE": "稀有",
+                        "SUPER_RARE": "超稀有",
+                    }.get(
+                        str(collectible.get("rarity") or "").strip(),
+                        str(collectible.get("rarity") or "").strip(),
+                    ),
+                    "unlock_condition": str(
+                        collectible.get("unlock_condition") or ""
+                    ).strip(),
+                    "can_sacrifice": bool(collectible.get("can_sacrifice")),
                 })
 
     return items
@@ -643,7 +686,7 @@ def _resolve_operator_by_id(
 
 
 # 原函数名 search_operator（2026-08-13 起重命名为 search，
-# 升级为资源统一搜索：干员、召唤物、皮肤、材料、关卡和敌人。
+# 升级为资源统一搜索：干员、召唤物、皮肤、材料、关卡、敌人和集成战略藏品。
 def search(
     context: AppContext,
     query: str,
@@ -667,8 +710,13 @@ def search(
     material_name_index_size = len(bundle.material_name_to_id) if bundle.material_name_to_id else 0
     stage_alias_index_size = len(bundle.stage_alias_to_ids) if bundle.stage_alias_to_ids else 0
     enemy_alias_index_size = len(bundle.enemy_alias_to_ids) if bundle.enemy_alias_to_ids else 0
+    collectible_alias_index_size = (
+        len(bundle.integrated_strategy_collectible_alias_to_ids)
+        if bundle.integrated_strategy_collectible_alias_to_ids
+        else 0
+    )
     logger.debug(
-        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s",
+        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s collectible_alias_index=%s",
         bundle_operators,
         name_index_size,
         token_name_index_size,
@@ -676,6 +724,7 @@ def search(
         material_name_index_size,
         stage_alias_index_size,
         enemy_alias_index_size,
+        collectible_alias_index_size,
     )
     if bundle_operators == 0 or name_index_size == 0:
         logger.warning(
@@ -684,7 +733,18 @@ def search(
             name_index_size,
         )
 
-    search_sources = build_sources(bundle, source_key=["name", "token_name", "skin", "material", "stage", "enemy"])
+    search_sources = build_sources(
+        bundle,
+        source_key=[
+            "name",
+            "token_name",
+            "skin",
+            "material",
+            "stage",
+            "enemy",
+            "integrated_strategy_collectible",
+        ],
+    )
     logger.debug("search: build_sources 返回 %s 个 source", len(search_sources))
 
     search_results = search_source_spec(normalized_query, sources=search_sources, n=max(limit, 1))
@@ -704,7 +764,7 @@ def search(
 
     if not items:
         logger.warning(
-            "search: 未找到干员、召唤物、皮肤、材料、关卡或敌人 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s",
+            "search: 未找到干员、召唤物、皮肤、材料、关卡、敌人或集成战略藏品 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s collectible_alias_index=%s",
             normalized_query,
             bundle_operators,
             name_index_size,
@@ -713,8 +773,14 @@ def search(
             material_name_index_size,
             stage_alias_index_size,
             enemy_alias_index_size,
+            collectible_alias_index_size,
         )
-        return QueryExecutionResult(message=f"未找到匹配的干员、召唤物、皮肤、材料、关卡或敌人: {normalized_query}")
+        return QueryExecutionResult(
+            message=(
+                "未找到匹配的干员、召唤物、皮肤、材料、关卡、敌人或"
+                f"集成战略藏品: {normalized_query}"
+            )
+        )
 
     return QueryExecutionResult(data={"items": items})
 

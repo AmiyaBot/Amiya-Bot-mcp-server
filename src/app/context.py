@@ -1,10 +1,11 @@
 # src/app/context.py
 from dataclasses import dataclass
-from typing import Optional
 
 from src.app.config import Config
 from src.data.repository.data_repository import DataRepository
 from src.app.card_service import CardService
+from src.app.remote_download_manager import RemoteDownloadManager
+
 
 @dataclass(slots=True)
 class AppContext:
@@ -13,3 +14,10 @@ class AppContext:
     card_service: CardService
     prefer_local_artifact_path: bool = False
     output_format: str = "markdown"
+    download_manager: RemoteDownloadManager | None = None
+
+    def __post_init__(self) -> None:
+        if self.download_manager is None:
+            self.download_manager = RemoteDownloadManager(
+                max_concurrency=self.cfg.RemoteAssetDownloadConcurrency,
+            )

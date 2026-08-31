@@ -41,6 +41,7 @@ config:
   gameDataRepo: "https://gitee.com/amiya-bot/amiya-bot-assets.git"
   commandServiceUrl: ""
   mcpDnsRebindingProtectionEnabled: false
+  remoteAssetDownloadConcurrency: 3
   logLevel: "DEBUG"
 
 resources: {}

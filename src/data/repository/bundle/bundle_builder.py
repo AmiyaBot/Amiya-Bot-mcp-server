@@ -60,6 +60,7 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
         ("building_data", "excel"),
         ("charword_table", "excel"),
         ("char_meta_table", "excel"),
+        ("roguelike_topic_table", "excel"),
     ]:
         tables["gamedata"][name] = _read_json(game_root / folder / f"{name}.json") or {}
 
@@ -84,6 +85,10 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
     materials, material_name_to_id = _build_materials(tables)
     stages, stage_alias_to_ids = _build_stages(tables, game_root)
     enemies, enemy_alias_to_ids = _build_enemies(tables)
+    (
+        integrated_strategy_collectibles,
+        integrated_strategy_collectible_alias_to_ids,
+    ) = _build_integrated_strategy_collectibles(tables)
 
     return DataBundle(
         version=version,
@@ -100,8 +105,102 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
         enemy_alias_to_ids=enemy_alias_to_ids,
         skins=skins,
         skin_name_to_id=skin_name_to_id,
+        integrated_strategy_collectibles=integrated_strategy_collectibles,
+        integrated_strategy_collectible_alias_to_ids=integrated_strategy_collectible_alias_to_ids,
         tables=tables,
     )
+
+
+def _build_integrated_strategy_collectibles(
+    tables,
+) -> tuple[Dict[str, Dict[str, Any]], Dict[str, list[str]]]:
+    """构建集成战略藏品数据及统一搜索索引。
+
+    roguelike_topic_table 的 items 还包含招募券、希望、骰子等模式内物品；
+    这里只收录游戏数据明确标记为 ``RELIC`` 的条目。
+    """
+    topic_table = get_table(
+        tables,
+        "roguelike_topic_table",
+        source="gamedata",
+        default={},
+    )
+    raw_topics = topic_table.get("topics") or {}
+    raw_details = topic_table.get("details") or {}
+    collectibles: Dict[str, Dict[str, Any]] = {}
+    aliases: Dict[str, list[str]] = {}
+
+    topics = sorted(
+        raw_topics.items(),
+        key=lambda pair: (
+            int(pair[1].get("sort") or 0) if isinstance(pair[1], dict) else 0,
+            str(pair[0]),
+        ),
+    )
+    for raw_topic_id, raw_topic in topics:
+        if not isinstance(raw_topic, dict):
+            continue
+        topic_id = str(raw_topic_id or "").strip()
+        topic_name = str(raw_topic.get("name") or "").strip()
+        detail = raw_details.get(topic_id) or {}
+        raw_items = detail.get("items") or {}
+        if not topic_id or not isinstance(raw_items, dict):
+            continue
+
+        for raw_item_id, raw in raw_items.items():
+            if not isinstance(raw, dict) or raw.get("type") != "RELIC":
+                continue
+            item_id = str(raw.get("id") or raw_item_id or "").strip()
+            name = str(raw.get("name") or "").strip()
+            if not item_id or not name:
+                continue
+
+            collectible = {
+                "id": item_id,
+                "name": name,
+                "description": html_tag_format(raw.get("description") or "")
+                .replace("\\n", "\n")
+                .strip(),
+                "usage": html_tag_format(raw.get("usage") or "")
+                .replace("\\n", "\n")
+                .strip(),
+                "obtain_approach": html_tag_format(raw.get("obtainApproach") or "")
+                .replace("\\n", "\n")
+                .strip(),
+                "rarity": str(raw.get("rarity") or "").strip(),
+                "icon_id": str(raw.get("iconId") or "").strip(),
+                "can_sacrifice": bool(raw.get("canSacrifice")),
+                "unlock_condition": html_tag_format(raw.get("unlockCondDesc") or "")
+                .replace("\\n", "\n")
+                .strip(),
+                "topic_id": topic_id,
+                "topic_name": topic_name,
+                "raw": raw,
+            }
+            if item_id in collectibles:
+                log.warning(
+                    "Duplicate integrated strategy collectible id: id=%s topic=%s",
+                    item_id,
+                    topic_id,
+                )
+                continue
+            collectibles[item_id] = collectible
+
+            for alias in {
+                item_id,
+                item_id.lower(),
+                item_id.upper(),
+                name,
+                remove_punctuation(name),
+            }:
+                normalized_alias = str(alias or "").strip()
+                if not normalized_alias:
+                    continue
+                bucket = aliases.setdefault(normalized_alias, [])
+                if item_id not in bucket:
+                    bucket.append(item_id)
+
+    return collectibles, aliases
 
 
 _ENEMY_ATTRIBUTE_PATHS = {

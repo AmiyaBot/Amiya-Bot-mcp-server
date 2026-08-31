@@ -16,7 +16,11 @@ async def build_context_from_disk(cfg) -> AppContext:
     cache_root = cfg.ResourcePath / "cache"
     repaired = 0
     failed = 0
-    for path in (cache_root / "cards", cache_root / "char_skin"):
+    for path in (
+        cache_root / "cards",
+        cache_root / "char_skin",
+        cache_root / "integrated_strategy_collectible_icons",
+    ):
         path_repaired, path_failed = repair_cache_file_permissions(path)
         repaired += path_repaired
         failed += path_failed

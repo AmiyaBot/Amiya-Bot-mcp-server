@@ -423,6 +423,22 @@ def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) ->
             continue_after_exact=False,
             allow_fuzzy=True,
         ),
+        SourceSpec(
+            key="integrated_strategy_collectible",
+            candidates=lambda: list(
+                (bundle.integrated_strategy_collectible_alias_to_ids or {}).keys()
+            ),
+            # 不同集成战略主题会复用部分藏品名，需要保留全部候选。
+            resolve=lambda k: [
+                bundle.integrated_strategy_collectibles[item_id]
+                for item_id in (
+                    bundle.integrated_strategy_collectible_alias_to_ids or {}
+                ).get(k, [])
+                if item_id in (bundle.integrated_strategy_collectibles or {})
+            ],
+            continue_after_exact=False,
+            allow_fuzzy=True,
+        ),
     ]
 
     if source_key:

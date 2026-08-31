@@ -5,11 +5,11 @@
 
 AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它基于本地游戏资源提供结构化数据和图片卡片，并附带命令行工具 `amiyabot-cli`。
 
-1.0.4 版本支持查询干员、技能、精英化与技能升级材料、模组、召唤物、皮肤、材料、关卡、敌人和游戏术语。
+1.0.4 版本支持查询干员、技能、精英化与技能升级材料、模组、召唤物、皮肤、材料、关卡、敌人、集成战略藏品和游戏术语。
 
 ## 功能
 
-- 通过统一搜索查找干员、召唤物、皮肤、材料、关卡和敌人
+- 通过统一搜索查找干员、召唤物、皮肤、材料、关卡、敌人和集成战略藏品
 - 返回结构化数据，并为适合展示的内容生成图片卡片
 - 通过 Streamable HTTP 提供 MCP 服务，可接入支持远程 MCP 的客户端
 - 提供 CLI、Docker 和 Helm 三种使用方式
@@ -19,7 +19,7 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 
 | 工具 | 用途 |
 | --- | --- |
-| `search` | 统一搜索入口，返回资源 ID 和类型 |
+| `search` | 统一搜索入口，返回资源 ID 和类型；集成战略藏品附带所属主题、效果、解锁条件和按需缓存的图标 URL |
 | `get_operator_basic_data` | 查询干员详情和干员卡片 |
 | `get_operator_skill` | 查询干员完整技能列表及所有等级数据 |
 | `get_operator_material` | 查询干员培养材料和材料卡片 |
@@ -164,6 +164,26 @@ Linux 全局配置默认位于 `~/.config/amiyabot-cli/config.json`；设置了 
 | `ResourcePath` | 游戏资源、缓存和日志所在目录 |
 | `GameDataRepo` | 资源仓库地址 |
 | `McpDnsRebindingProtectionEnabled` | 是否启用 MCP DNS rebinding protection |
+| `RemoteAssetDownloadConcurrency` | PRTS 等远程素材下载任务共享的最大并发数，默认 `3` |
+
+需要下载远程素材的任务应复用应用上下文中的下载管理器；单个请求可以独立设置超时、响应大小、允许主机和内容类型，所有请求共同受上述并发数限制：
+
+```python
+from src.app.remote_download_manager import (
+    RemoteDownloadRequest,
+    get_context_download_manager,
+)
+
+result = await get_context_download_manager(context).download(
+    RemoteDownloadRequest(
+        url="https://media.prts.wiki/path/to/asset.png",
+        allowed_hosts=frozenset({"media.prts.wiki"}),
+        allowed_content_types=frozenset({"image/png"}),
+    )
+)
+```
+
+批量任务可以调用同一管理器的 `download_many`；无需再自行创建并发信号量。
 
 只覆盖本机 CLI 的服务地址时，可以使用：
 

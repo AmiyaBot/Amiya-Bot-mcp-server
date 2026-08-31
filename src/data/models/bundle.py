@@ -45,5 +45,10 @@ class DataBundle:
     skin_name_to_id: Dict[str, str]
     """具名皮肤名 -> skin_id 的映射（供统一搜索使用，精英化立绘不收录）"""
 
+    integrated_strategy_collectibles: Dict[str, Dict[str, Any]]
+    """集成战略藏品字典，key 为藏品 item_id。"""
+    integrated_strategy_collectible_alias_to_ids: Dict[str, list[str]]
+    """藏品名称/ID -> item_id 列表，允许不同主题下的同名藏品并存。"""
+
     tables: Dict[str, Dict[str,Any]]
     """保留一些表，方便详情方法内部使用（避免再读磁盘）"""

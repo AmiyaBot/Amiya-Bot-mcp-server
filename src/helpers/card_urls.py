@@ -10,6 +10,7 @@ from src.app.config import Config
 
 DEFAULT_MOUNT_PATH = "/cards"
 CHAR_SKIN_MOUNT_PATH = "/char-skins"
+INTEGRATED_STRATEGY_COLLECTIBLE_ICON_MOUNT_PATH = "/integrated-strategy-collectible-icons"
 GAME_ASSETS_MOUNT_PATH = "/game-assets"
 
 
