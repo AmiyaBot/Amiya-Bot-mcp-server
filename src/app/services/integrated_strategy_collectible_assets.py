@@ -150,14 +150,15 @@ async def resolve_collectible_icon_artifact(
 async def attach_collectible_icon_artifacts(
     context: AppContext,
     response_payload: dict,
-) -> None:
-    """为统一搜索中的藏品候选按需缓存图标并附加本地 URL。"""
+) -> dict[str, IntegratedStrategyCollectibleIconArtifact]:
+    """为搜索藏品附加 URL，并返回可直接用于选择卡的图标产物。"""
+    artifacts: dict[str, IntegratedStrategyCollectibleIconArtifact] = {}
     data = response_payload.get("data")
     if not isinstance(data, dict):
-        return
+        return artifacts
     items = data.get("items")
     if not isinstance(items, list):
-        return
+        return artifacts
 
     async def attach_one(item: object) -> None:
         if not isinstance(item, dict) or item.get("type") != "集成战略藏品":
@@ -177,12 +178,16 @@ async def attach_collectible_icon_artifacts(
             return
         if artifact is None:
             return
+        item_id = str(item.get("id") or "").strip()
+        if item_id:
+            artifacts[item_id] = artifact
         if artifact.url:
             item["icon_url"] = artifact.url
         if context.prefer_local_artifact_path:
             item["icon_path"] = str(artifact.path)
 
     await asyncio.gather(*(attach_one(item) for item in items))
+    return artifacts
 
 
 def _normalize_icon_id(icon_id: str) -> str | None:

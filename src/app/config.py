@@ -15,6 +15,9 @@ CONFIG_FIELDS = (
     "CommandServiceUrl",
     "McpDnsRebindingProtectionEnabled",
     "RemoteAssetDownloadConcurrency",
+    "SearchCardCacheMaxEntries",
+    "SearchCardCacheMaxBytes",
+    "SearchCardCacheMaxEntryBytes",
 )
 
 @dataclass
@@ -26,6 +29,9 @@ class Config:
     CommandServiceUrl: Optional[str] = None
     McpDnsRebindingProtectionEnabled: bool = False
     RemoteAssetDownloadConcurrency: int = 3
+    SearchCardCacheMaxEntries: int = 128
+    SearchCardCacheMaxBytes: int = 256 * 1024 * 1024
+    SearchCardCacheMaxEntryBytes: int = 16 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -157,6 +163,18 @@ def inspect_config_state() -> ConfigState:
             merged_config.get("RemoteAssetDownloadConcurrency", 3),
             default=3,
         ),
+        SearchCardCacheMaxEntries=_coerce_positive_int(
+            merged_config.get("SearchCardCacheMaxEntries", 128),
+            default=128,
+        ),
+        SearchCardCacheMaxBytes=_coerce_positive_int(
+            merged_config.get("SearchCardCacheMaxBytes", 256 * 1024 * 1024),
+            default=256 * 1024 * 1024,
+        ),
+        SearchCardCacheMaxEntryBytes=_coerce_positive_int(
+            merged_config.get("SearchCardCacheMaxEntryBytes", 16 * 1024 * 1024),
+            default=16 * 1024 * 1024,
+        ),
     )
 
     return ConfigState(
@@ -177,4 +195,3 @@ def resolve_merged_config_paths() -> tuple[Path, ...]:
 
 def load_from_disk() -> Config:
     return inspect_config_state().config
-

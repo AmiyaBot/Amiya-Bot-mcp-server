@@ -43,4 +43,7 @@ async def build_context_from_disk(cfg) -> AppContext:
         card_service=card_service
     )
 
+    if ctx.search_card_cache is not None:
+        await ctx.search_card_cache.prune()
+
     return ctx

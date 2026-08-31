@@ -42,6 +42,9 @@ config:
   commandServiceUrl: ""
   mcpDnsRebindingProtectionEnabled: false
   remoteAssetDownloadConcurrency: 3
+  searchCardCacheMaxEntries: 128
+  searchCardCacheMaxBytes: 268435456
+  searchCardCacheMaxEntryBytes: 16777216
   logLevel: "DEBUG"
 
 resources: {}

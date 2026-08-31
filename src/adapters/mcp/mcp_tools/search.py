@@ -11,15 +11,13 @@ from src.adapters.mcp.tool_logging import log_tool_exception
 from src.adapters.mcp.tool_logging import log_tool_not_ready
 from src.adapters.mcp.tool_logging import log_tool_start
 from src.app.context import AppContext
-from src.app.services.integrated_strategy_collectible_assets import (
-    attach_collectible_icon_artifacts,
-)
-from src.app.services.operator_queries import search as search_query
+from src.app.services.search_queries import query_search
 
 logger = logging.getLogger(__name__)
 
 _SEARCH_TOOL_DESC = """本工具是资源统一搜索入口，任何查询都应先调用本工具。
 支持按名称或代号模糊搜索「干员」「干员的召唤物」「干员皮肤」「材料」「关卡」「敌人」与「集成战略藏品」，返回候选的 id、name、type；召唤物、皮肤、关卡、敌人和集成战略藏品条目会附带用于区分候选的字段。
+存在多个候选时还会返回 card_image_url 分类选择卡；卡片序号与 items 原始顺序一致，应优先展示该卡并让用户回复序号或名称。单个明确候选不生成搜索选择卡。
 - 干员：用返回的 id 调用 get_operator_basic_data（推荐，返回结构化数据 + card_image_url 卡片图片）；需要完整技能列表及所有技能等级数据时调用 get_operator_skill；培养材料和模组分别调用 get_operator_material / get_operator_modules；
 - 召唤物：用返回的 id 调用 get_token_detail 查看召唤物详情；也可以用 operator_id 查看所属干员。
 - 皮肤：用返回的 operator_id 调用 get_operator_skins 查看所属干员的皮肤。
@@ -73,12 +71,11 @@ def register_search_tool(mcp, app):
             else:
                 logger.warning("search: data_repository 为 None")
 
-            result = search_query(
+            result = await query_search(
                 context,
                 query=query,
             )
             result_payload = result.to_response()
-            await attach_collectible_icon_artifacts(context, result_payload)
             log_tool_end(logger, tool_name, started_at, result_payload)
             return result_payload
         except Exception:

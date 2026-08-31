@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>搜索结果</title>
+  <style>
+    @font-face {
+      font-family: "Harmony";
+      {% if template_font_url %}
+      src: url("{{ template_font_url }}") format("truetype");
+      {% else %}
+      src: local("HarmonyOS Sans SC"), local("Noto Sans CJK SC"), local("Noto Sans SC");
+      {% endif %}
+      font-display: swap;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: "Harmony", sans-serif !important;
+    }
+
+    html,
+    body {
+      width: 1200px;
+      margin: 0;
+      background: #e9edf0;
+      color: #20252b;
+    }
+
+    #template {
+      width: 1200px;
+      min-height: 720px;
+      padding: 48px 54px 60px;
+      background:
+        linear-gradient(135deg, rgb(0 158 206 / 10%), transparent 34%),
+        linear-gradient(315deg, rgb(31 38 46 / 10%), transparent 30%),
+        #edf0f2;
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 30px;
+      padding-bottom: 20px;
+      border-bottom: 4px solid #20252b;
+    }
+
+    .title {
+      font-size: 44px;
+      font-weight: 900;
+      letter-spacing: 2px;
+    }
+
+    .summary {
+      color: #5f6973;
+      font-size: 20px;
+      line-height: 1.45;
+      text-align: right;
+    }
+
+    .summary strong {
+      color: #008fc0;
+      font-size: 25px;
+    }
+
+    .group {
+      margin-top: 38px;
+    }
+
+    .group-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .group-title {
+      font-size: 29px;
+      font-weight: 900;
+      letter-spacing: 1px;
+    }
+
+    .group-count {
+      min-width: 35px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      background: #20252b;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .grid {
+      display: grid;
+      gap: 22px;
+    }
+
+    .grid.portrait,
+    .grid.square {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .grid.stage {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+
+    .result {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgb(25 33 40 / 15%);
+    }
+
+    .image-box {
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(145deg, rgb(0 150 197 / 15%), rgb(32 37 43 / 8%)),
+        #dfe4e7;
+    }
+
+    .portrait .image-box {
+      aspect-ratio: 1 / 2;
+    }
+
+    .square .image-box {
+      aspect-ratio: 1 / 1;
+    }
+
+    .stage .image-box {
+      aspect-ratio: 16 / 9;
+      background: #20252b;
+    }
+
+    .image-box img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .placeholder {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      color: rgb(32 37 43 / 42%);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+
+    .index {
+      position: absolute;
+      z-index: 2;
+      top: 0;
+      left: 0;
+      min-width: 45px;
+      padding: 7px 10px;
+      background: #009fce;
+      color: #fff;
+      font-size: 20px;
+      font-weight: 900;
+      line-height: 1;
+      text-align: center;
+      box-shadow: 4px 4px 0 rgb(255 255 255 / 80%);
+    }
+
+    .info {
+      min-height: 94px;
+      padding: 14px 15px 16px;
+      border-top: 4px solid #009fce;
+    }
+
+    .name {
+      overflow: hidden;
+      font-size: 21px;
+      font-weight: 850;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .subtitle,
+    .meta {
+      overflow: hidden;
+      margin-top: 6px;
+      color: #68727b;
+      font-size: 14px;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .meta {
+      color: #0085ae;
+      font-weight: 750;
+    }
+
+    .operator.result {
+      border: 1px solid rgb(0 159 206 / 25%);
+    }
+
+    .skin.result {
+      background: #fff8fc;
+      border: 1px solid rgb(194 76 142 / 25%);
+    }
+
+    .skin .info {
+      border-top-color: #c24c8e;
+    }
+
+    .skin .index {
+      background: #c24c8e;
+    }
+
+    .token.result {
+      border: 2px solid #3b8f79;
+      border-radius: 18px 4px 18px 4px;
+    }
+
+    .token .info {
+      border-top-color: #3b8f79;
+    }
+
+    .token .index {
+      background: #3b8f79;
+    }
+
+    .enemy.result {
+      background: #24292f;
+      border: 2px solid #b8413c;
+      border-radius: 2px;
+      color: #fff;
+    }
+
+    .enemy .image-box {
+      background: radial-gradient(circle, #5b6269 0%, #23282e 72%);
+    }
+
+    .enemy .info {
+      border-top-color: #b8413c;
+    }
+
+    .enemy .index {
+      background: #b8413c;
+    }
+
+    .enemy .subtitle,
+    .enemy .meta {
+      color: #d2d7dc;
+    }
+
+    .material.result {
+      background: #fffdf4;
+      border: 2px solid #c89d3d;
+    }
+
+    .material .image-box {
+      background: radial-gradient(circle, #fff 0%, #eee5c7 80%);
+    }
+
+    .material .info {
+      border-top-color: #c89d3d;
+    }
+
+    .material .index {
+      background: #c89d3d;
+    }
+
+    .collectible.result {
+      background: #f8f4ff;
+      border: 2px solid #7560a8;
+      border-radius: 4px 14px 4px 14px;
+    }
+
+    .collectible .image-box {
+      background:
+        radial-gradient(circle, rgb(255 255 255 / 90%), transparent 55%),
+        linear-gradient(135deg, #e9e0ff, #d4c9ec);
+    }
+
+    .collectible .info {
+      border-top-color: #7560a8;
+    }
+
+    .collectible .index {
+      background: #7560a8;
+    }
+
+    .collectible .meta {
+      color: #665092;
+    }
+
+    .stage.result {
+      border: 1px solid rgb(32 37 43 / 35%);
+      border-radius: 3px;
+    }
+
+    .stage .info {
+      min-height: 92px;
+      border-top-color: #20252b;
+    }
+
+    .stage .index {
+      background: #20252b;
+    }
+
+    .stage .name {
+      font-size: 24px;
+    }
+
+    .footer {
+      margin-top: 38px;
+      padding-top: 18px;
+      border-top: 1px solid rgb(32 37 43 / 20%);
+      color: #69737c;
+      font-size: 18px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <main id="template">
+    <header class="header">
+      <div class="title">搜索结果</div>
+      <div class="summary">
+        共 <strong>{{ total }}</strong> 项候选<br>
+        回复序号或名称继续查询
+      </div>
+    </header>
+
+    {% for group in groups %}
+    <section class="group {{ group.css_class }}-group">
+      <div class="group-header">
+        <div class="group-title">{{ group.type | e }}</div>
+        <div class="group-count">{{ group.count }}</div>
+      </div>
+      <div class="grid {{ group.layout }}">
+        {% for item in group["items"] %}
+        <article class="result {{ group.css_class }}">
+          <div class="image-box">
+            {% if item.image_data %}
+            <img src="{{ item.image_data }}" alt="{{ item.name | e }}">
+            {% else %}
+            <div class="placeholder">暂无预览</div>
+            {% endif %}
+            <div class="index">{{ item.index }}</div>
+          </div>
+          <div class="info">
+            <div class="name">{{ item.name | e }}</div>
+            {% if item.subtitle %}<div class="subtitle">{{ item.subtitle | e }}</div>{% endif %}
+            {% if item.meta %}<div class="meta">{{ item.meta | e }}</div>{% endif %}
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+
+    <footer class="footer">
+      {% if remaining > 0 %}
+      图片展示前 {{ displayed }} 项，另有 {{ remaining }} 项可在结构化结果中查看
+      {% else %}
+      序号与统一搜索返回顺序一致
+      {% endif %}
+    </footer>
+  </main>
+</body>
+</html>

@@ -27,6 +27,7 @@ test/
 !tests/test_data_repository_refresh.py
 !tests/test_integrated_strategy_collectible.py
 !tests/test_remote_download_manager.py
+!tests/test_search_card.py
 
 # CLI/Web 运行产物
 data/local/command-service.log

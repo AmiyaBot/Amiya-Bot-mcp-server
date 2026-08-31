@@ -239,7 +239,7 @@ def _build_drops(context: AppContext, bundle, stage: Stage) -> list[dict[str, An
     return result
 
 
-def _map_paths(resource_root: Path, stage_id: str) -> list[Path]:
+def resolve_stage_map_paths(resource_root: Path, stage_id: str) -> list[Path]:
     map_root = resource_root / "assets" / "map"
     base_id = str(stage_id or "").replace("#f#", "")
     candidates = sorted(
@@ -260,7 +260,7 @@ def _map_paths(resource_root: Path, stage_id: str) -> list[Path]:
 
 def _build_maps(context: AppContext, stage: Stage) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
-    for path in _map_paths(context.cfg.ResourcePath, stage.id):
+    for path in resolve_stage_map_paths(context.cfg.ResourcePath, stage.id):
         relative = str(path.relative_to(context.cfg.ResourcePath)).replace("\\", "/")
         result.append(
             {

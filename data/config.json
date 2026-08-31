@@ -4,5 +4,8 @@
     "BaseUrl": "http://127.0.0.1:9000/",
     "CommandServiceUrl": "http://127.0.0.1:9000/",
     "McpDnsRebindingProtectionEnabled": false,
-    "RemoteAssetDownloadConcurrency": 3
+    "RemoteAssetDownloadConcurrency": 3,
+    "SearchCardCacheMaxEntries": 128,
+    "SearchCardCacheMaxBytes": 268435456,
+    "SearchCardCacheMaxEntryBytes": 16777216
 }

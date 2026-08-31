@@ -19,7 +19,7 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 
 | 工具 | 用途 |
 | --- | --- |
-| `search` | 统一搜索入口，返回资源 ID 和类型；集成战略藏品附带所属主题、效果、解锁条件和按需缓存的图标 URL |
+| `search` | 统一搜索入口，返回资源 ID 和类型；多候选时附带按类型展示的选择卡；集成战略藏品附带所属主题、效果、解锁条件和按需缓存的图标 URL |
 | `get_operator_basic_data` | 查询干员详情和干员卡片 |
 | `get_operator_skill` | 查询干员完整技能列表及所有等级数据 |
 | `get_operator_material` | 查询干员培养材料和材料卡片 |
@@ -33,6 +33,11 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 | `get_glossary` | 查询游戏术语及计算公式 |
 
 除术语查询外，建议先调用 `search`，再将返回的 ID 传给对应的详情工具。
+
+统一搜索存在多个候选时会按类型生成选择卡，图片中的序号与结构化
+`items` 顺序一致。选择卡使用全部有序结果 ID 的 SHA-256 作为缓存键，
+因此返回相同候选和顺序的别名查询可以复用卡片；缓存按条目数和字节数
+双重限制执行 LRU 淘汰。
 
 ## 运行 MCP 服务
 
@@ -166,6 +171,9 @@ Linux 全局配置默认位于 `~/.config/amiyabot-cli/config.json`；设置了 
 | `GameDataRepo` | 资源仓库地址 |
 | `McpDnsRebindingProtectionEnabled` | 是否启用 MCP DNS rebinding protection |
 | `RemoteAssetDownloadConcurrency` | PRTS 等远程素材下载任务共享的最大并发数，默认 `3` |
+| `SearchCardCacheMaxEntries` | 统一搜索选择卡最多缓存的结果集合数，默认 `128` |
+| `SearchCardCacheMaxBytes` | 统一搜索选择卡缓存的总字节上限，默认 `268435456`（256 MiB） |
+| `SearchCardCacheMaxEntryBytes` | 单个统一搜索选择卡缓存目录的字节上限，默认 `16777216`（16 MiB） |
 
 需要下载远程素材的任务应复用应用上下文中的下载管理器；单个请求可以独立设置超时、响应大小、允许主机和内容类型，所有请求共同受上述并发数限制：
 
