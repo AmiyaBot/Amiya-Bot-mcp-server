@@ -17,7 +17,7 @@ from src.helpers.card_urls import build_card_url
 
 logger = logging.getLogger(__name__)
 
-COLLECTIBLE_CARD_REVISION = "collectible-v1"
+COLLECTIBLE_CARD_REVISION = "collectible-v3"
 COLLECTIBLE_CARD_TEMPLATE = "integrated_strategy_collectible"
 
 

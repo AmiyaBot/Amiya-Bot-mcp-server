@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -77,7 +78,7 @@ def test_collectible_is_available_from_unified_search(collectible_context):
         "usage": "立即进阶三个干员（不消耗希望）",
         "rarity": "超稀有",
         "unlock_condition": "在多局游戏中累计进阶总共35名干员",
-        "can_sacrifice": True,
+        "can_exchange": True,
     }
 
 
@@ -326,6 +327,8 @@ def test_collectible_detail_returns_structured_data_and_card(
     assert response["data"]["name"] == "古旧铸物"
     assert response["data"]["topic_name"] == "岁的界园志异"
     assert response["data"]["obtain_approach"] == "在集成战略模式中获得"
+    assert response["data"]["can_exchange"] is True
+    assert "can_sacrifice" not in response["data"]
     assert response["data"]["icon_url"].endswith(
         "/integrated-strategy-collectible-icons/rogue_5_relic_legacy_11.png"
     )
@@ -336,7 +339,15 @@ def test_collectible_detail_returns_structured_data_and_card(
     rendered_html, render_cfg = transformer.inputs[0]
     assert "古旧铸物" in rendered_html
     assert "data:image/png;base64," in rendered_html
+    assert "可交换" in rendered_html
+    assert "可被牺牲" not in rendered_html
+    assert "主题代号" not in rendered_html
     assert render_cfg["viewport"]["width"] == 1000
+
+    json_artifact_path = Path(response["image_path"]).with_name("artifact.json")
+    json_payload = json.loads(json_artifact_path.read_text(encoding="utf-8"))
+    assert json_payload["data"]["topic_id"] == "rogue_5"
+    assert json_payload["data"]["topic_name"] == "岁的界园志异"
 
 
 def test_same_name_collectible_ids_generate_unique_detail_cards(

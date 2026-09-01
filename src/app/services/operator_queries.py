@@ -103,7 +103,9 @@ def _build_search_items(
     其中 operator_id/operator_name 为皮肤归属干员。
     敌人条目：{"id", "name", "type": "敌人", "enemy_index", "enemy_level"}。
     集成战略藏品条目除 ID、名称和所属主题外，还直接附带描述、效果、
-    稀有度、解锁条件及是否可被牺牲，供统一搜索直接回答藏品问题。
+    稀有度、解锁条件及是否可交换，供统一搜索直接回答藏品问题。
+    通过远端别名命中的干员、材料或敌人保留原有 type，并额外附带
+    ``from_alias``，不会暴露独立的“别名”类型。
     """
     items: list[dict[str, object]] = []
     seen_ids: set[str] = set()
@@ -112,17 +114,32 @@ def _build_search_items(
         value = match.value
         if match.key == "name":
             # 干员
-            operator_id = str(getattr(value, "id", "") or "").strip()
-            operator_name = str(getattr(value, "name", "") or match.matched_text).strip()
-            if not operator_id or not operator_name or operator_id in seen_ids:
-                continue
+            operator_values = (
+                value if isinstance(value, (list, tuple)) else [value]
+            )
+            for operator in operator_values:
+                operator_id = str(
+                    getattr(operator, "id", "") or ""
+                ).strip()
+                operator_name = str(
+                    getattr(operator, "name", "") or match.matched_text
+                ).strip()
+                if (
+                    not operator_id
+                    or not operator_name
+                    or operator_id in seen_ids
+                ):
+                    continue
 
-            seen_ids.add(operator_id)
-            items.append({
-                "id": operator_id,
-                "name": operator_name,
-                "type": "干员",
-            })
+                seen_ids.add(operator_id)
+                item: dict[str, object] = {
+                    "id": operator_id,
+                    "name": operator_name,
+                    "type": "干员",
+                }
+                if match.from_alias:
+                    item["from_alias"] = match.from_alias
+                items.append(item)
         elif match.key == "token_name":
             # 召唤物：只返回有主的召唤物（"干员的召唤物"）
             token_id = str(getattr(value, "id", "") or "").strip()
@@ -157,17 +174,36 @@ def _build_search_items(
                 "operator_name": operator_name,
             })
         elif match.key == "material":
-            material_id = str(value.get("id") or "").strip() if isinstance(value, dict) else ""
-            material_name = str(value.get("name") or match.matched_text).strip() if isinstance(value, dict) else ""
-            if not material_id or not material_name or material_id in seen_ids:
-                continue
+            material_values = (
+                value if isinstance(value, (list, tuple)) else [value]
+            )
+            for material in material_values:
+                material_id = (
+                    str(material.get("id") or "").strip()
+                    if isinstance(material, dict)
+                    else ""
+                )
+                material_name = (
+                    str(material.get("name") or match.matched_text).strip()
+                    if isinstance(material, dict)
+                    else ""
+                )
+                if (
+                    not material_id
+                    or not material_name
+                    or material_id in seen_ids
+                ):
+                    continue
 
-            seen_ids.add(material_id)
-            items.append({
-                "id": material_id,
-                "name": material_name,
-                "type": "材料",
-            })
+                seen_ids.add(material_id)
+                item = {
+                    "id": material_id,
+                    "name": material_name,
+                    "type": "材料",
+                }
+                if match.from_alias:
+                    item["from_alias"] = match.from_alias
+                items.append(item)
         elif match.key == "stage":
             stage_values = value if isinstance(value, (list, tuple)) else [value]
             for stage in stage_values:
@@ -208,7 +244,7 @@ def _build_search_items(
 
                 seen_ids.add(enemy_id)
                 enemy_level = str(getattr(enemy, "enemy_level", "") or "").strip()
-                items.append({
+                item = {
                     "id": enemy_id,
                     "name": enemy_name,
                     "type": "敌人",
@@ -218,7 +254,10 @@ def _build_search_items(
                         "ELITE": "精英",
                         "BOSS": "BOSS",
                     }.get(enemy_level, enemy_level),
-                })
+                }
+                if match.from_alias:
+                    item["from_alias"] = match.from_alias
+                items.append(item)
         elif match.key == "integrated_strategy_collectible":
             collectible_values = value if isinstance(value, (list, tuple)) else [value]
             for collectible in collectible_values:
@@ -695,8 +734,18 @@ def search(
         if bundle.integrated_strategy_collectible_alias_to_ids
         else 0
     )
+    alias_repository = getattr(context, "search_alias_repository", None)
+    alias_snapshot = (
+        alias_repository.get_snapshot()
+        if alias_repository is not None
+        else None
+    )
+    alias_to_origins = (
+        getattr(alias_snapshot, "alias_to_origins", {}) or {}
+    )
+    remote_alias_index_size = len(alias_to_origins)
     logger.debug(
-        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s collectible_alias_index=%s",
+        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s collectible_alias_index=%s remote_alias_index=%s",
         bundle_operators,
         name_index_size,
         token_name_index_size,
@@ -705,6 +754,7 @@ def search(
         stage_alias_index_size,
         enemy_alias_index_size,
         collectible_alias_index_size,
+        remote_alias_index_size,
     )
     if bundle_operators == 0 or name_index_size == 0:
         logger.warning(
@@ -724,6 +774,7 @@ def search(
             "enemy",
             "integrated_strategy_collectible",
         ],
+        alias_to_origins=alias_to_origins,
     )
     logger.debug("search: build_sources 返回 %s 个 source", len(search_sources))
 
@@ -744,7 +795,7 @@ def search(
 
     if not items:
         logger.warning(
-            "search: 未找到干员、召唤物、皮肤、材料、关卡、敌人或集成战略藏品 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s collectible_alias_index=%s",
+            "search: 未找到干员、召唤物、皮肤、材料、关卡、敌人或集成战略藏品 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s collectible_alias_index=%s remote_alias_index=%s",
             normalized_query,
             bundle_operators,
             name_index_size,
@@ -754,6 +805,7 @@ def search(
             stage_alias_index_size,
             enemy_alias_index_size,
             collectible_alias_index_size,
+            remote_alias_index_size,
         )
         return QueryExecutionResult(
             message=(

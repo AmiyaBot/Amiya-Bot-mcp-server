@@ -1,12 +1,12 @@
 # MCP 工具说明
 
-本服务对外暴露 10 个 MCP 工具，通过 SSE 协议提供。`search` 是资源统一搜索入口（任何查询都应从它开始），干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material` / `get_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`，关卡查询流程为 `search` → `get_stage_data`。
+本服务对外暴露 12 个 MCP 工具，主要通过 Streamable HTTP 提供，并保留旧 SSE 入口。`search` 是资源统一搜索入口（任何查询都应从它开始），干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material` / `get_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`，关卡查询流程为 `search` → `get_stage_data`，敌人查询流程为 `search` → `get_enemy_data`，集成战略藏品查询流程为 `search` → `get_integrated_strategy_collectible_detail`。
 
 ---
 
 ## 1. search — 资源统一搜索（任何查询的入口）
 
-本服务所有查询的统一入口：按名称、代号模糊搜索「干员」「干员的召唤物」「干员皮肤（具名时装）」「材料」与「关卡」，返回候选实体的 `id`、`name` 和 `type`。拿到 `id` 后，再调用对应详情工具。召唤物、皮肤和关卡条目会附带下游查询所需的附加字段。
+本服务所有查询的统一入口：按名称、代号或常用别名模糊搜索「干员」「干员的召唤物」「干员皮肤（具名时装）」「材料」「关卡」「敌人」与「集成战略藏品」，返回候选实体的 `id`、`name` 和 `type`。拿到 `id` 后，再调用对应详情工具。服务启动后立即尝试同步一次旧版 AmiyaBot 全局别名表，之后每小时刷新；同步失败时保留上一版快照。
 
 > 注：本工具是统一搜索入口，可搜索范围未来会继续扩展（扩展内容不会提前暴露在 MCP 说明中）。
 
@@ -23,7 +23,7 @@
 {
   "data": {
     "items": [
-      {"id": "char_002_amiya", "name": "阿米娅", "type": "干员"},
+      {"id": "char_180_amgoat", "name": "艾雅法拉", "type": "干员", "from_alias": "小羊"},
       {"id": "token_10002_kalts_mon3tr", "name": "Mon3tr", "type": "召唤物", "operator_id": "char_003_kalts", "operator_name": "凯尔希"},
       {"id": "char_002_amiya@winter#1", "name": "报童", "type": "皮肤", "operator_id": "char_002_amiya", "operator_name": "阿米娅"},
       {"id": "main_08-17", "name": "昂首，足践烈焰", "type": "关卡", "code": "JT8-3", "difficulty": "普通", "stage_type": "主线"}
@@ -33,7 +33,8 @@
 ```
 
 字段说明：
-- `type`：实体类型，当前为 `干员`、`召唤物`、`皮肤`、`材料` 或 `关卡`。
+- `type`：实体真实类型，不会返回独立的“别名”类型。
+- `from_alias`：仅在远端别名候选命中时出现，值为实际命中的别名；正式名称命中不返回此字段。目前适用于干员、材料和敌人。
 - 干员条目：`id` 为干员 ID，可直接传给干员详情工具。
 - 召唤物条目：`id` 为召唤物 ID，传给 `get_token_detail` 查看召唤物详情；`operator_id` / `operator_name` 为该召唤物所属干员（也可用于查看所属干员）。未挂靠任何干员的召唤物不会出现在结果中。
 - 皮肤条目：`id` 为皮肤 ID（skin_id）；`operator_id` / `operator_name` 为皮肤归属干员，用 `operator_id` 调用 `get_operator_skins` 查看该干员全部皮肤与皮肤卡片。仅具名皮肤（有时装名）可被搜索，精英化立绘（初始/精英一/精英二）无独立名称、不进入搜索结果。
@@ -49,7 +50,7 @@
 {"message": "未找到匹配的干员、召唤物、皮肤、材料或关卡: xxx"}
 ```
 
-> 提示：若搜不到结果，可能是用户使用了干员外号（非正式称呼）。此时可先联网搜索该外号对应的干员正式名称，再用正式名称重新搜索。
+> 提示：若搜不到结果，可能是新外号尚未进入远端别名表，此时可联网确认正式名称后重新搜索。
 
 ### 排序规则
 

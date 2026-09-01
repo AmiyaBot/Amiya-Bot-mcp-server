@@ -31,7 +31,7 @@ def build_collectible_payload(
         "unlock_condition": str(
             collectible.get("unlock_condition") or ""
         ).strip(),
-        "can_sacrifice": bool(collectible.get("can_sacrifice")),
+        "can_exchange": bool(collectible.get("can_sacrifice")),
     }
     if include_obtain_approach:
         payload["obtain_approach"] = str(

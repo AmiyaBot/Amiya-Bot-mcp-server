@@ -69,7 +69,7 @@
     .label { margin-bottom: 8px; color: #cdb16f; font-size: 13px; font-weight: 800; letter-spacing: 2px; }
     .effect-text { font-size: 25px; font-weight: 700; line-height: 1.5; }
     .description { margin: 22px 4px 0; color: #c7cfcb; font-size: 18px; font-style: italic; line-height: 1.65; }
-    .details { display: grid; grid-template-columns: 1.25fr 1fr .72fr; gap: 12px; margin-top: 22px; }
+    .details { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; margin-top: 22px; }
     .detail { min-height: 91px; padding: 14px 16px; background: rgb(255 255 255 / 5%); border-top: 1px solid #58615e; }
     .detail-value { color: #edf0ee; font-size: 16px; line-height: 1.45; }
     .footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 25px; color: #77817c; font-size: 12px; letter-spacing: .4px; }
@@ -92,7 +92,7 @@
       <div class="topic">{{ collectible.topic_name | e }}</div>
       <div class="badges">
         {% if collectible.rarity %}<span class="badge rarity">{{ collectible.rarity | e }}</span>{% endif %}
-        <span class="badge">{{ "可被牺牲" if collectible.can_sacrifice else "不可被牺牲" }}</span>
+        <span class="badge">{{ "可交换" if collectible.can_exchange else "不可交换" }}</span>
       </div>
     </div>
   </section>
@@ -114,10 +114,6 @@
     <div class="detail">
       <div class="label">获取方式</div>
       <div class="detail-value">{{ (collectible.obtain_approach or "集成战略模式内获得") | e }}</div>
-    </div>
-    <div class="detail">
-      <div class="label">主题代号</div>
-      <div class="detail-value">{{ collectible.topic_id | e }}</div>
     </div>
   </section>
 

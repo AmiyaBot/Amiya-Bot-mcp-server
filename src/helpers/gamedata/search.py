@@ -2,7 +2,7 @@
 from typing import Any, Literal
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Callable, List, Optional, Sequence, Union
+from typing import Callable, List, Mapping, Optional, Sequence, Union
 
 from src.domain.models.operator import Operator
 from src.data.models.bundle import DataBundle
@@ -20,6 +20,7 @@ class MatchResult:
     score: float          # 可选：相似度得分（如果你的 find_most_similar 能返回）
     source_order: int     # SourceSpec 的顺序，用来稳定排序
     query_order: int      # query 在传入数组中的顺序，用来稳定同级排序
+    from_alias: str | None = None  # 远端别名命中时记录实际候选词
 
 @dataclass
 class SearchResults:
@@ -40,6 +41,7 @@ class SourceSpec:
     key: str
     candidates: Callable[[], Sequence[str]]
     resolve: Callable[[str], Any]
+    from_alias: Callable[[str], Optional[str]] | None = None
 
     # 命中 exact 后是否继续往下做 contains/similar
     continue_after_exact: bool = False
@@ -111,6 +113,7 @@ def _search_one_query(
                 score=1.0,
                 source_order=si,
                 query_order=query_order,   # ✅
+                from_alias=spec.from_alias(c) if spec.from_alias else None,
             ))
 
         # 如果全局禁止模糊，直接跳过后续
@@ -144,6 +147,7 @@ def _search_one_query(
                     score=contains_score(c),
                     source_order=si,
                     query_order=query_order,  # ✅
+                    from_alias=spec.from_alias(c) if spec.from_alias else None,
                 ))
             # 规则：如果有 contains，就不做逐字相似度
             continue
@@ -167,6 +171,7 @@ def _search_one_query(
                 score=s,
                 source_order=si,
                 query_order=query_order,  # ✅
+                from_alias=spec.from_alias(c) if spec.from_alias else None,
             ))
 
     return all_results
@@ -348,13 +353,121 @@ def search_source_spec(
 
     return SearchResults(matches=deduped)
 
-def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) -> List[SourceSpec]:
+def _build_external_alias_indices(
+    bundle: DataBundle,
+    alias_to_origins: Mapping[str, Sequence[str]],
+) -> tuple[
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list[str]],
+]:
+    """把远端 ``别名 -> 原词`` 表解析为当前 bundle 中的资源 ID。
+
+    原词可以继续指向另一个别名，例如 ``先蒂 -> 蒂蒂 -> 斯卡蒂``。
+    只接受最终能精确落到干员、材料或敌人的链路，并丢弃循环与失效记录。
+    """
+    operator_aliases: dict[str, list[str]] = {}
+    material_aliases: dict[str, list[str]] = {}
+    enemy_aliases: dict[str, list[str]] = {}
+    memo: dict[str, tuple[tuple[str, str], ...]] = {}
+
+    def resolve_name(
+        name: str,
+        resolving: frozenset[str],
+    ) -> tuple[tuple[str, str], ...]:
+        if name in memo:
+            return memo[name]
+
+        direct: list[tuple[str, str]] = []
+        operator_id = (bundle.operator_name_to_id or {}).get(name)
+        if operator_id in (bundle.operators or {}):
+            direct.append(("operator", operator_id))
+
+        material_id = (bundle.material_name_to_id or {}).get(name)
+        if material_id in (bundle.materials or {}):
+            direct.append(("material", material_id))
+
+        for enemy_id in (bundle.enemy_alias_to_ids or {}).get(name, []):
+            if enemy_id in (bundle.enemies or {}):
+                direct.append(("enemy", enemy_id))
+
+        if direct:
+            result = tuple(dict.fromkeys(direct))
+            memo[name] = result
+            return result
+
+        if name in resolving:
+            return ()
+
+        chained: list[tuple[str, str]] = []
+        next_resolving = resolving | {name}
+        for origin in alias_to_origins.get(name, ()):
+            normalized_origin = str(origin or "").strip()
+            if normalized_origin:
+                chained.extend(resolve_name(normalized_origin, next_resolving))
+
+        result = tuple(dict.fromkeys(chained))
+        memo[name] = result
+        return result
+
+    for raw_alias, raw_origins in alias_to_origins.items():
+        alias = str(raw_alias or "").strip()
+        if not alias:
+            continue
+
+        targets: list[tuple[str, str]] = []
+        for raw_origin in raw_origins:
+            origin = str(raw_origin or "").strip()
+            if origin:
+                targets.extend(resolve_name(origin, frozenset({alias})))
+
+        for target_type, target_id in dict.fromkeys(targets):
+            if target_type == "operator":
+                operator_aliases.setdefault(alias, []).append(target_id)
+            elif target_type == "material":
+                material_aliases.setdefault(alias, []).append(target_id)
+            elif target_type == "enemy":
+                enemy_aliases.setdefault(alias, []).append(target_id)
+
+    return operator_aliases, material_aliases, enemy_aliases
+
+
+def build_sources(
+    bundle: DataBundle,
+    source_key: Optional[List[str]] = None,
+    *,
+    alias_to_origins: Mapping[str, Sequence[str]] | None = None,
+) -> List[SourceSpec]:
     import logging
     _log = logging.getLogger(__name__)
 
     operators_count = len(bundle.operators) if bundle.operators else 0
     name_index_keys = list(bundle.operator_name_to_id.keys()) if bundle.operator_name_to_id else []
     name_index_count = len(name_index_keys)
+
+    operator_aliases: dict[str, list[str]] = {}
+    material_aliases: dict[str, list[str]] = {}
+    external_enemy_aliases: dict[str, list[str]] = {}
+    if alias_to_origins:
+        (
+            operator_aliases,
+            material_aliases,
+            external_enemy_aliases,
+        ) = _build_external_alias_indices(bundle, alias_to_origins)
+
+    operator_candidates = list(
+        dict.fromkeys([*name_index_keys, *operator_aliases.keys()])
+    )
+    material_name_to_id = bundle.material_name_to_id or {}
+    material_candidates = list(
+        dict.fromkeys([*material_name_to_id.keys(), *material_aliases.keys()])
+    )
+    native_enemy_aliases = bundle.enemy_alias_to_ids or {}
+    enemy_candidates = list(
+        dict.fromkeys(
+            [*native_enemy_aliases.keys(), *external_enemy_aliases.keys()]
+        )
+    )
 
     _log.debug(
         "build_sources: operators=%s operator_name_to_id_keys=%s",
@@ -371,8 +484,22 @@ def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) ->
     all_source = [
         SourceSpec(
             key="name",
-            candidates=lambda: name_index_keys,
-            resolve=lambda k: bundle.operators[bundle.operator_name_to_id[k]],
+            candidates=lambda: operator_candidates,
+            resolve=lambda k: (
+                bundle.operators[bundle.operator_name_to_id[k]]
+                if k in (bundle.operator_name_to_id or {})
+                else [
+                    bundle.operators[operator_id]
+                    for operator_id in operator_aliases.get(k, [])
+                    if operator_id in (bundle.operators or {})
+                ]
+            ),
+            from_alias=lambda k: (
+                k
+                if k in operator_aliases
+                and k not in (bundle.operator_name_to_id or {})
+                else None
+            ),
             continue_after_exact=True,   # 精确命中后继续模糊匹配，返回异格等同名变体供 AI 选择
             allow_fuzzy=True,
         ),
@@ -395,8 +522,21 @@ def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) ->
         ),
         SourceSpec(
             key="material",
-            candidates=lambda: list((bundle.material_name_to_id or {}).keys()),
-            resolve=lambda k: bundle.materials[bundle.material_name_to_id[k]],
+            candidates=lambda: material_candidates,
+            resolve=lambda k: (
+                bundle.materials[material_name_to_id[k]]
+                if k in material_name_to_id
+                else [
+                    bundle.materials[material_id]
+                    for material_id in material_aliases.get(k, [])
+                    if material_id in (bundle.materials or {})
+                ]
+            ),
+            from_alias=lambda k: (
+                k
+                if k in material_aliases and k not in material_name_to_id
+                else None
+            ),
             continue_after_exact=False,
             allow_fuzzy=True,
         ),
@@ -414,12 +554,22 @@ def build_sources(bundle: DataBundle, source_key: Optional[List[str]] = None) ->
         ),
         SourceSpec(
             key="enemy",
-            candidates=lambda: list((bundle.enemy_alias_to_ids or {}).keys()),
+            candidates=lambda: enemy_candidates,
             resolve=lambda k: [
                 bundle.enemies[enemy_id]
-                for enemy_id in (bundle.enemy_alias_to_ids or {}).get(k, [])
+                for enemy_id in (
+                    native_enemy_aliases.get(k, [])
+                    if k in native_enemy_aliases
+                    else external_enemy_aliases.get(k, [])
+                )
                 if enemy_id in (bundle.enemies or {})
             ],
+            from_alias=lambda k: (
+                k
+                if k in external_enemy_aliases
+                and k not in native_enemy_aliases
+                else None
+            ),
             continue_after_exact=False,
             allow_fuzzy=True,
         ),

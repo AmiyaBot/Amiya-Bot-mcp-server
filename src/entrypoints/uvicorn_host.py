@@ -27,6 +27,7 @@ from src.app.context import AppContext
 from src.app.config import load_from_disk
 from src.app.runtime_state import resource_update_status_path
 from src.app.services.resource_update import read_resource_update_status
+from src.app.services.search_aliases import SEARCH_ALIAS_SYNC_INTERVAL_SECONDS
 from src.app.services.operator_queries import search
 from src.app.transformers.html_to_png_transformer import probe_playwright_chromium
 
@@ -218,6 +219,43 @@ async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
             log.exception("data_repository.update failed")
 
 
+async def _periodic_alias_sync_loop(
+    app: FastAPI,
+    interval_seconds: int = SEARCH_ALIAS_SYNC_INTERVAL_SECONDS,
+):
+    """启动后立即同步一次，之后按固定间隔刷新统一搜索别名。"""
+    log.info("后台别名同步循环已启动: interval_seconds=%s", interval_seconds)
+    while True:
+        ctx = getattr(app.state, "ctx", None)
+        repository = (
+            getattr(ctx, "search_alias_repository", None)
+            if isinstance(ctx, AppContext)
+            else None
+        )
+        if repository is None:
+            log.warning("跳过后台别名同步: reason=repository_missing")
+        else:
+            try:
+                started_at = perf_counter()
+                result = await repository.sync()
+                elapsed_ms = int((perf_counter() - started_at) * 1000)
+                log.info(
+                    "后台别名同步完成: ok=%s aliases=%s source_records=%s elapsed_ms=%s",
+                    result.ok,
+                    result.alias_count,
+                    result.source_record_count,
+                    elapsed_ms,
+                )
+            except asyncio.CancelledError:
+                log.info("后台别名同步循环收到取消信号")
+                raise
+            except Exception:
+                # repository.sync 已自行保留上一版；这里防止循环因意外异常退出。
+                log.exception("search_alias_repository.sync failed")
+
+        await asyncio.sleep(interval_seconds)
+
+
 def uvicorn_main():
     # 初始化日志系统（从环境变量 LOG_LEVEL 读取级别，默认 DEBUG）
     import os as _os
@@ -279,19 +317,29 @@ def uvicorn_main():
 
         log.info("正在启动 MCP Streamable HTTP session manager")
         async with session_manager.run():
-            task = asyncio.create_task(_periodic_update_loop(app, interval_seconds=15 * 60))
-            log.info("后台资源刷新任务已创建")
+            resource_task = asyncio.create_task(
+                _periodic_update_loop(app, interval_seconds=15 * 60)
+            )
+            alias_task = asyncio.create_task(
+                _periodic_alias_sync_loop(
+                    app,
+                    interval_seconds=SEARCH_ALIAS_SYNC_INTERVAL_SECONDS,
+                )
+            )
+            log.info("后台资源刷新与别名同步任务已创建")
 
             try:
                 yield
             finally:
                 log.info("Web 服务进入关闭流程")
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-                log.info("后台资源刷新任务已停止")
+                resource_task.cancel()
+                alias_task.cancel()
+                await asyncio.gather(
+                    resource_task,
+                    alias_task,
+                    return_exceptions=True,
+                )
+                log.info("后台资源刷新与别名同步任务已停止")
                 if ctx.data_repository:
                     await ctx.data_repository.close()
                     log.info("后台资源刷新子进程池已关闭")
