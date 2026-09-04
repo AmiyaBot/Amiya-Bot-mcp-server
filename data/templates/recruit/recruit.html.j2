@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+@font-face{font-family:Harmony;{% if template_font_url %}src:url("{{ template_font_url }}");{% endif %}}
+*{box-sizing:border-box;font-family:Harmony,"Noto Sans CJK SC",sans-serif}html,body{margin:0;width:1280px;min-height:720px}body{overflow:visible}
+#template{width:1280px;min-height:720px;padding:20px;color:#fff;background:linear-gradient(135deg,#263238,#111820)}
+.group-list{display:flex;flex-wrap:wrap;align-items:flex-start}.group{margin:0 30px 20px 0;padding-left:10px;border-left:5px solid #424242;max-width:100%}.tags{margin-bottom:10px;white-space:nowrap}.tag{display:inline-block;padding:2px 5px;margin-right:5px;background:#343434;font-size:18px}.operator-list{display:flex;flex-wrap:wrap;align-items:flex-start;max-width:1200px}.operator{width:72px;display:flex;flex:0 0 72px;flex-direction:column;margin:0 6px 8px 0}.operator img{display:block;width:72px;height:96px;object-fit:cover;object-position:top;border-bottom:5px solid gray}.operator span{display:block;margin-top:2px;font-size:12px;line-height:16px;white-space:normal;word-break:keep-all;text-align:center}.rarity6{border-color:#f57c00!important}.rarity5{border-color:#ffc107!important}.rarity4{border-color:#d1c4e9!important}
+</style></head><body><main id="template"><div class="group-list">{% for group in groups %}<section class="group"><div class="tags">{% for tag in group.tags %}<span class="tag">{{ tag|e }}</span>{% endfor %}</div><div class="operator-list">{% for item in group.operators %}<div class="operator"><img class="rarity{{ item.operator_rarity }}" src="{{ item.image_data }}" alt="{{ item.operator_name|e }}"><span>{{ item.operator_name|e }}</span></div>{% endfor %}</div></section>{% endfor %}</div></main></body></html>
