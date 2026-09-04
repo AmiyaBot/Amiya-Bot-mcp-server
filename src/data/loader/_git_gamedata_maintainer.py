@@ -1,13 +1,26 @@
 import ctypes
 import errno
+import json
 import logging
 import os
 import shutil
+import stat
 import subprocess
 import tempfile
 import zipfile
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
+
+from src.app.config import Config
+from src.app.resource_releases import ResourceRelease
+from src.app.resource_releases import publish_active_release
+from src.app.resource_releases import prune_inactive_releases
+from src.app.resource_releases import read_active_release
+from src.app.resource_releases import read_published_releases
+from src.app.resource_releases import releases_dir
+from src.app.resource_releases import resource_update_transactions_dir
 
 log = logging.getLogger("asset")
 
@@ -56,6 +69,22 @@ class GameDataUpdateResult:
     result: str
     message: str
 
+
+@dataclass(frozen=True, slots=True)
+class PreparedResourceRelease:
+    release_id: str
+    root: Path
+    transaction_dir: Path | None
+    version: str | None
+    version_date: str | None
+    result: str
+    message: str
+    fallback_assets: Path | None = None
+
+    @property
+    def needs_publish(self) -> bool:
+        return self.transaction_dir is not None
+
 class GitGameDataMaintainer:
     def __init__(self, repo_url: str, base_dir: Path):
         self.repo_url = repo_url
@@ -64,7 +93,18 @@ class GitGameDataMaintainer:
         self.gamedata_dir = base_dir / "gamedata"
 
     def is_initialized(self) -> bool:
-        return (self.gamedata_dir / "excel" / "character_table.json").exists()
+        return (
+            read_active_release(self._config()).root
+            / "gamedata"
+            / "excel"
+            / "character_table.json"
+        ).exists()
+
+    def current_release(self) -> ResourceRelease:
+        return read_active_release(self._config())
+
+    def current_resource_root(self) -> Path:
+        return self.current_release().root
 
     def _run_git(self, args, cwd=None) -> int:
         p = subprocess.Popen(["git"] + args, cwd=cwd,
@@ -94,7 +134,10 @@ class GitGameDataMaintainer:
         """
         assets_dir 工作区是否有改动（对浅克隆也适用）。
         """
-        out = self._git_output(["status", "--porcelain"], cwd=self.assets_dir)
+        out = self._git_output(
+            ["status", "--porcelain"],
+            cwd=self.current_resource_root() / "assets",
+        )
         return bool(out and out.strip())
 
     def get_version(self, short: bool = True, with_dirty: bool = True) -> str | None:
@@ -102,11 +145,12 @@ class GitGameDataMaintainer:
         返回用于 bundle.version 的版本串：
         - 默认：<short_head> 或 <short_head>-dirty
         """
-        if not self._is_git_repo():
+        assets_dir = self.current_resource_root() / "assets"
+        if not self._is_git_repo(assets_dir):
             return None
 
         args = ["rev-parse", "--short", "HEAD"] if short else ["rev-parse", "HEAD"]
-        out = self._git_output(args, cwd=self.assets_dir)
+        out = self._git_output(args, cwd=assets_dir)
         if not out:
             return None
 
@@ -122,21 +166,24 @@ class GitGameDataMaintainer:
         """
         返回当前 HEAD 提交日期（YYYY-MM-DD）。
         """
-        if not self._is_git_repo():
+        assets_dir = self.current_resource_root() / "assets"
+        if not self._is_git_repo(assets_dir):
             return None
 
-        out = self._git_output(["show", "-s", "--format=%cs", "HEAD"], cwd=self.assets_dir)
+        out = self._git_output(["show", "-s", "--format=%cs", "HEAD"], cwd=assets_dir)
         if not out:
             return None
 
         commit_date = out.strip().splitlines()[-1].strip()
         return commit_date or None
 
-    def _is_git_repo(self) -> bool:
-        return self.assets_dir.exists() and (self.assets_dir / ".git").exists()
+    def _is_git_repo(self, assets_dir: Path | None = None) -> bool:
+        target = assets_dir or self.current_resource_root() / "assets"
+        return target.exists() and (target / ".git").exists()
 
-    def _local_head_hash(self) -> str | None:
-        out = self._git_output(["rev-parse", "HEAD"], cwd=self.assets_dir)
+    def _local_head_hash(self, assets_dir: Path | None = None) -> str | None:
+        target = assets_dir or self.current_resource_root() / "assets"
+        out = self._git_output(["rev-parse", "HEAD"], cwd=target)
         return out.strip() if out else None
 
     def _remote_head_hash(self) -> str | None:
@@ -170,6 +217,223 @@ class GitGameDataMaintainer:
                 shutil.rmtree(self.assets_dir, ignore_errors=True)
 
         return self._run_git(["clone", "--depth", "1", "--progress", self.repo_url, str(self.assets_dir)]) == 0
+
+    def prepare_release(self, *, force_rebuild: bool = False) -> PreparedResourceRelease:
+        """在隔离事务目录中准备完整候选版本，不修改当前在线版本。"""
+        if not self.repo_url:
+            raise RuntimeError("未配置 GameDataRepo，无法更新资源")
+
+        current = self.current_release()
+        current_assets = current.root / "assets"
+        current_head = self._local_head_hash(current_assets) if self._is_git_repo(current_assets) else None
+        remote_head = self._remote_head_hash()
+        if (
+            current.managed
+            and current.self_contained
+            and not force_rebuild
+            and remote_head is not None
+            and current_head == remote_head
+        ):
+            return PreparedResourceRelease(
+                release_id=current.release_id,
+                root=current.root,
+                transaction_dir=None,
+                version=current.version or remote_head[:7],
+                version_date=current.version_date,
+                result="up_to_date",
+                message="资源已是最新版本",
+            )
+
+        transaction_dir = resource_update_transactions_dir(self._config()) / uuid4().hex
+        candidate_root = transaction_dir / "release"
+        candidate_assets = candidate_root / "assets"
+        transaction_dir.mkdir(parents=True, exist_ok=False)
+
+        cloned = False
+        if remote_head is not None:
+            cloned = self._run_git(
+                ["clone", "--depth", "1", "--progress", self.repo_url, str(candidate_assets)]
+            ) == 0
+
+        fallback_assets: Path | None = None
+        if not cloned:
+            if candidate_assets.exists():
+                shutil.rmtree(candidate_assets, ignore_errors=True)
+            if not force_rebuild:
+                self.discard_prepared_release(transaction_dir)
+                raise RuntimeError("拉取资源仓库更新失败")
+            fallback_assets = next(
+                (
+                    assets
+                    for assets in self._fallback_assets_candidates(current_assets)
+                    if self._is_readable_file(assets / "gamedata.zip")
+                ),
+                None,
+            )
+            if fallback_assets is None:
+                self.discard_prepared_release(transaction_dir)
+                raise RuntimeError("拉取资源仓库失败，当前 gamedata.zip 也不可读")
+            zip_path = fallback_assets / "gamedata.zip"
+            candidate_root.mkdir(parents=True, exist_ok=True)
+        else:
+            zip_path = candidate_assets / "gamedata.zip"
+
+        candidate_gamedata = candidate_root / "gamedata"
+        try:
+            self._extract_zip_to(zip_path, candidate_gamedata)
+            self._normalize_permissions(candidate_root)
+            version = self._git_value(candidate_assets, ["rev-parse", "--short", "HEAD"])
+            version_date = self._git_value(candidate_assets, ["show", "-s", "--format=%cs", "HEAD"])
+            if version is None:
+                version = current.version or (current_head[:7] if current_head else "local-recovery")
+            if version_date is None:
+                version_date = current.version_date
+            release_id = self._new_release_id(version)
+            return PreparedResourceRelease(
+                release_id=release_id,
+                root=candidate_root,
+                transaction_dir=transaction_dir,
+                version=version,
+                version_date=version_date,
+                result="recovered" if fallback_assets is not None else "updated",
+                message=(
+                    "已使用当前资源包重建候选版本"
+                    if fallback_assets is not None
+                    else "资源候选版本准备完成"
+                ),
+                fallback_assets=fallback_assets,
+            )
+        except Exception:
+            self.discard_prepared_release(transaction_dir)
+            raise
+
+    def publish_prepared_release(
+        self,
+        prepared: PreparedResourceRelease,
+    ) -> ResourceRelease:
+        """候选 Bundle 通过校验后，先固定版本目录，再原子切换活动清单。"""
+        if not prepared.needs_publish:
+            return self.current_release()
+
+        target_parent = releases_dir(self._config())
+        target_parent.mkdir(parents=True, exist_ok=True)
+        target = target_parent / prepared.release_id
+        if target.exists():
+            raise FileExistsError(f"资源版本目录已存在: {target}")
+        os.replace(prepared.root, target)
+
+        if prepared.fallback_assets is not None:
+            relative_target = os.path.relpath(prepared.fallback_assets, start=target)
+            os.symlink(relative_target, target / "assets", target_is_directory=True)
+
+        release = ResourceRelease(
+            release_id=prepared.release_id,
+            root=target,
+            version=prepared.version,
+            version_date=prepared.version_date,
+            created_at=self._now_iso(),
+            self_contained=prepared.fallback_assets is None,
+        )
+        self._write_release_metadata(release)
+        publish_active_release(self._config(), release)
+        self.discard_prepared_release(prepared.transaction_dir)
+        prune_inactive_releases(self._config())
+        return release
+
+    @staticmethod
+    def discard_prepared_release(transaction_dir: Path | None) -> None:
+        if transaction_dir is not None and transaction_dir.exists():
+            shutil.rmtree(transaction_dir, ignore_errors=True)
+
+    def _extract_zip_to(self, zip_path: Path, destination: Path) -> None:
+        destination.mkdir(parents=True, exist_ok=False)
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            for member in archive.infolist():
+                relative = Path(member.filename)
+                if relative.is_absolute() or ".." in relative.parts:
+                    raise RuntimeError(f"资源包包含越界路径: {member.filename}")
+            archive.extractall(destination)
+
+        marker = destination / "excel" / "character_table.json"
+        if not marker.is_file():
+            raise RuntimeError(f"解压结果校验失败，缺少 {marker}")
+
+    @staticmethod
+    def _normalize_permissions(root: Path) -> None:
+        for directory, names, files in os.walk(root):
+            directory_path = Path(directory)
+            os.chmod(directory_path, 0o755)
+            for name in names:
+                path = directory_path / name
+                if not path.is_symlink():
+                    os.chmod(path, 0o755)
+            for name in files:
+                path = directory_path / name
+                if not path.is_symlink():
+                    os.chmod(path, 0o644)
+
+        mode = stat.S_IMODE((root / "gamedata" / "excel" / "character_table.json").stat().st_mode)
+        if mode & 0o444 == 0:
+            raise PermissionError("候选资源权限修复失败: character_table.json 仍不可读")
+
+    @staticmethod
+    def _is_readable_file(path: Path) -> bool:
+        try:
+            with path.open("rb") as file:
+                return bool(file.read(1))
+        except OSError:
+            return False
+
+    def _write_release_metadata(self, release: ResourceRelease) -> None:
+        payload = {
+            "release_id": release.release_id,
+            "version": release.version,
+            "version_date": release.version_date,
+            "created_at": release.created_at,
+            "self_contained": release.self_contained,
+        }
+        path = release.root / "release.json"
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.chmod(path, 0o644)
+
+    def _git_value(self, assets_dir: Path, args: list[str]) -> str | None:
+        if not self._is_git_repo(assets_dir):
+            return None
+        output = self._git_output(args, cwd=assets_dir)
+        if not output:
+            return None
+        return output.strip().splitlines()[-1].strip() or None
+
+    def _fallback_assets_candidates(self, current_assets: Path) -> list[Path]:
+        current, previous = read_published_releases(self._config())
+        candidates = [
+            current_assets,
+            *(item.root / "assets" for item in (current, previous) if item is not None),
+            self.assets_dir,
+        ]
+        result: list[Path] = []
+        for candidate in candidates:
+            if candidate not in result:
+                result.append(candidate)
+        return result
+
+    def _new_release_id(self, version: str | None) -> str:
+        safe_version = "".join(
+            character for character in str(version or "unknown") if character.isalnum() or character in "-_"
+        )[:24] or "unknown"
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        return f"{safe_version}-{timestamp}-{uuid4().hex[:8]}"
+
+    def _config(self) -> Config:
+        return Config(
+            ProjectRoot=self.base_dir.parent,
+            ResourcePath=self.base_dir,
+            GameDataRepo=self.repo_url,
+        )
+
+    @staticmethod
+    def _now_iso() -> str:
+        return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
     def extract_zip(self) -> bool:
         zip_path = self.assets_dir / "gamedata.zip"
@@ -231,7 +495,7 @@ class GitGameDataMaintainer:
             return GameDataUpdateResult(ok=False, result="failed", message="未配置 GameDataRepo，无法更新资源")
 
         # 1) 如果还没 clone（或目录不是 git repo），走原逻辑：clone/pull + 解压
-        if not self._is_git_repo():
+        if not self._is_git_repo(self.assets_dir):
             ok = self.sync_repo()
             if not ok:
                 return GameDataUpdateResult(ok=False, result="failed", message="首次拉取资源仓库失败")
@@ -241,7 +505,7 @@ class GitGameDataMaintainer:
 
         # 2) 已有仓库：先对比 hash
         remote_hash = self._remote_head_hash()
-        local_hash = self._local_head_hash()
+        local_hash = self._local_head_hash(self.assets_dir)
 
         if not remote_hash or not local_hash:
             # 无法获取 hash（网络/权限/仓库损坏等），保守起见走 sync_repo

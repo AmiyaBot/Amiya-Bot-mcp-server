@@ -27,6 +27,8 @@ from src.app.context import AppContext
 from src.app.config import load_from_disk
 from src.app.runtime_state import resource_update_status_path
 from src.app.services.resource_update import read_resource_update_status
+from src.app.services.resource_update import resource_update_in_progress
+from src.app.services.resource_update import wait_for_resource_update
 from src.app.services.search_aliases import SEARCH_ALIAS_SYNC_INTERVAL_SECONDS
 from src.app.services.operator_queries import search
 from src.app.transformers.html_to_png_transformer import probe_playwright_chromium
@@ -90,6 +92,7 @@ def build_resource_check_payload(
     repository = getattr(ctx, "data_repository", None) if isinstance(ctx, AppContext) else None
     update_status = read_resource_update_status(cfg)
     queries = _normalize_operator_check_queries(operator_names)
+    resource_root = repository.get_resource_root() if repository else cfg.ResourcePath
 
     payload: dict[str, Any] = {
         "status": "ok",
@@ -100,7 +103,8 @@ def build_resource_check_payload(
             "project_root": str(cfg.ProjectRoot),
             "resource_root": _build_path_summary(cfg.ResourcePath),
             "runtime_state_root": _build_path_summary(cfg.ResourcePath / "runtime"),
-            "character_table": _build_path_summary(cfg.ResourcePath / "gamedata" / "excel" / "character_table.json"),
+            "active_resource_root": _build_path_summary(resource_root),
+            "character_table": _build_path_summary(resource_root / "gamedata" / "excel" / "character_table.json"),
             "resource_update_status": _build_path_summary(resource_update_status_path(cfg)),
         },
         "bundle": {
@@ -122,6 +126,7 @@ def build_resource_check_payload(
             "version": update_status.version,
             "version_date": update_status.version_date,
         },
+        "maintenance": repository.maintenance_state() if repository else None,
     }
 
     if not repository or not repository.is_ready():
@@ -189,27 +194,48 @@ def build_resource_check_payload(
     return payload
 
 
-async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
-    log.info("后台资源刷新循环已启动: interval_seconds=%s", interval_seconds)
+async def _periodic_update_loop(
+    app: FastAPI,
+    interval_seconds: int = 15 * 60,
+    health_check_interval_seconds: int = 60,
+):
+    log.info(
+        "后台资源维护循环已启动: update_interval_seconds=%s health_check_interval_seconds=%s",
+        interval_seconds,
+        health_check_interval_seconds,
+    )
+    next_update_at = asyncio.get_running_loop().time() + interval_seconds
     while True:
-        await asyncio.sleep(interval_seconds)
-
         ctx = getattr(app.state, "ctx", None)
         if not isinstance(ctx, AppContext):
             log.warning("跳过后台资源刷新: reason=context_not_ready")
+            await asyncio.sleep(health_check_interval_seconds)
             continue
         if not ctx.data_repository:
             log.warning("跳过后台资源刷新: reason=data_repository_missing")
+            await asyncio.sleep(health_check_interval_seconds)
             continue
 
         try:
             started_at = perf_counter()
-            log.info("开始执行后台资源更新检查")
-            changed = await ctx.data_repository.update_and_refresh()
+            try:
+                await ctx.data_repository.ensure_bundle_fresh_from_disk()
+            except Exception:
+                log.warning("活动资源重新加载失败，交给自动恢复处理", exc_info=True)
+            if not ctx.data_repository.is_ready():
+                log.warning("资源健康检查失败，开始自动恢复")
+                changed = await ctx.data_repository.recover_if_needed()
+            elif asyncio.get_running_loop().time() >= next_update_at:
+                log.info("开始执行后台资源更新检查")
+                next_update_at = asyncio.get_running_loop().time() + interval_seconds
+                changed = await ctx.data_repository.update_and_refresh()
+            else:
+                changed = False
             elapsed_ms = int((perf_counter() - started_at) * 1000)
             log.info(
-                "后台资源更新检查完成: changed=%s elapsed_ms=%s",
+                "后台资源维护完成: changed=%s ready=%s elapsed_ms=%s",
                 changed,
+                ctx.data_repository.is_ready(),
                 elapsed_ms,
             )
         except asyncio.CancelledError:
@@ -217,6 +243,7 @@ async def _periodic_update_loop(app: FastAPI, interval_seconds: int = 15 * 60):
             raise
         except Exception:
             log.exception("data_repository.update failed")
+        await asyncio.sleep(health_check_interval_seconds)
 
 
 async def _periodic_alias_sync_loop(
@@ -362,11 +389,25 @@ def uvicorn_main():
     @app.get("/health/live", include_in_schema=False)
     async def health_live():
         """只验证 HTTP 事件循环存活，不触碰磁盘或外部依赖。"""
-        return {"status": "ok"}
+        # AI-CORRECTION 2026-09-04: 恢复耗尽后会读取一次事务锁状态；仅在未更新时请求重启。
+        ctx = getattr(app.state, "ctx", None)
+        repository = getattr(ctx, "data_repository", None)
+        if repository is not None and repository.should_restart():
+            updating = await asyncio.to_thread(resource_update_in_progress, cfg)
+            if not updating:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Resource recovery exhausted; restart requested",
+                )
+        return {
+            "status": "ok",
+            "maintenance": repository.maintenance_state() if repository else None,
+        }
 
     @app.get("/health/ready", include_in_schema=False)
     async def health_ready():
         """旧 bundle 在后台更新期间仍可用，因此继续就绪。"""
+        # AI-CORRECTION 2026-09-04: 无可用 Bundle 或活动版本文件不可读时返回 503。
         ctx = getattr(app.state, "ctx", None)
         repository = getattr(ctx, "data_repository", None)
         if repository is None or not repository.is_ready():
@@ -375,7 +416,18 @@ def uvicorn_main():
         return {
             "status": "ready",
             "bundle_version": getattr(bundle, "version", None),
+            "maintenance": repository.maintenance_state(),
         }
+
+    @app.get("/health/prestop", include_in_schema=False)
+    async def health_prestop():
+        released = await asyncio.to_thread(wait_for_resource_update, cfg, 840)
+        if not released:
+            raise HTTPException(
+                status_code=503,
+                detail="Timed out waiting for resource transaction",
+            )
+        return {"status": "safe-to-stop"}
 
     @app.get("/rest/status")
     async def status():
@@ -398,6 +450,11 @@ def uvicorn_main():
                 "version": update_status.version,
                 "version_date": update_status.version_date,
             },
+            "maintenance": (
+                app.state.ctx.data_repository.maintenance_state()
+                if isinstance(getattr(app.state, "ctx", None), AppContext)
+                else None
+            ),
         }
 
     @app.get("/rest/resource-check")

@@ -6,19 +6,28 @@ import logging
 import os
 import subprocess
 import sys
-from dataclasses import asdict, dataclass
+import time
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from src.app.config import Config
 from src.app.runtime_state import resource_update_lock_path
 from src.app.runtime_state import resource_update_log_path
 from src.app.runtime_state import resource_update_status_path
 from src.data.loader._git_gamedata_maintainer import GitGameDataMaintainer
+from src.data.loader._git_gamedata_maintainer import PreparedResourceRelease
+from src.data.models.bundle import DataBundle
+from src.data.repository.bundle.bundle_builder import load_bundle_from_disk
+from src.data.repository.bundle.bundle_validation import validate_data_bundle
 
 log = logging.getLogger(__name__)
 
-RESOURCE_NOT_READY_MESSAGE = "❌ 本地资源尚未初始化，请先执行 resource-update 启动一次资源更新。"
+RESOURCE_NOT_READY_MESSAGE = (
+    "❌ 本地资源暂未就绪，服务正在自动恢复；"
+    "可执行 resource-update-status 查看进度。"
+)
 
 
 @dataclass(slots=True)
@@ -42,6 +51,8 @@ class ResourceUpdateExecutionResult:
     message: str
     version: str | None = None
     version_date: str | None = None
+    bundle: DataBundle | None = None
+    resource_root: Path | None = None
 
 def is_resource_initialized(cfg: Config) -> bool:
     maintainer = GitGameDataMaintainer(cfg.GameDataRepo or "", cfg.ResourcePath)
@@ -79,12 +90,15 @@ def read_resource_update_status(cfg: Config) -> ResourceUpdateStatus:
 
 def write_resource_update_status(cfg: Config, status: ResourceUpdateStatus) -> None:
     path = resource_update_status_path(cfg)
-    temp_path = path.with_suffix(".tmp")
-    temp_path.write_text(
-        json.dumps(asdict(status), ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    temp_path.replace(path)
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
+    try:
+        temp_path.write_text(
+            json.dumps(asdict(status), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temp_path, path)
+    finally:
+        temp_path.unlink(missing_ok=True)
 
 
 def launch_resource_update_worker(cfg: Config) -> ResourceUpdateExecutionResult:
@@ -135,7 +149,14 @@ def launch_resource_update_worker(cfg: Config) -> ResourceUpdateExecutionResult:
     )
 
 
-def perform_resource_update(cfg: Config, trigger: str) -> ResourceUpdateExecutionResult:
+def perform_resource_update(
+    cfg: Config,
+    trigger: str,
+    *,
+    current_bundle_valid: bool = False,
+    current_version: str | None = None,
+    force_rebuild: bool = False,
+) -> ResourceUpdateExecutionResult:
     lock_path = resource_update_lock_path(cfg)
     with lock_path.open("a+b") as lock_file:
         try:
@@ -156,40 +177,148 @@ def perform_resource_update(cfg: Config, trigger: str) -> ResourceUpdateExecutio
         write_resource_update_status(cfg, status)
 
         maintainer = GitGameDataMaintainer(cfg.GameDataRepo or "", cfg.ResourcePath)
-        result = maintainer.update()
-        version = maintainer.get_version(short=True, with_dirty=True)
-        version_date = maintainer.get_version_date()
+        prepared: PreparedResourceRelease | None = None
+        try:
+            prepared = maintainer.prepare_release(
+                force_rebuild=force_rebuild,
+            )
+            bundle = _build_required_bundle(
+                cfg,
+                prepared,
+                current_bundle_valid=current_bundle_valid,
+                current_version=current_version,
+            )
+        except Exception as first_error:
+            if prepared is not None:
+                maintainer.discard_prepared_release(prepared.transaction_dir)
+            if force_rebuild or (prepared is not None and prepared.needs_publish):
+                return _finish_failed_update(cfg, status, str(first_error))
 
+            log.warning(
+                "当前资源校验失败，改为重建独立候选版本: %s",
+                first_error,
+            )
+            try:
+                prepared = maintainer.prepare_release(force_rebuild=True)
+                bundle = _build_required_bundle(
+                    cfg,
+                    prepared,
+                    current_bundle_valid=False,
+                    current_version=current_version,
+                )
+            except Exception as recovery_error:
+                if prepared is not None:
+                    maintainer.discard_prepared_release(prepared.transaction_dir)
+                return _finish_failed_update(cfg, status, str(recovery_error))
+
+        try:
+            release = maintainer.publish_prepared_release(prepared)
+        except Exception as exc:
+            maintainer.discard_prepared_release(prepared.transaction_dir)
+            return _finish_failed_update(cfg, status, f"发布候选资源失败: {exc}")
+
+        if bundle is not None and bundle.resource_root != release.root:
+            bundle = replace(bundle, resource_root=release.root)
+
+        message = (
+            "资源已完成校验并原子切换"
+            if prepared.needs_publish
+            else prepared.message
+        )
         status.current_state = "idle"
         status.last_finished_at = _now_iso()
+        status.last_success_at = status.last_finished_at
+        status.last_result = prepared.result
+        status.message = message
         status.pid = None
         status.trigger = trigger
-        status.version = version
-        status.version_date = version_date
-
-        if result.ok:
-            status.last_result = result.result
-            status.last_success_at = status.last_finished_at
-            status.message = result.message
-            write_resource_update_status(cfg, status)
-            return ResourceUpdateExecutionResult(
-                ok=True,
-                result=result.result,
-                message=result.message,
-                version=version,
-                version_date=version_date,
-            )
-
-        status.last_result = "failed"
-        status.message = result.message
+        status.version = prepared.version
+        status.version_date = prepared.version_date
         write_resource_update_status(cfg, status)
         return ResourceUpdateExecutionResult(
-            ok=False,
-            result="failed",
-            message=result.message,
-            version=version,
-            version_date=version_date,
+            ok=True,
+            result=prepared.result,
+            message=message,
+            version=prepared.version,
+            version_date=prepared.version_date,
+            bundle=bundle,
+            resource_root=release.root,
         )
+
+
+def resource_update_in_progress(cfg: Config) -> bool:
+    """以 flock 为权威信号判断资源事务是否仍在执行。"""
+    lock_path = resource_update_lock_path(cfg)
+    try:
+        lock_file = lock_path.open("a+b")
+    except OSError:
+        log.warning("资源更新锁不可访问，按事务仍在执行处理: %s", lock_path, exc_info=True)
+        return True
+    with lock_file:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        except OSError:
+            log.warning("资源更新锁状态不可确认，按事务仍在执行处理", exc_info=True)
+            return True
+        finally:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+    return False
+
+
+def wait_for_resource_update(cfg: Config, timeout_seconds: float) -> bool:
+    deadline = time.monotonic() + max(0.0, timeout_seconds)
+    while resource_update_in_progress(cfg):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.25)
+    return True
+
+
+def _build_required_bundle(
+    cfg: Config,
+    prepared: PreparedResourceRelease,
+    *,
+    current_bundle_valid: bool,
+    current_version: str | None,
+) -> DataBundle | None:
+    if (
+        not prepared.needs_publish
+        and current_bundle_valid
+        and current_version == prepared.version
+    ):
+        return None
+    bundle = load_bundle_from_disk(
+        cfg,
+        version=prepared.version,
+        resource_root=prepared.root,
+    )
+    validate_data_bundle(bundle)
+    return bundle
+
+
+def _finish_failed_update(
+    cfg: Config,
+    status: ResourceUpdateStatus,
+    message: str,
+) -> ResourceUpdateExecutionResult:
+    status.current_state = "idle"
+    status.last_finished_at = _now_iso()
+    status.last_result = "failed"
+    status.message = message or "资源更新失败"
+    status.pid = None
+    write_resource_update_status(cfg, status)
+    return ResourceUpdateExecutionResult(
+        ok=False,
+        result="failed",
+        message=status.message,
+        version=status.version,
+        version_date=status.version_date,
+    )
 
 
 def format_resource_update_status(cfg: Config, status: ResourceUpdateStatus) -> str:
@@ -201,6 +330,7 @@ def format_resource_update_status(cfg: Config, status: ResourceUpdateStatus) -> 
         "never": "从未执行",
         "updated": "成功（已更新）",
         "up_to_date": "成功（已是最新）",
+        "recovered": "成功（已恢复）",
         "failed": "失败",
     }.get(status.last_result, status.last_result)
 

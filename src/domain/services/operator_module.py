@@ -10,7 +10,7 @@ import re
 from typing import Any
 from urllib.parse import quote
 
-from src.app.context import AppContext
+from src.app.context import AppContext, get_bundle_resource_root
 from src.domain.models.operator import Operator, OperatorModule
 from src.domain.services.operator import (
     build_operator_template_bg_data,
@@ -351,7 +351,7 @@ def build_operator_module_query_result(ctx: AppContext, op: Operator) -> QueryRe
         data={
             "op": op,
             "modules": module_entries,
-            "material_icon_data": build_material_icon_data(icon_ids, ctx.cfg.ResourcePath),
+            "material_icon_data": build_material_icon_data(icon_ids, get_bundle_resource_root(bundle, ctx)),
             "template_bg_data": build_operator_template_bg_data(ctx.cfg.ProjectRoot),
             "template_bg_url": build_operator_template_bg_url(ctx.cfg.ProjectRoot),
             "template_font_url": build_operator_template_font_url(ctx.cfg.ProjectRoot),

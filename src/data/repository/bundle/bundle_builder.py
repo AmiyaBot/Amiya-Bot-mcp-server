@@ -8,6 +8,8 @@ from typing import Any, Dict, List
 
 from src.app.config import Config
 from src.data.models.bundle import DataBundle
+from src.data.repository.bundle.bundle_validation import GAMEDATA_TABLE_SPECS
+from src.data.repository.bundle.bundle_validation import ResourceDataError
 from src.data.models._operator_impl import OperatorImpl
 from src.domain.models.enemy import Enemy
 from src.domain.models.operator import Operator
@@ -17,7 +19,6 @@ from src.domain.models.token import Token
 from src.helpers.bundle import build_range, get_table, html_tag_format, parse_template, remove_punctuation
 
 log = logging.getLogger(__name__)
-
 
 def _read_json(path: Path) -> Dict[str, Any]:
     """读不到/解析失败则返回 {}"""
@@ -31,39 +32,53 @@ def _read_json(path: Path) -> Dict[str, Any]:
         return {}
 
 
-def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle:
+def _read_required_json(path: Path) -> Dict[str, Any]:
+    """必需表必须可读、是合法 JSON 对象；失败时禁止发布空 Bundle。"""
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ResourceDataError(f"读取必需游戏数据失败: {path}: {exc}") from exc
+    if not isinstance(payload, dict) or not payload:
+        raise ResourceDataError(f"必需游戏数据不是非空 JSON 对象: {path}")
+    return payload
+    # AI-REMOVED 2026-09-04:
+    # Reason: apply_patch 定位到了 _read_json 的提前返回，导致原可选表读取代码被误放到本函数 return 之后。
+    # Trigger: 新增必需表 fail-fast 读取逻辑后，静态检查发现以下代码不可达。
+    # Evidence: _read_required_json 已在上一行无条件 return payload。
+    # Replacement: 本文件 _read_json 的活动实现。
+    # Risk: Low
+    # Human Review: Required
+    #
+    # Original code:
+    # try:
+    #     with path.open("r", encoding="utf-8") as f:
+    #         return json.load(f) or {}
+    # except Exception:
+    #     log.exception("Failed to read json: %s", path)
+    #     return {}
+
+
+def load_bundle_from_disk(
+    cfg: Config,
+    version: str | None = None,
+    resource_root: Path | None = None,
+) -> DataBundle:
     if cfg.ResourcePath is None:
         raise ValueError("ResourcePath must be configured")
     if cfg.ProjectRoot is None:
         raise ValueError("ProjectRoot must be configured")
 
-    game_root = cfg.ResourcePath / "gamedata"
+    resolved_resource_root = resource_root or cfg.ResourcePath
+    game_root = resolved_resource_root / "gamedata"
 
     # 1) 读取表
     tables: Dict[str, Any] = {}
     tables["gamedata"] = {}
-    for name, folder in [
-        ("character_table", "excel"),
-        ("uniequip_table", "excel"),
-        ("battle_equip_table", "excel"),
-        ("favor_table", "excel"),
-        ("handbook_team_table", "excel"),
-        ("handbook_info_table", "excel"),
-        ("item_table", "excel"),
-        ("stage_table", "excel"),
-        ("zone_table", "excel"),
-        ("enemy_handbook_table", "excel"),
-        ("enemy_database", "levels/enemydata"),
-        ("range_table", "excel"),
-        ("skill_table", "excel"),
-        ("gacha_table", "excel"),
-        ("skin_table", "excel"),
-        ("building_data", "excel"),
-        ("charword_table", "excel"),
-        ("char_meta_table", "excel"),
-        ("roguelike_topic_table", "excel"),
-    ]:
-        tables["gamedata"][name] = _read_json(game_root / folder / f"{name}.json") or {}
+    for name, folder in GAMEDATA_TABLE_SPECS:
+        tables["gamedata"][name] = _read_required_json(
+            game_root / folder / f"{name}.json"
+        )
 
     # 2) 添加本地表 ProjectRoot/data/local/*.json
     # 这些表用于存放项目本地的自定义数据
@@ -93,6 +108,7 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
 
     return DataBundle(
         version=version,
+        resource_root=resolved_resource_root,
         operators=operators,
         tokens=tokens,
         operator_name_to_id=name_to_id,

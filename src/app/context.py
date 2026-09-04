@@ -1,5 +1,6 @@
 # src/app/context.py
 from dataclasses import dataclass
+from pathlib import Path
 
 from src.app.config import Config
 from src.data.repository.data_repository import DataRepository
@@ -7,6 +8,26 @@ from src.app.card_service import CardService
 from src.app.remote_download_manager import RemoteDownloadManager
 from src.app.services.search_aliases import SearchAliasRepository
 from src.app.services.search_card_cache import SearchCardCache
+
+
+def get_context_resource_root(context) -> Path:
+    repository = getattr(context, "data_repository", None)
+    getter = getattr(repository, "get_resource_root", None)
+    if callable(getter):
+        return Path(getter())
+    bundle_getter = getattr(repository, "get_bundle", None)
+    if callable(bundle_getter):
+        bundle_root = getattr(bundle_getter(), "resource_root", None)
+        if bundle_root is not None:
+            return Path(bundle_root)
+    return Path(context.cfg.ResourcePath)
+
+
+def get_bundle_resource_root(bundle, context) -> Path:
+    root = getattr(bundle, "resource_root", None)
+    if root is not None:
+        return Path(root)
+    return get_context_resource_root(context)
 
 
 @dataclass(slots=True)
@@ -19,6 +40,11 @@ class AppContext:
     download_manager: RemoteDownloadManager | None = None
     search_card_cache: SearchCardCache | None = None
     search_alias_repository: SearchAliasRepository | None = None
+
+    @property
+    def resource_root(self) -> Path:
+        """返回当前 Bundle 绑定的资源版本根目录。"""
+        return get_context_resource_root(self)
 
     def __post_init__(self) -> None:
         if self.download_manager is None:

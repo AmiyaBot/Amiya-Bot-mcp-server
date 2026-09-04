@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 
-from src.app.context import AppContext
+from src.app.context import AppContext, get_bundle_resource_root
 from src.app.services.integrated_strategy_collectible_output import (
     build_collectible_payload,
 )
@@ -358,7 +358,7 @@ async def _render_operator_token_card(
                 {
                     **skill,
                     "icon_data": _build_skill_icon_data_uri(
-                        context.cfg.ResourcePath,
+                        get_bundle_resource_root(bundle, context),
                         icon_id,
                     ),
                 }
@@ -372,7 +372,7 @@ async def _render_operator_token_card(
                 "classes": token.classes,
                 "type": token.type,
                 "description": token.description,
-                "avatar_data": _build_token_avatar_data_uri(context.cfg.ResourcePath, token.id),
+                "avatar_data": _build_token_avatar_data_uri(get_bundle_resource_root(bundle, context), token.id),
                 "max_attr": token_max_attr_data(token),
                 "range": token_first_range(token),
                 "talents": token.talents or [],
@@ -619,7 +619,11 @@ async def query_operator_skins(
             entry["立绘URL"] = ""
             skin_artifact = None
             try:
-                skin_artifact = await resolve_skin_artifact_by_id(context, skin.skin_id)
+                skin_artifact = await resolve_skin_artifact_by_id(
+                    context,
+                    skin.skin_id,
+                    resource_root=get_bundle_resource_root(bundle, context),
+                )
                 if skin_artifact is None:
                     logger.debug("皮肤立绘索引缺失，跳过卡片渲染: skin_id=%s", skin.skin_id)
                 else:
@@ -639,7 +643,7 @@ async def query_operator_skins(
                     exc_info=True,
                 )
 
-            preview_data = _build_skin_portrait_data_uri(context.cfg.ResourcePath, skin.skin_id)
+            preview_data = _build_skin_portrait_data_uri(get_bundle_resource_root(bundle, context), skin.skin_id)
             preview_contain = False
             if preview_data is None and skin_artifact is not None:
                 try:
@@ -868,6 +872,7 @@ async def query_operator_basic_by_id(
                     context,
                     resolved,
                     bundle.tables,
+                    resource_root=get_bundle_resource_root(bundle, context),
                 )
             except Exception:
                 logger.warning(
@@ -914,6 +919,7 @@ async def query_operator_basic_by_id(
                         context,
                         resolved,
                         bundle.tables,
+                        resource_root=get_bundle_resource_root(bundle, context),
                     )
                 if skin_artifact is not None:
                     image_url = skin_artifact.url
@@ -1128,6 +1134,7 @@ async def query_operator_material_by_id(
                     context,
                     resolved,
                     bundle.tables,
+                    resource_root=get_bundle_resource_root(bundle, context),
                 )
             except Exception:
                 logger.warning(
@@ -1173,6 +1180,7 @@ async def query_operator_material_by_id(
                         context,
                         resolved,
                         bundle.tables,
+                        resource_root=get_bundle_resource_root(bundle, context),
                     )
                 if skin_artifact is not None:
                     image_url = skin_artifact.url

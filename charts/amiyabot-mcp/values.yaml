@@ -10,6 +10,9 @@ fullnameOverride: ""
 
 podAnnotations: {}
 
+# PreStop 最多等待 840 秒让 Git/解压/原子发布事务完成，额外保留 60 秒退出应用。
+terminationGracePeriodSeconds: 900
+
 podSecurityContext:
   fsGroup: 1000
 

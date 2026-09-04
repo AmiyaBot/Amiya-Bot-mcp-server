@@ -13,7 +13,7 @@ import base64
 import logging
 from pathlib import Path
 
-from src.app.context import AppContext
+from src.app.context import AppContext, get_bundle_resource_root
 from src.domain.models.generic import GoldCost, MaterialCost
 from src.domain.models.operator import Operator
 from src.domain.services.operator import build_skill_icon_data
@@ -250,9 +250,9 @@ def build_operator_material_query_result(ctx: AppContext, op: Operator) -> Query
             "evolve_groups": evolve_groups,
             "common_levels": common_levels,
             "mastery_groups": mastery_groups,
-            "material_icon_data": build_material_icon_data(icon_ids, ctx.cfg.ResourcePath),
+            "material_icon_data": build_material_icon_data(icon_ids, get_bundle_resource_root(bundle, ctx)),
             "evolve_badge_data": build_badge_data(EVOLVE_BADGE_NAMES, ctx.cfg.ProjectRoot),
             "mastery_badge_data": build_badge_data(MASTERY_BADGE_NAMES, ctx.cfg.ProjectRoot),
-            "skill_icon_data": build_skill_icon_data(op, ctx.cfg.ResourcePath),
+            "skill_icon_data": build_skill_icon_data(op, get_bundle_resource_root(bundle, ctx)),
         },
     )

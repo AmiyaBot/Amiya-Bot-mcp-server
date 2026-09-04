@@ -8,7 +8,7 @@ from src.helpers.gamedata.search import build_sources, search_source_spec
 
 from src.helpers.bundle import get_table, html_tag_format
 
-from src.app.context import AppContext
+from src.app.context import AppContext, get_bundle_resource_root
 from src.domain.models.operator import Operator
 from src.domain.types import QueryResult
 from src.helpers.glossary import mark_glossary_used_terms
@@ -318,12 +318,12 @@ def build_operator_query_result(ctx: AppContext, op: Operator) -> QueryResult:
             "module_attr": build_module_attr(op),
             "op_range_html": None,
             "skill_range_html": {},
-            "skill_icon_data": build_skill_icon_data(op, ctx.cfg.ResourcePath),
-            "building_skill_icon_data": build_building_skill_icon_data(building_skills, ctx.cfg.ResourcePath),
+            "skill_icon_data": build_skill_icon_data(op, get_bundle_resource_root(bundle, ctx)),
+            "building_skill_icon_data": build_building_skill_icon_data(building_skills, get_bundle_resource_root(bundle, ctx)),
             "template_bg_data": build_operator_template_bg_data(ctx.cfg.ProjectRoot),
             "template_bg_url": build_operator_template_bg_url(ctx.cfg.ProjectRoot),
             "template_font_url": build_operator_template_font_url(ctx.cfg.ProjectRoot),
-            "class_icon_data": build_operator_class_icon_data(op, ctx.cfg.ResourcePath),
+            "class_icon_data": build_operator_class_icon_data(op, get_bundle_resource_root(bundle, ctx)),
             "potential_icon_data": build_potential_icon_data(),
             "classes_icons": CLASSICON,
             "sp_type_name": SP_TYPE_NAME,

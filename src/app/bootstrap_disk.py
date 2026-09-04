@@ -33,7 +33,11 @@ async def build_context_from_disk(cfg) -> AppContext:
     data_repo = DataRepository(
         cfg=cfg,
     )
-    await data_repo.startup_prepare(False)
+    try:
+        await data_repo.startup_prepare(False)
+    except Exception:
+        # 服务先进入 NotReady，由后台资源维护循环在进程存活期间自动修复。
+        logger.exception("启动时加载游戏资源失败，已转入自动恢复")
 
     card_service = CardService(cfg)
 

@@ -5,7 +5,7 @@ import base64
 from pathlib import Path
 from typing import Any
 
-from src.app.context import AppContext
+from src.app.context import AppContext, get_bundle_resource_root
 from src.domain.services.operator import build_operator_template_font_url
 from src.domain.types import QueryResult
 
@@ -72,7 +72,7 @@ def build_material_query_result(ctx: AppContext, material_id: str) -> QueryResul
         title=str(material.get("name") or material_id),
         data={
             "material": material,
-            "icon_data": _build_icon_data(icon_ids, ctx.cfg.ResourcePath),
+            "icon_data": _build_icon_data(icon_ids, get_bundle_resource_root(bundle, ctx)),
             "template_font_url": build_operator_template_font_url(ctx.cfg.ProjectRoot),
         },
     )

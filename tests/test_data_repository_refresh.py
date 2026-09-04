@@ -83,12 +83,15 @@ def test_update_check_atomically_replaces_bundle_when_resources_changed(tmp_path
 def test_stale_bundle_is_rebuilt_even_when_disk_is_already_current(tmp_path, monkeypatch):
     rebuilt_bundle = _bundle("def5678")
 
-    def fake_update(_cfg, _trigger):
+    def fake_update(_cfg, _trigger, **kwargs):
+        assert kwargs["current_bundle_valid"] is True
+        assert kwargs["current_version"] == "abc1234"
         return ResourceUpdateExecutionResult(
             ok=True,
             result="up_to_date",
             message="already current",
             version="def5678",
+            bundle=rebuilt_bundle,
         )
 
     load_calls = []
@@ -113,7 +116,8 @@ def test_stale_bundle_is_rebuilt_even_when_disk_is_already_current(tmp_path, mon
     )
 
     assert result.bundle is rebuilt_bundle
-    assert load_calls[0][1] == "def5678"
+    assert result.target_version == "def5678"
+    assert load_calls == []
 
 
 def test_periodic_executor_runs_work_in_a_separate_process(tmp_path):

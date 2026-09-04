@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from src.app.context import AppContext
+from src.app.context import AppContext, get_bundle_resource_root
 from src.app.services.operator_queries import QueryExecutionResult
 from src.domain.models.stage import Stage
 from src.domain.services.operator import (
@@ -106,12 +106,13 @@ def _clean_text(value: Any) -> str:
     return html_tag_format(str(value or "")).replace("\\n", "\n").strip()
 
 
-def _stage_level_data(context: AppContext, stage: Stage) -> dict[str, Any]:
+def _stage_level_data(context: AppContext, bundle, stage: Stage) -> dict[str, Any]:
     if not stage.level_path:
         return {}
 
-    levels_root = (context.cfg.ResourcePath / "gamedata" / "levels").resolve()
-    path = (context.cfg.ResourcePath / "gamedata" / stage.level_path).resolve()
+    resource_root = get_bundle_resource_root(bundle, context)
+    levels_root = (resource_root / "gamedata" / "levels").resolve()
+    path = (resource_root / "gamedata" / stage.level_path).resolve()
     try:
         if not path.is_relative_to(levels_root):
             logger.warning("拒绝读取越界的关卡 level 路径: %s", stage.level_path)
@@ -258,10 +259,11 @@ def resolve_stage_map_paths(resource_root: Path, stage_id: str) -> list[Path]:
     return [fallback] if fallback.is_file() else []
 
 
-def _build_maps(context: AppContext, stage: Stage) -> list[dict[str, Any]]:
+def _build_maps(context: AppContext, bundle, stage: Stage) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
-    for path in resolve_stage_map_paths(context.cfg.ResourcePath, stage.id):
-        relative = str(path.relative_to(context.cfg.ResourcePath)).replace("\\", "/")
+    resource_root = get_bundle_resource_root(bundle, context)
+    for path in resolve_stage_map_paths(resource_root, stage.id):
+        relative = str(path.relative_to(resource_root)).replace("\\", "/")
         result.append(
             {
                 "id": path.stem,
@@ -272,9 +274,9 @@ def _build_maps(context: AppContext, stage: Stage) -> list[dict[str, Any]]:
 
 
 def build_stage_payload(context: AppContext, bundle, stage: Stage) -> dict[str, Any]:
-    level_data = _stage_level_data(context, stage)
+    level_data = _stage_level_data(context, bundle, stage)
     options = level_data.get("options") or {}
-    maps = _build_maps(context, stage)
+    maps = _build_maps(context, bundle, stage)
     enemies = _build_enemies(bundle, level_data)
     drops = _build_drops(context, bundle, stage)
 
@@ -310,7 +312,7 @@ def build_stage_query_result(context: AppContext, stage_id: str) -> QueryResult 
         return QueryExecutionResult(message=f"未找到关卡ID: {normalized_id}")
 
     stage_payload = build_stage_payload(context, bundle, stage)
-    resource_root = context.cfg.ResourcePath
+    resource_root = get_bundle_resource_root(bundle, context)
     map_data: dict[str, str] = {}
     enemy_icon_data: dict[str, str] = {}
     item_icon_data: dict[str, str] = {}

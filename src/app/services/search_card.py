@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from src.app.context import get_bundle_resource_root
 from src.app.services.integrated_strategy_collectible_assets import (
     IntegratedStrategyCollectibleIconArtifact,
 )
@@ -121,9 +122,10 @@ def _build_display_item(
     image_path: Path | None = None
     subtitle = ""
     meta = ""
+    resource_root = get_bundle_resource_root(bundle, context)
 
     if item_type == "干员":
-        image_path = _operator_portrait_path(context.cfg.ResourcePath, item_id)
+        image_path = _operator_portrait_path(resource_root, item_id)
         operator = (getattr(bundle, "operators", {}) or {}).get(item_id)
         if operator is not None:
             subtitle = str(getattr(operator, "classes", "") or "").strip()
@@ -131,7 +133,7 @@ def _build_display_item(
             meta = f"{rarity}★" if rarity else ""
     elif item_type == "皮肤":
         image_path = (
-            Path(context.cfg.ResourcePath)
+            resource_root
             / "assets"
             / "portrait"
             / f"{item_id}.png"
@@ -139,7 +141,7 @@ def _build_display_item(
         subtitle = str(item.get("operator_name") or "").strip()
     elif item_type == "召唤物":
         image_path = (
-            Path(context.cfg.ResourcePath)
+            resource_root
             / "assets"
             / "avatar"
             / f"{item_id}#1.png"
@@ -147,7 +149,7 @@ def _build_display_item(
         subtitle = str(item.get("operator_name") or "").strip()
     elif item_type == "敌人":
         image_path = (
-            Path(context.cfg.ResourcePath)
+            resource_root
             / "assets"
             / "enemy"
             / f"{item_id}.png"
@@ -155,7 +157,7 @@ def _build_display_item(
         subtitle = str(item.get("enemy_index") or "").strip()
         meta = str(item.get("enemy_level") or "").strip()
     elif item_type == "关卡":
-        map_paths = resolve_stage_map_paths(context.cfg.ResourcePath, item_id)
+        map_paths = resolve_stage_map_paths(resource_root, item_id)
         image_path = map_paths[0] if map_paths else None
         subtitle = str(item.get("code") or "").strip()
         difficulty = str(item.get("difficulty") or "").strip()
@@ -170,7 +172,7 @@ def _build_display_item(
         icon_id = str(material.get("icon_id") or "").strip()
         if icon_id:
             image_path = (
-                Path(context.cfg.ResourcePath) / "assets" / "item" / icon_id
+                resource_root / "assets" / "item" / icon_id
             )
             if not image_path.suffix:
                 image_path = image_path.with_suffix(".png")
@@ -188,7 +190,7 @@ def _build_display_item(
         )
     else:
         image_data = _image_data_uri(image_path)
-        image_signature = _path_signature(image_path, context.cfg.ResourcePath)
+        image_signature = _path_signature(image_path, resource_root)
 
     return {
         "index": index,

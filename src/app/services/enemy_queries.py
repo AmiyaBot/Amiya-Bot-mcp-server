@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from src.app.context import AppContext
+from src.app.context import AppContext, get_bundle_resource_root, get_context_resource_root
 from src.app.services.operator_queries import QueryExecutionResult
 from src.domain.models.enemy import Enemy
 from src.domain.services.operator import build_operator_template_font_url
@@ -78,7 +78,7 @@ def _fallback_enemy_icon_data() -> str:
 
 
 def _public_enemy_icon_url(context: AppContext, enemy_id: str) -> str:
-    icon_path = context.cfg.ResourcePath / "assets" / "enemy" / f"{enemy_id}.png"
+    icon_path = get_context_resource_root(context) / "assets" / "enemy" / f"{enemy_id}.png"
     if not icon_path.is_file():
         return ""
     try:
@@ -180,7 +180,7 @@ def build_enemy_query_result(context: AppContext, enemy_id: str) -> QueryResult 
         return QueryExecutionResult(message=f"未找到敌人ID: {normalized_id}")
 
     payload = build_enemy_payload(context, bundle, enemy)
-    resource_root = context.cfg.ResourcePath
+    resource_root = get_bundle_resource_root(bundle, context)
     icon_data: dict[str, str] = {}
     for item in [payload, *payload["linked_enemies"]]:
         item_id = str(item.get("id") or "")

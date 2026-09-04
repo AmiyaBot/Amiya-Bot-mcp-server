@@ -340,7 +340,11 @@ amiyabot-cli resource-update
 amiyabot-cli resource-update-status
 ```
 
-Web 服务运行期间还会定期检查资源更新。执行单次 CLI 查询时，如果本地命令服务尚未运行，CLI 会尝试自动在后台启动它。
+Web 服务每 60 秒执行一次轻量资源可读性检查，每 15 分钟检查一次远端更新。资源异常时会立即进入自动恢复；所有更新和恢复都在 `resources/runtime/resource-updates/` 的独立事务目录中完成。只有 Git 拉取、解压、权限归一、必需 JSON 校验和候选 Bundle 构建全部成功后，服务才会通过 `resources/runtime/active-resource-release.json` 原子切换到 `resources/releases/<release-id>/`。在线版本不会被原地覆盖，清单同时保留上一有效版本用于回退。
+
+`/health/ready` 表示当前 Bundle 与其磁盘资源均可用；异常时 Pod 会先退出 Service 流量。`/health/live` 只会在连续 3 次自动恢复失败且内存中没有有效 Bundle 后返回失败，让 Kubernetes 重启容器。Git、解压或发布事务持锁期间 liveness 不会失败。Helm 的 PreStop 最多等待 840 秒让资源事务结束，Pod 总终止宽限期默认是 900 秒。
+
+旧版 `resources/assets/` 与 `resources/gamedata/` 会继续作为首次启动的只读来源；第一次成功更新后自动迁移到版本化发布目录。执行单次 CLI 查询时，如果本地命令服务尚未运行，CLI 会尝试自动在后台启动它。
 
 ## 升级
 

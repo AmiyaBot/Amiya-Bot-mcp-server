@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from src.app.context import AppContext
+from src.app.context import AppContext, get_context_resource_root
 from src.app.cache_permissions import CACHE_FILE_MODE
 from src.app.remote_download_manager import (
     RemoteDownloadRequest,
@@ -64,8 +64,10 @@ async def resolve_operator_skin_artifact(
     context: AppContext,
     operator: Operator,
     tables: dict,
+    *,
+    resource_root: Path | None = None,
 ) -> OperatorSkinArtifact | None:
-    skin_index = _load_skin_index(context.cfg.ResourcePath)
+    skin_index = _load_skin_index(resource_root or get_context_resource_root(context))
     operator_urls = skin_index.get(operator.id)
     if not isinstance(operator_urls, dict) or not operator_urls:
         return None
@@ -81,6 +83,8 @@ async def resolve_operator_skin_artifact(
 async def resolve_skin_artifact_by_id(
     context: AppContext,
     skin_id: str,
+    *,
+    resource_root: Path | None = None,
 ) -> OperatorSkinArtifact | None:
     """按 skin_id 精确解析皮肤立绘（索引全局 skin_id 零重复，可直接全局查找）。
 
@@ -90,7 +94,7 @@ async def resolve_skin_artifact_by_id(
     if not normalized_skin_id:
         return None
 
-    _load_skin_index(context.cfg.ResourcePath)
+    _load_skin_index(resource_root or get_context_resource_root(context))
     remote_url = _global_skin_url_cache.get(normalized_skin_id)
     if not remote_url:
         logger.debug("皮肤立绘 URL 索引中不存在: %s", normalized_skin_id)

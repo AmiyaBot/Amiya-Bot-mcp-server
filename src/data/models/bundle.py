@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Mapping
 
 from src.domain.models.operator import Operator
@@ -10,6 +11,8 @@ from src.helpers.bundle import *
 @dataclass(frozen=True, slots=True)
 class DataBundle:
     version: str
+    resource_root: Path
+    """该快照绑定的版本化资源根目录；磁盘懒加载必须使用此目录。"""
 
     # domain models
     operators: Dict[str, Operator]

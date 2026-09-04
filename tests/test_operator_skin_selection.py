@@ -48,7 +48,7 @@ def test_query_operator_skins_returns_selection_card_and_numbered_urls(
         data_repository=SimpleNamespace(get_bundle=lambda: bundle),
     )
 
-    async def fake_resolve_skin_artifact(_context, skin_id: str):
+    async def fake_resolve_skin_artifact(_context, skin_id: str, **_kwargs):
         # 即使某个皮肤立绘缺失，它也必须继续出现在选择卡和编号列表中。
         if skin_id == "char_test@skin#1":
             return None

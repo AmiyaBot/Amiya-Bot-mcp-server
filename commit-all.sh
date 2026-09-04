@@ -1,45 +1,60 @@
 #!/usr/bin/env bash
-# commit-all.sh — 提交当前全部改动并推送到远端
-# 用法: ./commit-all.sh <提交信息>
-#
-# 行为：
-#   1. 暂存全部改动（含未跟踪文件）
-#   2. 使用传入的提交信息提交
-#   3. 推送当前分支与全部标签到远端
+
 set -euo pipefail
 
-# 切换到仓库根目录（脚本所在目录）
-cd "$(dirname "$0")"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$script_dir"
 
-COMMIT_MSG="${1:-}"
-
-if [[ -z "$COMMIT_MSG" ]]; then
-  echo "❌ 用法: ./commit-all.sh <提交信息>"
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "当前目录不是 Git 仓库。" >&2
   exit 1
 fi
 
-# 暂存全部改动
-git add -A
+push_after_commit=1
+if [[ "${1:-}" == "--no-push" ]]; then
+  push_after_commit=0
+  shift
+fi
 
-# 无改动时直接退出
-if git diff --cached --quiet; then
-  echo "✅ 没有需要提交的改动"
+if [[ $# -eq 0 ]]; then
+  echo "用法: ./commit-all.sh [--no-push] <提交信息>" >&2
+  exit 1
+fi
+
+commit_message="$*"
+if [[ -z "${commit_message//[[:space:]]/}" ]]; then
+  echo "提交信息不能为空。" >&2
+  exit 1
+fi
+
+if [[ -z "$(git status --porcelain)" ]]; then
+  echo "没有可提交的变更。"
   exit 0
 fi
 
-echo "📦 即将提交的改动："
-git status --short
+git add -A
 
-git commit -m "$COMMIT_MSG"
+if git diff --cached --quiet; then
+  echo "没有可提交的变更。"
+  exit 0
+fi
+
+git commit -m "$commit_message"
+echo "已提交本地改动。"
+
+if [[ $push_after_commit -eq 0 ]]; then
+  echo "未推送（--no-push）。"
+  exit 0
+fi
+
+if ! git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+  echo "当前分支没有 upstream；本地提交已保留，未执行推送。" >&2
+  exit 2
+fi
 
 if ! git push; then
-  echo "❌ 推送分支失败：远端可能有新提交，请先 git pull --rebase 后再试"
+  echo "推送失败；本地提交已保留，请检查远端状态后手动处理。" >&2
   exit 1
 fi
 
-if ! git push --tags; then
-  echo "❌ 推送标签失败"
-  exit 1
-fi
-
-echo "✅ 提交并推送完成"
+echo "已推送当前分支。"
