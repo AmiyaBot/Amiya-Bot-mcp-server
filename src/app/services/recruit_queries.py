@@ -32,7 +32,7 @@ def _find_combinations(tags: list[str]) -> list[list[str]]:
     return result
 
 
-def _normalize_tags(text: str, known_tags: set[str]) -> tuple[list[str], int]:
+def _normalize_tag_text(text: str, known_tags: set[str]) -> tuple[list[str], int]:
     """匹配数据标签，并兼容源插件定义的三个公招简称。"""
     # 这些简称来自源插件的输入处理，不是额外的游戏词条；实际查询标签
     # 仍必须存在于当前 gacha/character 数据中。
@@ -65,11 +65,24 @@ def _normalize_tags(text: str, known_tags: set[str]) -> tuple[list[str], int]:
     return tags_list, 6 if "高级资深干员" in tags_list else 5
 
 
-async def query_recruit(context: AppContext, text: str) -> dict[str, Any]:
+def _normalize_tags(tags: list[str], known_tags: set[str]) -> tuple[list[str], int]:
+    """按输入顺序规范化结构化标签数组，并去除重复项。"""
+    normalized: list[str] = []
+    max_rarity = 5
+    for value in tags:
+        matched, value_max_rarity = _normalize_tag_text(str(value), known_tags)
+        for tag in matched:
+            if tag not in normalized:
+                normalized.append(tag)
+        max_rarity = max(max_rarity, value_max_rarity)
+    return normalized, max_rarity
+
+
+async def query_recruit(context: AppContext, tags: list[str]) -> dict[str, Any]:
     bundle = context.data_repository.get_bundle()
     recruit_operators = [op for op in (bundle.operators or {}).values() if op.is_recruit]
     known_tags = {tag for op in recruit_operators for tag in op.tags}
-    tags, max_rarity = _normalize_tags(text or "", known_tags)
+    tags, max_rarity = _normalize_tags(tags or [], known_tags)
     if not tags:
         return {"message": "未识别到有效的公招标签", "tags": [], "available_tags": sorted(known_tags)}
 
@@ -108,8 +121,16 @@ async def query_recruit(context: AppContext, text: str) -> dict[str, Any]:
     groups.sort(key=lambda item: (-len(item["tags"]), -item["max_rarity"]))
 
     # 使用与源插件一致的深色横向布局，复用现有卡片服务输出图片 URL。
+    # AI-CORRECTION 2026-09-04: 渲染数据使用独立副本，避免 Base64 头像进入 MCP 响应。
     resource_root = Path(context.cfg.ResourcePath)
-    for group in groups:
+    render_groups = [
+        {
+            **group,
+            "operators": [dict(item) for item in group["operators"]],
+        }
+        for group in groups
+    ]
+    for group in render_groups:
         for item in group["operators"]:
             portrait = resource_root / "assets" / "portrait" / f'{item["operator_id"]}#1.png'
             item["image_data"] = _image_data_uri(portrait)
@@ -120,7 +141,7 @@ async def query_recruit(context: AppContext, text: str) -> dict[str, Any]:
         key=payload_key,
         title="公开招募",
         data={
-            "groups": groups,
+            "groups": render_groups,
             "tags": tags,
             "template_font_url": None,
         },

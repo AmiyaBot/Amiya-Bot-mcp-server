@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -10,6 +11,8 @@ from mcp.types import LATEST_PROTOCOL_VERSION
 
 from src.adapters.mcp.app import register_asgi
 from src.app.config import Config
+from src.app.services.recruit_queries import _normalize_tags
+from src.app.services.recruit_queries import query_recruit
 
 
 pytestmark = pytest.mark.anyio
@@ -28,6 +31,98 @@ def _sse_json(response: httpx.Response) -> dict:
     ]
     assert data_lines, response.text
     return json.loads("\n".join(data_lines))
+
+
+def test_normalize_recruit_tags_keeps_all_screenshot_tags_in_input_order() -> None:
+    known_tags = {
+        "高级资深干员",
+        "近卫干员",
+        "输出",
+        "近战位",
+        "支援",
+    }
+    screenshot_tags = [
+        "高级资深干员",
+        "近卫干员",
+        "输出",
+        "近战位",
+        "支援",
+    ]
+
+    tags, max_rarity = _normalize_tags(screenshot_tags, known_tags)
+
+    assert tags == screenshot_tags
+    assert max_rarity == 6
+
+
+def test_normalize_recruit_tags_ignores_unknown_values_and_deduplicates() -> None:
+    tags, max_rarity = _normalize_tags(
+        ["近卫干员", "未知词条", "近卫干员", "输出"],
+        {"近卫干员", "输出"},
+    )
+
+    assert tags == ["近卫干员", "输出"]
+    assert max_rarity == 5
+
+
+async def test_recruit_response_excludes_render_only_base64(tmp_path: Path) -> None:
+    portrait = tmp_path / "assets" / "portrait" / "char_test#1.png"
+    portrait.parent.mkdir(parents=True)
+    portrait.write_bytes(b"test-portrait")
+
+    operator = SimpleNamespace(
+        id="char_test",
+        name="测试干员",
+        rarity=5,
+        tags=["近卫干员", "输出", "近战位"],
+        is_recruit=True,
+    )
+    bundle = SimpleNamespace(
+        version="test-bundle",
+        operators={operator.id: operator},
+    )
+
+    class CardService:
+        payload = None
+
+        async def get(self, **kwargs):
+            self.payload = kwargs["payload"]
+            return SimpleNamespace()
+
+    card_service = CardService()
+    context = SimpleNamespace(
+        cfg=SimpleNamespace(
+            ResourcePath=tmp_path,
+            BaseUrl="https://example.test/",
+        ),
+        data_repository=SimpleNamespace(get_bundle=lambda: bundle),
+        card_service=card_service,
+    )
+
+    response = await query_recruit(
+        context,
+        ["近卫干员", "输出", "近战位"],
+    )
+
+    assert response["card_image_url"].startswith("https://example.test/cards/")
+    response_operators = [
+        item
+        for group in response["groups"]
+        for item in group["operators"]
+    ]
+    assert response_operators
+    assert all("image_data" not in item for item in response_operators)
+
+    render_operators = [
+        item
+        for group in card_service.payload.data["groups"]
+        for item in group["operators"]
+    ]
+    assert render_operators
+    assert all(
+        item["image_data"].startswith("data:image/png;base64,")
+        for item in render_operators
+    )
 
 
 async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None:
@@ -121,8 +216,33 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
                 "get_material",
                 "get_stage_data",
                 "get_enemy_data",
+                "recruit_with_tag",
                 "get_integrated_strategy_collectible_detail",
             } <= tool_names
+            assert "recruit" not in tool_names
+
+            recruit_with_tag_tool = next(
+                tool for tool in tools if tool["name"] == "recruit_with_tag"
+            )
+            assert set(recruit_with_tag_tool["inputSchema"]["properties"]) == {
+                "tags"
+            }
+            assert recruit_with_tag_tool["inputSchema"]["required"] == ["tags"]
+            tags_schema = recruit_with_tag_tool["inputSchema"]["properties"][
+                "tags"
+            ]
+            assert tags_schema["type"] == "array"
+            assert tags_schema["minItems"] == 1
+            assert tags_schema["maxItems"] == 5
+            assert "高级资深干员" in tags_schema["items"]["enum"]
+            assert "女性干员" in tags_schema["items"]["enum"]
+            assert "全部 5 个词条" in recruit_with_tag_tool["description"]
+            assert "禁止自行组合" in recruit_with_tag_tool["description"]
+            assert "直接向用户展示图片" in recruit_with_tag_tool["description"]
+            assert (
+                "不要自行计算、筛选或复述结果"
+                in recruit_with_tag_tool["description"]
+            )
 
             collectible_tool = next(
                 tool

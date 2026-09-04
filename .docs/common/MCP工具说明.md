@@ -1,6 +1,6 @@
 # MCP 工具说明
 
-本服务对外暴露 12 个 MCP 工具，主要通过 Streamable HTTP 提供，并保留旧 SSE 入口。`search` 是资源统一搜索入口（任何查询都应从它开始），干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material` / `get_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`，关卡查询流程为 `search` → `get_stage_data`，敌人查询流程为 `search` → `get_enemy_data`，集成战略藏品查询流程为 `search` → `get_integrated_strategy_collectible_detail`。
+本服务对外暴露 13 个 MCP 工具，主要通过 Streamable HTTP 提供，并保留旧 SSE 入口。除公开招募外，`search` 是资源统一搜索入口；干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material` / `get_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`，关卡查询流程为 `search` → `get_stage_data`，敌人查询流程为 `search` → `get_enemy_data`，集成战略藏品查询流程为 `search` → `get_integrated_strategy_collectible_detail`。公开招募直接调用 `recruit_with_tag`。
 
 ---
 
@@ -488,6 +488,51 @@ Markdown 文本包含：干员名、技能名、等级、技能范围（文本�
 ```json
 {"message": "读取关卡数据失败: xxx"}
 ```
+
+---
+
+## 10. recruit_with_tag — 公开招募
+
+根据公开招募标签返回可锁定的稀有组合与候选干员。公开招募不经过 `search`。
+
+当用户发送公招界面截图时，由客户端模型识别标签区；若其中显示 5 个有效词条，必须将全部 5 项一次性传入 `tags`。不得自行组合、筛选或拆成多次调用，组合计算由本工具完成。
+
+返回的 `card_image_url` 图片已汇总这 5 个标签产生的全部有效组合及候选干员。有该字段时，客户端模型应直接向用户展示图片，不再自行计算、筛选或复述组合结果。
+
+Base64 头像仅供服务端内部渲染，不包含在 MCP 响应中；`groups[].operators[]` 只返回干员 ID、名称、稀有度和匹配标签。
+
+### 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `tags` | `str[]` | 是 | 1–5 个公招标签；截图场景必须包含画面显示的全部 5 项 |
+
+有效标签：近卫干员、狙击干员、重装干员、医疗干员、辅助干员、术师干员、特种干员、先锋干员、近战位、远程位、高级资深干员、控场、爆发、资深干员、治疗、支援、新手、费用回复、输出、生存、群攻、防护、减速、削弱、快速复活、位移、召唤、支援机械、元素、男性干员、女性干员。
+
+### 返回值
+
+```json
+{
+  "tags": ["高级资深干员", "近卫干员", "输出", "近战位", "支援"],
+  "groups": [
+    {
+      "tags": ["高级资深干员", "近卫干员", "输出"],
+      "max_rarity": 6,
+      "operators": [
+        {
+          "operator_id": "char_172_svrash",
+          "operator_name": "银灰",
+          "operator_rarity": 6,
+          "operator_tags": ["高级资深干员", "近卫干员", "输出"]
+        }
+      ]
+    }
+  ],
+  "card_image_url": "https://..."
+}
+```
+
+没有有效标签或没有稀有组合时返回 `message`。
 
 ---
 
