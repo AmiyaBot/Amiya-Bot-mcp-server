@@ -5,7 +5,7 @@
 
 AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它基于本地游戏资源提供结构化数据和图片卡片，并附带命令行工具 `amiyabot-cli`。
 
-1.0.5 版本支持查询干员、技能、精英化与技能升级材料、模组、召唤物、皮肤、材料、关卡、敌人、集成战略藏品和游戏术语。
+1.0.6 版本支持查询干员、技能、精英化与技能升级材料、模组、召唤物、皮肤、材料、关卡、敌人、集成战略藏品和游戏术语。
 
 ## 功能
 
@@ -50,7 +50,7 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 
 ### Docker（推荐）
 
-准备一个持久化目录并启动 1.0.5：
+准备一个持久化目录并启动 1.0.6：
 
 ```bash
 mkdir -p ./amiyabot-resources
@@ -59,7 +59,7 @@ docker run -d \
   --name amiyabot-mcp \
   -p 9000:9000 \
   -v "$(pwd)/amiyabot-resources:/app/resources" \
-  hsyhhssyy/amiyabot-mcp:v1.0.5
+  hsyhhssyy/amiyabot-mcp:v1.0.6
 ```
 
 首次启动时，容器会自动把游戏资源下载到挂载目录；所需时间取决于网络和磁盘性能。建议为资源、缓存和日志预留至少 20 GiB 空间。
@@ -88,13 +88,13 @@ ingress:
     secretName: amiyabot-example-tls
 ```
 
-安装 1.0.5：
+安装 1.0.6：
 
 ```bash
 helm repo add amiyabot https://AmiyaBot.github.io/Amiya-Bot-mcp-server
 helm repo update
 helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp \
-  --version 1.0.5 \
+  --version 1.0.6 \
   -f values.yaml
 ```
 
@@ -108,11 +108,11 @@ Chart 默认创建 PVC 并将其挂载到 `/app/resources`。已有 PVC 可以�
 
 #### 一键安装
 
-下面的命令会将 1.0.5 安装到 `~/.local/share/amiyabot-cli/venv`，并在 `~/.local/bin` 创建 `amiyabot-cli`：
+下面的命令会将 1.0.6 安装到 `~/.local/share/amiyabot-cli/venv`，并在 `~/.local/bin` 创建 `amiyabot-cli`：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.5/install.sh \
-  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.5" sh
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.6/install.sh \
+  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.6" sh
 ```
 
 如果 `~/.local/bin` 不在 `PATH` 中，安装脚本会显示需要加入 shell 配置的内容。
@@ -120,14 +120,14 @@ curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.
 不需要图片渲染时，可以跳过 Chromium 安装：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.5/install.sh \
-  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.5" sh -s -- --no-playwright
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.6/install.sh \
+  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.6" sh -s -- --no-playwright
 ```
 
 #### 从源码安装
 
 ```bash
-git clone --branch v1.0.5 --depth 1 https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git
+git clone --branch v1.0.6 --depth 1 https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git
 cd Amiya-Bot-mcp-server
 
 python3 -m venv .venv
@@ -224,7 +224,7 @@ docker run -d \
   -p 9000:9000 \
   -v "$(pwd)/amiyabot-resources:/app/resources" \
   -v "$(pwd)/config.json:/app/config.json:ro" \
-  hsyhhssyy/amiyabot-mcp:v1.0.5
+  hsyhhssyy/amiyabot-mcp:v1.0.6
 ```
 
 ## 接入 MCP 服务
