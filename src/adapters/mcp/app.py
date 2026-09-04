@@ -35,6 +35,7 @@ from src.adapters.mcp.mcp_tools.operator_skill import register_operator_skill_to
 from src.adapters.mcp.mcp_tools.material import register_material_tool
 from src.adapters.mcp.mcp_tools.stage import register_stage_tool
 from src.adapters.mcp.mcp_tools.enemy import register_enemy_tool
+from src.adapters.mcp.mcp_tools.recruit import register_recruit_tool
 from src.adapters.mcp.mcp_tools.integrated_strategy_collectible import (
     register_integrated_strategy_collectible_tool,
 )
@@ -237,10 +238,11 @@ def register_asgi(app: FastAPI, cfg: Config) -> FastMCP:
     register_material_tool(mcp,app)
     register_stage_tool(mcp,app)
     register_enemy_tool(mcp,app)
+    register_recruit_tool(mcp, app)
     register_integrated_strategy_collectible_tool(mcp,app)
     logger.info(
         "MCP 工具注册完成: tools=%s",
-        ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins", "get_material", "get_stage_data", "get_enemy_data", "get_integrated_strategy_collectible_detail"],
+        ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins", "get_material", "get_stage_data", "get_enemy_data", "recruit", "get_integrated_strategy_collectible_detail"],
     )
 
     streamable_http_app = mcp.streamable_http_app()

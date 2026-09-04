@@ -56,6 +56,7 @@ def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle
         ("enemy_database", "levels/enemydata"),
         ("range_table", "excel"),
         ("skill_table", "excel"),
+        ("gacha_table", "excel"),
         ("skin_table", "excel"),
         ("building_data", "excel"),
         ("charword_table", "excel"),
@@ -721,8 +722,25 @@ def _build_token(tables):
 
     return tokens, name_to_id
 
+def _recruit_operator_names(tables) -> set[str]:
+    """从 gacha_table.recruitDetail 解析当前版本可公开招募的干员名称。"""
+    import re
+
+    detail = str((tables.get("gamedata", {}).get("gacha_table") or {}).get("recruitDetail") or "")
+    # 去除明日方舟文本标签，并兼容数据中的字面量 \\n。
+    detail = re.sub(r"<[^>]*>", "", detail).replace("\\n", "\n")
+    names: set[str] = set()
+    for match in re.finditer(r"★+\s*\n([^\r\n]*)", detail):
+        for name in match.group(1).split("/"):
+            normalized = name.strip().strip("\\r")
+            if normalized:
+                names.add(normalized)
+    return names
+
+
 def _build_operators(tables) -> tuple[Dict[str, Operator], Dict[str, str], Dict[str, str]]:
     character_table: Dict[str, dict] = tables.get("gamedata", {}).get("character_table") or {}
+    recruit_names = _recruit_operator_names(tables)
 
     operators: Dict[str, Operator] = {}
     name_to_id: Dict[str, str] = {}
@@ -737,7 +755,13 @@ def _build_operators(tables) -> tuple[Dict[str, Operator], Dict[str, str], Dict[
         if not str(op_id).startswith("char_"):
             continue
 
-        op = OperatorImpl(op_id, data, tables=tables, is_recruit=False, known_operator_ids=known_operator_ids)
+        op = OperatorImpl(
+            op_id,
+            data,
+            tables=tables,
+            is_recruit=(data.get("name") or "").strip() in recruit_names,
+            known_operator_ids=known_operator_ids,
+        )
         operators[op_id] = op
 
         if getattr(op, "name", ""):
