@@ -6,6 +6,7 @@ from typing import Any
 import base64
 
 from src.app.context import AppContext
+from src.app.services.operator_queries import QueryExecutionResult
 from src.domain.types import QueryResult
 from src.helpers.card_urls import build_card_url
 
@@ -78,13 +79,16 @@ def _normalize_tags(tags: list[str], known_tags: set[str]) -> tuple[list[str], i
     return normalized, max_rarity
 
 
-async def query_recruit(context: AppContext, tags: list[str]) -> dict[str, Any]:
+async def query_recruit(context: AppContext, tags: list[str]) -> QueryExecutionResult:
     bundle = context.data_repository.get_bundle()
     recruit_operators = [op for op in (bundle.operators or {}).values() if op.is_recruit]
     known_tags = {tag for op in recruit_operators for tag in op.tags}
     tags, max_rarity = _normalize_tags(tags or [], known_tags)
     if not tags:
-        return {"message": "未识别到有效的公招标签", "tags": [], "available_tags": sorted(known_tags)}
+        return QueryExecutionResult(
+            data={"tags": [], "available_tags": sorted(known_tags)},
+            message="未识别到有效的公招标签",
+        )
 
     operators: dict[str, dict[str, Any]] = {}
     for operator in (bundle.operators or {}).values():
@@ -117,7 +121,10 @@ async def query_recruit(context: AppContext, tags: list[str]) -> dict[str, Any]:
             })
 
     if not groups:
-        return {"message": "没有找到可以锁定稀有干员的组合", "tags": tags}
+        return QueryExecutionResult(
+            data={"tags": tags, "groups": []},
+            message="没有找到可以锁定稀有干员的组合",
+        )
     groups.sort(key=lambda item: (-len(item["tags"]), -item["max_rarity"]))
 
     # 使用与源插件一致的深色横向布局，复用现有卡片服务输出图片 URL。
@@ -168,7 +175,7 @@ async def query_recruit(context: AppContext, tags: list[str]) -> dict[str, Any]:
     except Exception:
         card_url = None
 
-    response = {"tags": tags, "groups": groups}
-    if card_url:
-        response["card_image_url"] = card_url
-    return response
+    return QueryExecutionResult(
+        data={"tags": tags, "groups": groups},
+        image_url=card_url,
+    )

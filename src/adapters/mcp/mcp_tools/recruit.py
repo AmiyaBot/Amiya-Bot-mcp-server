@@ -69,9 +69,9 @@ def register_recruit_with_tag_tool(mcp, app):
                 log_tool_end(logger, tool_name, started_at, payload)
                 return payload
             context: AppContext = app.state.ctx
-            payload = await query_recruit(context, tags)
-            log_tool_end(logger, tool_name, started_at, payload)
-            return payload
+            result_payload = (await query_recruit(context, tags)).to_response()
+            log_tool_end(logger, tool_name, started_at, result_payload)
+            return result_payload
         except Exception:
             log_tool_exception(logger, tool_name, started_at, tags=tags)
             raise

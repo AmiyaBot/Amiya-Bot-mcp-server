@@ -702,10 +702,21 @@ def _resolve_operator_by_id(
 
     bundle = context.data_repository.get_bundle()
     operator = bundle.operators.get(normalized_operator_id)
-    if operator is None:
-        return QueryExecutionResult(message=f"未找到干员ID: {normalized_operator_id}")
+    if operator is not None:
+        return operator
 
-    return operator
+    # 兼容旧客户端/模型传入被截断的 char_* ID。
+    # 仅在前缀唯一时自动补全，避免把请求静默解析到错误的干员。
+    if normalized_operator_id.startswith("char_"):
+        prefix_matches = [
+            candidate
+            for candidate in bundle.operators
+            if candidate.startswith(normalized_operator_id)
+        ]
+        if len(prefix_matches) == 1:
+            return bundle.operators[prefix_matches[0]]
+
+    return QueryExecutionResult(message=f"未找到干员ID: {normalized_operator_id}")
 
 
 # 原函数名 search_operator（2026-08-13 起重命名为 search，
