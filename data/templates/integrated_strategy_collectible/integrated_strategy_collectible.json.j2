@@ -1,5 +1,5 @@
 {
-  "type": "integrated_strategy_collectible",
+  "type": {{ r.type | tojson }},
   "key": {{ r.key | tojson }},
   "title": {{ r.title | tojson }},
   "data": {{ r.data.collectible | tojson }}

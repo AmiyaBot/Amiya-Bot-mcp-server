@@ -147,6 +147,45 @@ def test_search_selection_card_uses_type_specific_assets_and_global_indexes(
     assert "search-card-test" not in html
 
 
+def test_search_selection_card_groups_mechanism_items(tmp_path: Path) -> None:
+    context, collectible_artifact = _card_context(tmp_path)
+    items = [
+        {
+            "id": "rogue_3_totem_R_L1",
+            "name": "黜人",
+            "type": "密文板",
+            "topic_name": "探索者的银凇止境",
+            "sub_type": "上半板",
+            "rarity": "普通",
+        },
+        {
+            "id": "rogue_5_copper_B_01_a",
+            "name": "大炎通宝",
+            "type": "通宝",
+            "topic_name": "岁的界园志异",
+            "variant_count": 11,
+        },
+    ]
+
+    result, _ = build_search_selection_query_result(
+        context,
+        items,
+        collectible_artifacts={
+            "rogue_3_totem_R_L1": collectible_artifact,
+        },
+    )
+
+    groups = result.data["groups"]
+    assert [group["type"] for group in groups] == ["密文板", "通宝"]
+    assert all(group["css_class"] == "collectible" for group in groups)
+    assert groups[0]["items"][0]["subtitle"] == "探索者的银凇止境"
+    assert groups[0]["items"][0]["meta"] == "上半板 · 普通"
+    assert groups[0]["items"][0]["image_data"].startswith(
+        "data:image/png;base64,"
+    )
+    assert groups[1]["items"][0]["meta"] == "11种变体"
+
+
 def test_result_cache_key_uses_all_ids_in_original_order_without_join_ambiguity() -> None:
     first = build_search_result_cache_key([{"id": "ab"}, {"id": "c"}])
     second = build_search_result_cache_key([{"id": "a"}, {"id": "bc"}])

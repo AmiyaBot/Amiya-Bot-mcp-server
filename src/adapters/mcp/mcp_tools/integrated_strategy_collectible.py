@@ -17,7 +17,7 @@ from src.app.services.integrated_strategy_collectible_queries import (
 
 logger = logging.getLogger(__name__)
 
-_COLLECTIBLE_TOOL_DESC = """根据唯一的集成战略藏品 ID 获取藏品详情和详情卡片。
+_COLLECTIBLE_TOOL_DESC = """兼容旧客户端：根据唯一的集成战略藏品 ID 获取藏品详情和详情卡片。新查询请统一使用 get_integrated_strategy_item_detail。
 请先调用 search，由 AI 根据名称、所属主题和效果选择 type 为「集成战略藏品」的唯一候选，再把该候选的 id 传给本工具；不要把藏品名称直接传入。
 
 返回 data、card_image_url，以及可选的 data_url / image_path；卡片生成失败时仍会返回结构化藏品数据。"""

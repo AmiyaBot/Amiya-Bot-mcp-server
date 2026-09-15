@@ -574,17 +574,31 @@ def build_sources(
             allow_fuzzy=True,
         ),
         SourceSpec(
-            key="integrated_strategy_collectible",
+            key="integrated_strategy_item",
             candidates=lambda: list(
-                (bundle.integrated_strategy_collectible_alias_to_ids or {}).keys()
+                (
+                    getattr(
+                        bundle,
+                        "integrated_strategy_item_alias_to_ids",
+                        {},
+                    )
+                    or {}
+                ).keys()
             ),
             # 不同集成战略主题会复用部分藏品名，需要保留全部候选。
+            # AI-CORRECTION 2026-09-15: 机制道具也可能同名但效果不同，需保留不同聚合组。
             resolve=lambda k: [
-                bundle.integrated_strategy_collectibles[item_id]
+                getattr(bundle, "integrated_strategy_items", {})[item_id]
                 for item_id in (
-                    bundle.integrated_strategy_collectible_alias_to_ids or {}
+                    getattr(
+                        bundle,
+                        "integrated_strategy_item_alias_to_ids",
+                        {},
+                    )
+                    or {}
                 ).get(k, [])
-                if item_id in (bundle.integrated_strategy_collectibles or {})
+                if item_id
+                in (getattr(bundle, "integrated_strategy_items", {}) or {})
             ],
             continue_after_exact=False,
             allow_fuzzy=True,

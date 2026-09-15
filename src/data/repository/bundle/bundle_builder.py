@@ -105,6 +105,10 @@ def load_bundle_from_disk(
         integrated_strategy_collectibles,
         integrated_strategy_collectible_alias_to_ids,
     ) = _build_integrated_strategy_collectibles(tables)
+    (
+        integrated_strategy_items,
+        integrated_strategy_item_alias_to_ids,
+    ) = _build_integrated_strategy_items(tables)
 
     return DataBundle(
         version=version,
@@ -124,6 +128,8 @@ def load_bundle_from_disk(
         skin_name_to_id=skin_name_to_id,
         integrated_strategy_collectibles=integrated_strategy_collectibles,
         integrated_strategy_collectible_alias_to_ids=integrated_strategy_collectible_alias_to_ids,
+        integrated_strategy_items=integrated_strategy_items,
+        integrated_strategy_item_alias_to_ids=integrated_strategy_item_alias_to_ids,
         tables=tables,
     )
 
@@ -218,6 +224,342 @@ def _build_integrated_strategy_collectibles(
                     bucket.append(item_id)
 
     return collectibles, aliases
+
+
+_INTEGRATED_STRATEGY_ITEM_TYPE_NAMES = {
+    "RELIC": "集成战略藏品",
+    "CAPSULE": "剧目",
+    "DICE_TYPE": "骰子",
+    "TOTEM": "密文板",
+    "FRAGMENT": "构想",
+    "COPPER": "通宝",
+    "SCRAP": "零件",
+}
+
+_COPPER_VARIANT_NAMES = {
+    "a": "基础",
+    "b": "锈色",
+    "c": "存护",
+    "d": "入幻",
+    "e": "引光",
+    "f": "巡游",
+    "g": "相合",
+    "h": "易变",
+    "i": "易花",
+    "j": "易厉",
+    "k": "受引",
+    "l": "特殊受引",
+}
+
+
+def _build_integrated_strategy_items(
+    tables,
+) -> tuple[Dict[str, Dict[str, Any]], Dict[str, list[str]]]:
+    """构建可查询的肉鸽藏品和主题机制道具，并合并数据层重复项。
+
+    聚合规则：
+    - 藏品、密文板、构想和零件按原始物品保留；
+    - 普通/猩红剧目合为同一剧目的变体；
+    - 同名骰子的常规/作战内记录合为变体，同时去掉场景重复记录；
+    - 通宝按 itemIconGroupId 合并，同组只保留有效品相，去掉
+      ``change_copper`` 镜像记录；``COPPER_BUFF`` 是通宝效果的内部镜像，
+      不单独进入查询索引。
+    """
+    topic_table = get_table(
+        tables,
+        "roguelike_topic_table",
+        source="gamedata",
+        default={},
+    )
+    raw_topics = topic_table.get("topics") or {}
+    raw_details = topic_table.get("details") or {}
+    items: Dict[str, Dict[str, Any]] = {}
+    aliases: Dict[str, list[str]] = {}
+
+    topics = sorted(
+        raw_topics.items(),
+        key=lambda pair: (
+            int(pair[1].get("sort") or 0)
+            if isinstance(pair[1], dict)
+            else 0,
+            str(pair[0]),
+        ),
+    )
+    for raw_topic_id, raw_topic in topics:
+        if not isinstance(raw_topic, dict):
+            continue
+        topic_id = str(raw_topic_id or "").strip()
+        topic_name = str(raw_topic.get("name") or "").strip()
+        detail = raw_details.get(topic_id) or {}
+        raw_items = detail.get("items") or {}
+        if not topic_id or not isinstance(raw_items, dict):
+            continue
+
+        grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for raw_item_id, raw in raw_items.items():
+            if not isinstance(raw, dict):
+                continue
+            game_type = str(raw.get("type") or "").strip()
+            if game_type not in _INTEGRATED_STRATEGY_ITEM_TYPE_NAMES:
+                continue
+            item_id = str(raw.get("id") or raw_item_id or "").strip()
+            name = str(raw.get("name") or "").strip()
+            if not item_id or not name:
+                continue
+            if item_id == raw.get("id") and name == raw.get("name"):
+                normalized = raw
+            else:
+                normalized = dict(raw)
+                normalized["id"] = item_id
+                normalized["name"] = name
+            group_key = _integrated_strategy_group_key(game_type, normalized)
+            grouped.setdefault((game_type, group_key), []).append(normalized)
+
+        for (game_type, group_id), raw_group in grouped.items():
+            item = _build_integrated_strategy_item_record(
+                raw_group,
+                game_type=game_type,
+                group_id=group_id,
+                topic_id=topic_id,
+                topic_name=topic_name,
+            )
+            item_id = str(item.get("id") or "")
+            if not item_id:
+                continue
+            if item_id in items:
+                log.warning(
+                    "Duplicate integrated strategy item id: id=%s topic=%s",
+                    item_id,
+                    topic_id,
+                )
+                continue
+            items[item_id] = item
+            for alias in _integrated_strategy_item_aliases(item, raw_group):
+                bucket = aliases.setdefault(alias, [])
+                if item_id not in bucket:
+                    bucket.append(item_id)
+
+    return items, aliases
+
+
+def _integrated_strategy_group_key(
+    game_type: str,
+    raw: Dict[str, Any],
+) -> str:
+    item_id = str(raw.get("id") or "").strip()
+    name = str(raw.get("name") or "").strip()
+    if game_type == "CAPSULE":
+        return name.removeprefix("猩红")
+    if game_type == "DICE_TYPE":
+        return name
+    if game_type == "COPPER":
+        return str(raw.get("itemIconGroupId") or item_id).strip()
+    return item_id
+
+
+def _build_integrated_strategy_item_record(
+    raw_group: list[dict[str, Any]],
+    *,
+    game_type: str,
+    group_id: str,
+    topic_id: str,
+    topic_name: str,
+) -> Dict[str, Any]:
+    ordered = sorted(
+        raw_group,
+        key=lambda raw: _item_variant_sort_key(game_type, raw),
+    )
+    representative = ordered[0]
+    variants = _build_item_variants(game_type, ordered)
+    name = str(representative.get("name") or "").strip()
+    if game_type == "CAPSULE":
+        name = name.removeprefix("猩红")
+
+    return {
+        "id": str(representative.get("id") or "").strip(),
+        "name": name,
+        "description": _clean_rogue_item_text(
+            representative.get("description")
+        ),
+        "usage": _clean_rogue_item_text(representative.get("usage")),
+        "obtain_approach": _clean_rogue_item_text(
+            representative.get("obtainApproach")
+        ),
+        "rarity": str(representative.get("rarity") or "").strip(),
+        "icon_id": str(representative.get("iconId") or "").strip(),
+        "can_sacrifice": bool(representative.get("canSacrifice")),
+        "unlock_condition": _clean_rogue_item_text(
+            representative.get("unlockCondDesc")
+        ),
+        "topic_id": topic_id,
+        "topic_name": topic_name,
+        "game_type": game_type,
+        "display_type": _INTEGRATED_STRATEGY_ITEM_TYPE_NAMES[game_type],
+        "sub_type": str(representative.get("subType") or "").strip(),
+        "sub_type_name": _integrated_strategy_sub_type_name(
+            game_type,
+            representative,
+        ),
+        "group_id": group_id,
+        "variant_count": len(variants),
+        "variants": variants,
+        "raw": representative,
+    }
+
+
+def _item_variant_sort_key(
+    game_type: str,
+    raw: dict[str, Any],
+) -> tuple[int, str]:
+    item_id = str(raw.get("id") or "")
+    sub_type = str(raw.get("subType") or "")
+    if game_type == "CAPSULE":
+        return (1 if sub_type == "RED_CAPSULE" else 0, item_id)
+    if game_type == "DICE_TYPE":
+        return (1 if "_battle" in item_id else 0, item_id)
+    if game_type == "COPPER":
+        is_change_copy = 1 if "change_copper" in item_id else 0
+        suffix = item_id.rsplit("_", 1)[-1]
+        suffix_order = (
+            list(_COPPER_VARIANT_NAMES).index(suffix)
+            if suffix in _COPPER_VARIANT_NAMES
+            else 99
+        )
+        return (is_change_copy * 100 + suffix_order, item_id)
+    return (0, item_id)
+
+
+def _build_item_variants(
+    game_type: str,
+    ordered: list[dict[str, Any]],
+) -> list[Dict[str, Any]]:
+    variants: list[Dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw in ordered:
+        item_id = str(raw.get("id") or "").strip()
+        usage = _clean_rogue_item_text(raw.get("usage"))
+        if game_type == "COPPER" and "change_copper" in item_id:
+            continue
+        variant_name = _item_variant_name(game_type, raw)
+        dedupe_key = (variant_name, usage)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        variants.append(
+            {
+                "id": item_id,
+                "name": str(raw.get("name") or "").strip(),
+                "variant_name": variant_name,
+                "usage": usage,
+                "variant_effect": _item_variant_effect(
+                    game_type,
+                    usage,
+                    base_usage=_clean_rogue_item_text(ordered[0].get("usage")),
+                    variant_name=variant_name,
+                ),
+                "icon_id": str(raw.get("iconId") or "").strip(),
+            }
+        )
+    return variants
+
+
+def _item_variant_effect(
+    game_type: str,
+    usage: str,
+    *,
+    base_usage: str,
+    variant_name: str,
+) -> str:
+    """返回适合品相表展示的变体增量效果。"""
+    if game_type != "COPPER":
+        return usage
+    if usage == base_usage:
+        return "无额外品相效果"
+    base_prefix = f"{base_usage}\n" if base_usage else ""
+    if base_prefix and usage.startswith(base_prefix):
+        effect = usage[len(base_prefix) :].strip()
+        label_prefix = f"{variant_name}："
+        return effect.removeprefix(label_prefix).strip()
+    return usage
+
+
+def _item_variant_name(game_type: str, raw: dict[str, Any]) -> str:
+    item_id = str(raw.get("id") or "")
+    if game_type == "CAPSULE":
+        return (
+            "猩红"
+            if str(raw.get("subType") or "") == "RED_CAPSULE"
+            else "普通"
+        )
+    if game_type == "DICE_TYPE":
+        return "作战内" if "_battle" in item_id else "常规"
+    if game_type == "COPPER":
+        return _COPPER_VARIANT_NAMES.get(item_id.rsplit("_", 1)[-1], "特殊")
+    return "默认"
+
+
+def _integrated_strategy_sub_type_name(
+    game_type: str,
+    raw: dict[str, Any],
+) -> str:
+    item_id = str(raw.get("id") or "")
+    if game_type == "TOTEM":
+        return {
+            "TOTEM_UPPER": "上半板",
+            "TOTEM_LOWER": "下半板",
+        }.get(str(raw.get("subType") or ""), "")
+    if game_type == "FRAGMENT":
+        if "_fragment_D_" in item_id:
+            return "遗愿"
+        if "_fragment_F_" in item_id:
+            return "灵感"
+        if "_fragment_I_" in item_id:
+            return "构想"
+    if game_type == "COPPER":
+        name = str(raw.get("name") or "").strip()
+        if name.startswith("花-"):
+            return "花钱"
+        if name.startswith("厉-"):
+            return "厉钱"
+        if name.startswith("衡-") or name == "大炎通宝":
+            return "衡钱"
+    if game_type == "SCRAP":
+        if "_scrap_G_" in item_id:
+            return "自然物"
+        if "_scrap_M_" in item_id:
+            return "加工品"
+        if "_scrap_P_" in item_id:
+            return "概念体"
+    return ""
+
+
+def _integrated_strategy_item_aliases(
+    item: Dict[str, Any],
+    raw_group: list[dict[str, Any]],
+) -> set[str]:
+    aliases = {
+        str(item.get("id") or "").strip(),
+        str(item.get("name") or "").strip(),
+        remove_punctuation(str(item.get("name") or "")),
+        str(item.get("sub_type_name") or "").strip(),
+    }
+    for raw in raw_group:
+        item_id = str(raw.get("id") or "").strip()
+        name = str(raw.get("name") or "").strip()
+        aliases.update(
+            {
+                item_id,
+                item_id.lower(),
+                item_id.upper(),
+                name,
+                remove_punctuation(name),
+            }
+        )
+    return {alias for alias in aliases if alias}
+
+
+def _clean_rogue_item_text(value: Any) -> str:
+    return html_tag_format(value or "").replace("\\n", "\n").strip()
 
 
 _ENEMY_ATTRIBUTE_PATHS = {

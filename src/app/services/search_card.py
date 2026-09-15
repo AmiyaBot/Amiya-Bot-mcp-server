@@ -11,6 +11,9 @@ from src.app.context import get_bundle_resource_root
 from src.app.services.integrated_strategy_collectible_assets import (
     IntegratedStrategyCollectibleIconArtifact,
 )
+from src.app.services.integrated_strategy_item_output import (
+    INTEGRATED_STRATEGY_ITEM_TYPES,
+)
 from src.app.services.search_card_cache import build_search_card_fingerprint
 from src.app.services.stage_queries import resolve_stage_map_paths
 from src.domain.services.operator import build_operator_template_font_url
@@ -32,6 +35,11 @@ _GROUP_CONFIG = {
         "layout": "square",
         "css_class": "collectible",
     },
+    "剧目": {"layout": "square", "css_class": "collectible"},
+    "骰子": {"layout": "square", "css_class": "collectible"},
+    "密文板": {"layout": "square", "css_class": "collectible"},
+    "构想": {"layout": "square", "css_class": "collectible"},
+    "通宝": {"layout": "square", "css_class": "collectible"},
 }
 
 
@@ -178,9 +186,15 @@ def _build_display_item(
                 image_path = image_path.with_suffix(".png")
         rarity = material.get("rarity")
         meta = f"稀有度 {rarity}" if rarity not in (None, "") else ""
-    elif item_type == "集成战略藏品":
+    elif item_type in INTEGRATED_STRATEGY_ITEM_TYPES:
         subtitle = str(item.get("topic_name") or "").strip()
-        meta = str(item.get("rarity") or "").strip()
+        rarity = str(item.get("rarity") or "").strip()
+        sub_type = str(item.get("sub_type") or "").strip()
+        variant_count = int(item.get("variant_count") or 0)
+        variant_meta = f"{variant_count}种变体" if variant_count > 1 else ""
+        meta = " · ".join(
+            value for value in (sub_type, rarity, variant_meta) if value
+        )
 
     if collectible_artifact is not None:
         image_data = collectible_artifact.to_data_uri()

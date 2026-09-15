@@ -9,6 +9,9 @@ from src.app.context import AppContext, get_bundle_resource_root
 from src.app.services.integrated_strategy_collectible_output import (
     build_collectible_payload,
 )
+from src.app.services.integrated_strategy_item_output import (
+    build_integrated_strategy_item_payload,
+)
 from src.app.services.operator_material_output import build_operator_material_payload, render_operator_material_markdown
 from src.app.services.operator_module_output import build_operator_module_payload, render_operator_module_markdown
 from src.app.services.material_output import build_material_payload
@@ -104,6 +107,8 @@ def _build_search_items(
     敌人条目：{"id", "name", "type": "敌人", "enemy_index", "enemy_level"}。
     集成战略藏品条目除 ID、名称和所属主题外，还直接附带描述、效果、
     稀有度、解锁条件及是否可交换，供统一搜索直接回答藏品问题。
+    AI-CORRECTION 2026-09-15: 剧目、骰子、密文板、构想、通宝和零件也会
+    返回类型、子类型及聚合变体，供统一搜索直接回答主题机制道具问题。
     通过远端别名命中的干员、材料或敌人保留原有 type，并额外附带
     ``from_alias``，不会暴露独立的“别名”类型。
     """
@@ -258,24 +263,29 @@ def _build_search_items(
                 if match.from_alias:
                     item["from_alias"] = match.from_alias
                 items.append(item)
-        elif match.key == "integrated_strategy_collectible":
-            collectible_values = value if isinstance(value, (list, tuple)) else [value]
-            for collectible in collectible_values:
-                if not isinstance(collectible, dict):
+        elif match.key == "integrated_strategy_item":
+            strategy_values = value if isinstance(value, (list, tuple)) else [value]
+            for strategy_item in strategy_values:
+                if not isinstance(strategy_item, dict):
                     continue
-                collectible_id = str(collectible.get("id") or "").strip()
-                collectible_name = str(
-                    collectible.get("name") or match.matched_text
+                strategy_item_id = str(strategy_item.get("id") or "").strip()
+                strategy_item_name = str(
+                    strategy_item.get("name") or match.matched_text
                 ).strip()
                 if (
-                    not collectible_id
-                    or not collectible_name
-                    or collectible_id in seen_ids
+                    not strategy_item_id
+                    or not strategy_item_name
+                    or strategy_item_id in seen_ids
                 ):
                     continue
 
-                seen_ids.add(collectible_id)
-                items.append(build_collectible_payload(collectible))
+                seen_ids.add(strategy_item_id)
+                if strategy_item.get("game_type") == "RELIC":
+                    items.append(build_collectible_payload(strategy_item))
+                else:
+                    items.append(
+                        build_integrated_strategy_item_payload(strategy_item)
+                    )
 
     return items
 
@@ -744,9 +754,9 @@ def search(
     material_name_index_size = len(bundle.material_name_to_id) if bundle.material_name_to_id else 0
     stage_alias_index_size = len(bundle.stage_alias_to_ids) if bundle.stage_alias_to_ids else 0
     enemy_alias_index_size = len(bundle.enemy_alias_to_ids) if bundle.enemy_alias_to_ids else 0
-    collectible_alias_index_size = (
-        len(bundle.integrated_strategy_collectible_alias_to_ids)
-        if bundle.integrated_strategy_collectible_alias_to_ids
+    strategy_item_alias_index_size = (
+        len(getattr(bundle, "integrated_strategy_item_alias_to_ids", {}) or {})
+        if bundle
         else 0
     )
     alias_repository = getattr(context, "search_alias_repository", None)
@@ -760,7 +770,7 @@ def search(
     )
     remote_alias_index_size = len(alias_to_origins)
     logger.debug(
-        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s collectible_alias_index=%s remote_alias_index=%s",
+        "search bundle 状态: operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s strategy_item_alias_index=%s remote_alias_index=%s",
         bundle_operators,
         name_index_size,
         token_name_index_size,
@@ -768,7 +778,7 @@ def search(
         material_name_index_size,
         stage_alias_index_size,
         enemy_alias_index_size,
-        collectible_alias_index_size,
+        strategy_item_alias_index_size,
         remote_alias_index_size,
     )
     if bundle_operators == 0 or name_index_size == 0:
@@ -787,7 +797,7 @@ def search(
             "material",
             "stage",
             "enemy",
-            "integrated_strategy_collectible",
+            "integrated_strategy_item",
         ],
         alias_to_origins=alias_to_origins,
     )
@@ -810,7 +820,7 @@ def search(
 
     if not items:
         logger.warning(
-            "search: 未找到干员、召唤物、皮肤、材料、关卡、敌人或集成战略藏品 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s collectible_alias_index=%s remote_alias_index=%s",
+            "search: 未找到干员、召唤物、皮肤、材料、关卡、敌人或集成战略物品 query=%s bundle_operators=%s name_index=%s token_name_index=%s skin_name_index=%s material_name_index=%s stage_alias_index=%s enemy_alias_index=%s strategy_item_alias_index=%s remote_alias_index=%s",
             normalized_query,
             bundle_operators,
             name_index_size,
@@ -819,13 +829,13 @@ def search(
             material_name_index_size,
             stage_alias_index_size,
             enemy_alias_index_size,
-            collectible_alias_index_size,
+            strategy_item_alias_index_size,
             remote_alias_index_size,
         )
         return QueryExecutionResult(
             message=(
                 "未找到匹配的干员、召唤物、皮肤、材料、关卡、敌人或"
-                f"集成战略藏品: {normalized_query}"
+                f"集成战略物品: {normalized_query}"
             )
         )
 

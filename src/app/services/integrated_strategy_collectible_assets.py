@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 import base64
 from dataclasses import dataclass
+import hashlib
 import logging
 import os
 from pathlib import Path
 import re
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 
 from src.app.cache_permissions import CACHE_FILE_MODE
 from src.app.context import AppContext
@@ -19,6 +21,9 @@ from src.helpers.card_urls import (
     INTEGRATED_STRATEGY_COLLECTIBLE_ICON_MOUNT_PATH,
     build_static_url,
 )
+from src.app.services.integrated_strategy_item_output import (
+    INTEGRATED_STRATEGY_ITEM_TYPES,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -29,11 +34,22 @@ COLLECTIBLE_ICON_CACHE_PATH = (
 COLLECTIBLE_ICON_BASE_URL = (
     "https://torappu.prts.wiki/assets/roguelike_topic_itempic/"
 )
+PRTS_MEDIA_BASE_URL = "https://media.prts.wiki"
 DOWNLOAD_TIMEOUT_SECONDS = 10
 DOWNLOAD_MAX_BYTES = 5 * 1024 * 1024
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-PRTS_ASSET_HOSTS = frozenset({"torappu.prts.wiki"})
+PRTS_ASSET_HOSTS = frozenset({"torappu.prts.wiki", "media.prts.wiki"})
 _SAFE_ICON_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
+_CAPSULE_ICON_ID = re.compile(r"^rogue_1_capsule_(\d+)$")
+_COPPER_ICON_ID = re.compile(r"^(rogue_5_copper_.+)_[a-l]$")
+_DICE_MEDIA_FILENAMES = {
+    "rogue_2_dice_1": "头像_装置_骰子.png",
+    "rogue_2_dice_battle1": "头像_装置_骰子.png",
+    "rogue_2_dice_11": "头像_装置_8面骰子.png",
+    "rogue_2_dice_battle2": "头像_装置_8面骰子.png",
+    "rogue_2_dice_41": "头像_装置_12面骰子.png",
+    "rogue_2_dice_battle3": "头像_装置_12面骰子.png",
+}
 
 _download_locks: dict[str, asyncio.Lock] = {}
 _download_locks_guard = asyncio.Lock()
@@ -58,6 +74,45 @@ def build_collectible_icon_source_url(icon_id: str) -> str | None:
     return f"{COLLECTIBLE_ICON_BASE_URL}{normalized_icon_id}.png"
 
 
+def build_collectible_icon_source_urls(icon_id: str) -> tuple[str, ...]:
+    """返回图标候选源；部分机制物品在 PRTS 使用另一套文件名。"""
+    normalized_icon_id = _normalize_icon_id(icon_id)
+    if normalized_icon_id is None:
+        return ()
+
+    urls = [f"{COLLECTIBLE_ICON_BASE_URL}{normalized_icon_id}.png"]
+    capsule_match = _CAPSULE_ICON_ID.fullmatch(normalized_icon_id)
+    if capsule_match:
+        urls.append(
+            _build_prts_media_url(
+                f"集成战略_2_剧目_{capsule_match.group(1)}.png"
+            )
+        )
+
+    dice_filename = _DICE_MEDIA_FILENAMES.get(normalized_icon_id)
+    if dice_filename:
+        urls.append(_build_prts_media_url(dice_filename))
+
+    copper_match = _COPPER_ICON_ID.fullmatch(normalized_icon_id)
+    if copper_match:
+        urls.append(
+            f"{COLLECTIBLE_ICON_BASE_URL}{copper_match.group(1)}.png"
+        )
+
+    return tuple(dict.fromkeys(urls))
+
+
+def _build_prts_media_url(filename: str) -> str:
+    digest = hashlib.md5(
+        filename.encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()
+    return (
+        f"{PRTS_MEDIA_BASE_URL}/{digest[0]}/{digest[:2]}/"
+        f"{quote(filename, safe='')}"
+    )
+
+
 async def resolve_collectible_icon_artifact(
     context: AppContext,
     icon_id: str,
@@ -77,49 +132,58 @@ async def resolve_collectible_icon_artifact(
         async with lock:
             cached_path = _find_cached_icon_path(cache_root, normalized_icon_id)
             if cached_path is None and normalized_icon_id not in _missing_icon_ids:
-                try:
-                    remote_url = build_collectible_icon_source_url(
-                        normalized_icon_id
-                    )
-                    if remote_url is None:
-                        return None
-                    downloaded = await get_context_download_manager(context).download(
-                        RemoteDownloadRequest(
-                            url=remote_url,
-                            timeout_seconds=DOWNLOAD_TIMEOUT_SECONDS,
-                            max_bytes=DOWNLOAD_MAX_BYTES,
-                            headers={"Accept": "image/png"},
-                            allowed_hosts=PRTS_ASSET_HOSTS,
-                            allowed_content_types=frozenset(
-                                {"image/png", "application/octet-stream"}
-                            ),
+                remote_urls = build_collectible_icon_source_urls(
+                    normalized_icon_id
+                )
+                if not remote_urls:
+                    return None
+                for remote_url in remote_urls:
+                    try:
+                        downloaded = await get_context_download_manager(
+                            context
+                        ).download(
+                            RemoteDownloadRequest(
+                                url=remote_url,
+                                timeout_seconds=DOWNLOAD_TIMEOUT_SECONDS,
+                                max_bytes=DOWNLOAD_MAX_BYTES,
+                                headers={"Accept": "image/png"},
+                                allowed_hosts=PRTS_ASSET_HOSTS,
+                                allowed_content_types=frozenset(
+                                    {
+                                        "image/png",
+                                        "application/octet-stream",
+                                    }
+                                ),
+                            )
                         )
-                    )
-                    cached_path = _cache_collectible_icon(
-                        cache_root,
-                        normalized_icon_id,
-                        downloaded.payload,
-                    )
-                except HTTPError as exc:
-                    if exc.code == 404:
-                        _missing_icon_ids.add(normalized_icon_id)
-                        logger.info(
-                            "PRTS 不存在集成战略藏品图标: icon_id=%s",
+                        cached_path = _cache_collectible_icon(
+                            cache_root,
                             normalized_icon_id,
+                            downloaded.payload,
                         )
-                    else:
+                        break
+                    except HTTPError as exc:
+                        if exc.code == 404:
+                            continue
                         logger.warning(
                             "下载集成战略藏品图标失败: icon_id=%s status=%s",
                             normalized_icon_id,
                             exc.code,
                             exc_info=True,
                         )
-                    return None
-                except (OSError, RuntimeError, TimeoutError, URLError):
-                    logger.warning(
-                        "下载集成战略藏品图标失败: icon_id=%s",
+                        return None
+                    except (OSError, RuntimeError, TimeoutError, URLError):
+                        logger.warning(
+                            "下载集成战略藏品图标失败: icon_id=%s",
+                            normalized_icon_id,
+                            exc_info=True,
+                        )
+                        return None
+                if cached_path is None:
+                    _missing_icon_ids.add(normalized_icon_id)
+                    logger.info(
+                        "PRTS 不存在集成战略藏品图标: icon_id=%s",
                         normalized_icon_id,
-                        exc_info=True,
                     )
                     return None
 
@@ -152,6 +216,7 @@ async def attach_collectible_icon_artifacts(
     response_payload: dict,
 ) -> dict[str, IntegratedStrategyCollectibleIconArtifact]:
     """为搜索藏品附加 URL，并返回可直接用于选择卡的图标产物。"""
+    # AI-CORRECTION 2026-09-15: 同一资源管线现也处理主题机制道具。
     artifacts: dict[str, IntegratedStrategyCollectibleIconArtifact] = {}
     data = response_payload.get("data")
     if not isinstance(data, dict):
@@ -161,7 +226,10 @@ async def attach_collectible_icon_artifacts(
         return artifacts
 
     async def attach_one(item: object) -> None:
-        if not isinstance(item, dict) or item.get("type") != "集成战略藏品":
+        if (
+            not isinstance(item, dict)
+            or item.get("type") not in INTEGRATED_STRATEGY_ITEM_TYPES
+        ):
             return
         icon_id = str(item.get("icon_id") or "").strip()
         if not icon_id:

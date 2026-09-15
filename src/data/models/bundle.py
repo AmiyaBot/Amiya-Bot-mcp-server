@@ -53,5 +53,10 @@ class DataBundle:
     integrated_strategy_collectible_alias_to_ids: Dict[str, list[str]]
     """藏品名称/ID -> item_id 列表，允许不同主题下的同名藏品并存。"""
 
+    integrated_strategy_items: Dict[str, Dict[str, Any]]
+    """可查询的集成战略藏品与主题机制道具，key 为聚合后的代表 ID。"""
+    integrated_strategy_item_alias_to_ids: Dict[str, list[str]]
+    """集成战略物品名称/原始 ID -> 聚合后代表 ID 列表。"""
+
     tables: Dict[str, Dict[str,Any]]
     """保留一些表，方便详情方法内部使用（避免再读磁盘）"""

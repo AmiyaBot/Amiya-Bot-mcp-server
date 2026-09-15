@@ -22,6 +22,7 @@ def build_collectible_payload(
         "id": str(collectible.get("id") or "").strip(),
         "name": str(collectible.get("name") or "").strip(),
         "type": "集成战略藏品",
+        "game_type": "RELIC",
         "topic_id": str(collectible.get("topic_id") or "").strip(),
         "topic_name": str(collectible.get("topic_name") or "").strip(),
         "icon_id": str(collectible.get("icon_id") or "").strip(),

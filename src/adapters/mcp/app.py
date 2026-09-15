@@ -39,6 +39,9 @@ from src.adapters.mcp.mcp_tools.recruit import register_recruit_with_tag_tool
 from src.adapters.mcp.mcp_tools.integrated_strategy_collectible import (
     register_integrated_strategy_collectible_tool,
 )
+from src.adapters.mcp.mcp_tools.integrated_strategy_item import (
+    register_integrated_strategy_item_tool,
+)
 from src.app.config import Config
 
 logger = logging.getLogger(__name__)
@@ -115,7 +118,7 @@ class MCPRequestLoggingMiddleware:
 server_instructions = """
 本服务器是一个游戏<明日方舟>的知识库查询助手，专注于为用户提供准确的干员信息数据和游戏资料。
 你可以使用注册的工具来回答明日方舟游戏内的问题。
-除公开招募外，任何查询都请先调用 search 获取候选实体的 id（干员、召唤物、皮肤、材料、关卡、敌人或集成战略藏品），再用该 id 调用对应的详情工具（干员基础资料：get_operator_basic_data；干员完整技能列表及全部等级：get_operator_skill；干员培养材料：get_operator_material；干员模组：get_operator_modules；召唤物：get_token_detail；皮肤：get_operator_skins；材料：get_material；关卡：get_stage_data；敌人：get_enemy_data；集成战略藏品：get_integrated_strategy_collectible_detail）。同名藏品可能属于不同主题，必须由 search 返回的主题和效果选择唯一候选，再将其 id 传给藏品详情工具，不能用名称代替 id。
+除公开招募外，任何查询都请先调用 search 获取候选实体的 id（干员、召唤物、皮肤、材料、关卡、敌人或集成战略物品），再用该 id 调用对应的详情工具（干员基础资料：get_operator_basic_data；干员完整技能列表及全部等级：get_operator_skill；干员培养材料：get_operator_material；干员模组：get_operator_modules；召唤物：get_token_detail；皮肤：get_operator_skins；材料：get_material；关卡：get_stage_data；敌人：get_enemy_data；集成战略藏品、剧目、骰子、密文板、构想、通宝和零件：get_integrated_strategy_item_detail）。同名物品可能属于不同主题或具有不同效果，必须根据 search 返回的主题、类型和效果选择唯一候选，再将其 id 传给详情工具，不能用名称代替 id。旧工具 get_integrated_strategy_collectible_detail 仅用于兼容只查询藏品的客户端。
 公开招募查询直接调用 recruit_with_tag，不经过 search。用户发送公招截图时，识别标签区显示的全部 5 个词条并一次性传入 tags；禁止自行组合、筛选或分多次调用。recruit_with_tag 返回 card_image_url 时，直接向用户展示该图片，不要自行计算、筛选或复述组合结果。
 """
 
@@ -241,9 +244,10 @@ def register_asgi(app: FastAPI, cfg: Config) -> FastMCP:
     register_enemy_tool(mcp,app)
     register_recruit_with_tag_tool(mcp, app)
     register_integrated_strategy_collectible_tool(mcp,app)
+    register_integrated_strategy_item_tool(mcp, app)
     logger.info(
         "MCP 工具注册完成: tools=%s",
-        ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins", "get_material", "get_stage_data", "get_enemy_data", "recruit_with_tag", "get_integrated_strategy_collectible_detail"],
+        ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins", "get_material", "get_stage_data", "get_enemy_data", "recruit_with_tag", "get_integrated_strategy_collectible_detail", "get_integrated_strategy_item_detail"],
     )
 
     streamable_http_app = mcp.streamable_http_app()

@@ -68,6 +68,12 @@
     .effect { position: relative; margin-top: 28px; padding: 21px 24px 21px 30px; background: linear-gradient(90deg, rgb(205 177 111 / 19%), rgb(205 177 111 / 4%)); border-left: 5px solid #cdb16f; }
     .label { margin-bottom: 8px; color: #cdb16f; font-size: 13px; font-weight: 800; letter-spacing: 2px; }
     .effect-text { font-size: 25px; font-weight: 700; line-height: 1.5; }
+    .variants { margin-top: 22px; border: 1px solid #4e5955; background: rgb(255 255 255 / 3%); }
+    .variants-title { padding: 13px 17px; border-bottom: 1px solid #4e5955; color: #cdb16f; font-size: 14px; font-weight: 800; letter-spacing: 2px; }
+    .variant-row { display: grid; grid-template-columns: 118px minmax(0, 1fr); border-bottom: 1px solid rgb(255 255 255 / 8%); }
+    .variant-row:last-child { border-bottom: 0; }
+    .variant-name { padding: 10px 14px; color: #f2dc9d; background: rgb(205 177 111 / 8%); font-size: 15px; font-weight: 800; }
+    .variant-effect { padding: 10px 14px; color: #d9dfdc; font-size: 15px; line-height: 1.45; white-space: pre-line; }
     .description { margin: 22px 4px 0; color: #c7cfcb; font-size: 18px; font-style: italic; line-height: 1.65; }
     .details { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; margin-top: 22px; }
     .detail { min-height: 91px; padding: 14px 16px; background: rgb(255 255 255 / 5%); border-top: 1px solid #58615e; }
@@ -87,20 +93,34 @@
       {% endif %}
     </div>
     <div class="meta">
-      <div class="eyebrow">集成战略藏品</div>
+      <div class="eyebrow">{{ (collectible.type or "集成战略物品") | e }}</div>
       <h1>{{ collectible.name | e }}</h1>
       <div class="topic">{{ collectible.topic_name | e }}</div>
       <div class="badges">
         {% if collectible.rarity %}<span class="badge rarity">{{ collectible.rarity | e }}</span>{% endif %}
-        <span class="badge">{{ "可交换" if collectible.can_exchange else "不可交换" }}</span>
+        {% if collectible.sub_type %}<span class="badge">{{ collectible.sub_type | e }}</span>{% endif %}
+        {% if collectible.variant_count and collectible.variant_count > 1 %}<span class="badge">{{ collectible.variant_count }}种变体</span>{% endif %}
+        {% if not collectible.game_type or collectible.game_type in ["RELIC", "TOTEM", "COPPER"] %}<span class="badge">{{ "可交换" if collectible.can_exchange else "不可交换" }}</span>{% endif %}
       </div>
     </div>
   </section>
 
   <section class="effect">
-    <div class="label">藏品效果</div>
+    <div class="label">物品效果</div>
     <div class="effect-text">{{ (collectible.usage or "暂无效果说明") | e }}</div>
   </section>
+
+  {% if collectible.variants and collectible.variant_count > 1 %}
+  <section class="variants">
+    <div class="variants-title">{{ "品相一览" if collectible.game_type == "COPPER" else "变体一览" }}</div>
+    {% for variant in collectible.variants %}
+    <div class="variant-row">
+      <div class="variant-name">{{ variant.variant_name | e }}</div>
+      <div class="variant-effect">{{ (variant.variant_effect or variant.usage or "暂无效果说明") | e }}</div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
   {% if collectible.description %}
   <div class="description">「{{ collectible.description | e }}」</div>

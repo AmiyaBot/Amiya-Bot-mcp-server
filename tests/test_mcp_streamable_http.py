@@ -218,6 +218,7 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
                 "get_enemy_data",
                 "recruit_with_tag",
                 "get_integrated_strategy_collectible_detail",
+                "get_integrated_strategy_item_detail",
             } <= tool_names
             assert "recruit" not in tool_names
 
@@ -256,6 +257,21 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
                 "collectible_id"
             ]
             assert "唯一" in collectible_tool["description"]
+
+            strategy_item_tool = next(
+                tool
+                for tool in tools
+                if tool["name"] == "get_integrated_strategy_item_detail"
+            )
+            assert set(strategy_item_tool["inputSchema"]["properties"]) == {
+                "item_id"
+            }
+            assert strategy_item_tool["inputSchema"]["required"] == [
+                "item_id"
+            ]
+            assert "剧目" in strategy_item_tool["description"]
+            assert "零件" in strategy_item_tool["description"]
+            assert "variants" in strategy_item_tool["description"]
 
             skill_tool = next(tool for tool in tools if tool["name"] == "get_operator_skill")
             assert set(skill_tool["inputSchema"]["properties"]) == {"operator_id"}

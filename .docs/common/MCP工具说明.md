@@ -1,12 +1,12 @@
 # MCP 工具说明
 
-本服务对外暴露 13 个 MCP 工具，主要通过 Streamable HTTP 提供，并保留旧 SSE 入口。除公开招募外，`search` 是资源统一搜索入口；干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material` / `get_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`，关卡查询流程为 `search` → `get_stage_data`，敌人查询流程为 `search` → `get_enemy_data`，集成战略藏品查询流程为 `search` → `get_integrated_strategy_collectible_detail`。公开招募直接调用 `recruit_with_tag`。
+本服务对外暴露 14 个 MCP 工具，主要通过 Streamable HTTP 提供，并保留旧 SSE 入口。除公开招募外，`search` 是资源统一搜索入口；干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material` / `get_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`，关卡查询流程为 `search` → `get_stage_data`，敌人查询流程为 `search` → `get_enemy_data`，集成战略物品查询流程为 `search` → `get_integrated_strategy_item_detail`。旧工具 `get_integrated_strategy_collectible_detail` 仅保留藏品查询兼容性。公开招募直接调用 `recruit_with_tag`。
 
 ---
 
 ## 1. search — 资源统一搜索（任何查询的入口）
 
-本服务所有查询的统一入口：按名称、代号或常用别名模糊搜索「干员」「干员的召唤物」「干员皮肤（具名时装）」「材料」「关卡」「敌人」与「集成战略藏品」，返回候选实体的 `id`、`name` 和 `type`。拿到 `id` 后，再调用对应详情工具。服务启动后立即尝试同步一次旧版 AmiyaBot 全局别名表，之后每小时刷新；同步失败时保留上一版快照。
+本服务所有查询的统一入口：按名称、代号或常用别名模糊搜索「干员」「干员的召唤物」「干员皮肤（具名时装）」「材料」「关卡」「敌人」「集成战略藏品」「剧目」「骰子」「密文板」「构想」「通宝」与「零件」，返回候选实体的 `id`、`name` 和 `type`。拿到 `id` 后，再调用对应详情工具。服务启动后立即尝试同步一次旧版 AmiyaBot 全局别名表，之后每小时刷新；同步失败时保留上一版快照。
 
 > 注：本工具是统一搜索入口，可搜索范围未来会继续扩展（扩展内容不会提前暴露在 MCP 说明中）。
 
@@ -14,7 +14,7 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `query` | `str` | 是 | 搜索关键词（干员名称、召唤物名称或皮肤名），支持模糊搜索 |
+| `query` | `str` | 是 | 搜索关键词（资源正式名称、代号或常用别名），支持模糊搜索 |
 
 ### 返回值
 
@@ -26,7 +26,8 @@
       {"id": "char_180_amgoat", "name": "艾雅法拉", "type": "干员", "from_alias": "小羊"},
       {"id": "token_10002_kalts_mon3tr", "name": "Mon3tr", "type": "召唤物", "operator_id": "char_003_kalts", "operator_name": "凯尔希"},
       {"id": "char_002_amiya@winter#1", "name": "报童", "type": "皮肤", "operator_id": "char_002_amiya", "operator_name": "阿米娅"},
-      {"id": "main_08-17", "name": "昂首，足践烈焰", "type": "关卡", "code": "JT8-3", "difficulty": "普通", "stage_type": "主线"}
+      {"id": "main_08-17", "name": "昂首，足践烈焰", "type": "关卡", "code": "JT8-3", "difficulty": "普通", "stage_type": "主线"},
+      {"id": "rogue_3_totem_R_L1", "name": "黜人", "type": "密文板", "game_type": "TOTEM", "sub_type": "上半板", "topic_name": "探索者的银凇止境", "usage": "选择所有右侧邻近的战斗节点"}
     ]
   }
 }
@@ -39,6 +40,7 @@
 - 召唤物条目：`id` 为召唤物 ID，传给 `get_token_detail` 查看召唤物详情；`operator_id` / `operator_name` 为该召唤物所属干员（也可用于查看所属干员）。未挂靠任何干员的召唤物不会出现在结果中。
 - 皮肤条目：`id` 为皮肤 ID（skin_id）；`operator_id` / `operator_name` 为皮肤归属干员，用 `operator_id` 调用 `get_operator_skins` 查看该干员全部皮肤与皮肤卡片。仅具名皮肤（有时装名）可被搜索，精英化立绘（初始/精英一/精英二）无独立名称、不进入搜索结果。
 - 关卡条目：`id` 为关卡 ID，`code` 为关卡代号，`difficulty` 为普通/突袭等难度，传给 `get_stage_data` 查看关卡详情。相同代号的普通和突袭关卡会分别返回。
+- 集成战略物品条目：`type` 为「集成战略藏品」「剧目」「骰子」「密文板」「构想」「通宝」或「零件」，`game_type` 为解包类型。剧目的普通/猩红版、骰子的常规/作战内记录、通宝的不同品相会在同一条目的 `variants` 中合并；通宝通过 `sub_type` 标明「花钱」「衡钱」「厉钱」，黑流树海零件通过 `sub_type` 标明「加工品」「自然物」「概念体」。不同基础效果的同名项仍分别返回。使用代表 `id` 调用 `get_integrated_strategy_item_detail`。
 
 **空查询**：
 ```json
@@ -47,7 +49,7 @@
 
 **无匹配**：
 ```json
-{"message": "未找到匹配的干员、召唤物、皮肤、材料或关卡: xxx"}
+{"message": "未找到匹配的干员、召唤物、皮肤、材料、关卡、敌人或集成战略物品: xxx"}
 ```
 
 > 提示：若搜不到结果，可能是新外号尚未进入远端别名表，此时可联网确认正式名称后重新搜索。
@@ -533,6 +535,71 @@ Base64 头像仅供服务端内部渲染，不包含在 MCP 响应中；`groups[
 ```
 
 没有有效标签或没有稀有组合时返回 `message`。
+
+---
+
+## 11. get_integrated_strategy_item_detail — 集成战略物品详情
+
+根据 `search` 返回的代表 ID 查询集成战略藏品或主题机制道具。支持的
+`type` 为「集成战略藏品」「剧目」「骰子」「密文板」「构想」「通宝」「零件」。
+
+### 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `item_id` | `str` | 是 | `search` 返回的集成战略物品代表 ID；不接受名称 |
+
+### 聚合规则
+
+- 剧目：同一剧目的普通版与猩红版合并为 `variants`。
+- 骰子：同名骰子的重复场景记录去重，常规与作战内效果合并为 `variants`。
+- 密文板：每块板独立返回，并通过 `sub_type` 标明「上半板」或「下半板」；不暴露内部 `TOTEM_EFFECT`。
+- 构想：每项独立返回，并通过 `sub_type` 区分「遗愿」「灵感」「构想」。
+- 通宝：按 `itemIconGroupId` 合并基础通宝；通过 `sub_type` 区分「花钱」「衡钱」「厉钱」。基础与适用的品相合并为 `variants`（通常为基础、锈色、存护、入幻、引光、巡游、相合、易变、易花、易厉、受引，共 11 种；特殊通宝最多再有 1 种特殊受引），每项的 `variant_effect` 是剔除基础效果后的品相增量，便于直接拉表，不重复暴露 `change_copper` / `COPPER_BUFF` 内部镜像。
+- 零件：黑流树海的机制物品，解包类型为 `SCRAP`，通过 `sub_type` 区分「加工品」「自然物」「概念体」。需要资源数据已更新并包含 `rogue_6`。
+- 不同效果的同名物品不会合并，例如四种方向效果的「衡-捕风」分别返回。
+
+### 返回值
+
+```json
+{
+  "data": {
+    "id": "rogue_5_copper_B_01_a",
+    "name": "大炎通宝",
+    "type": "通宝",
+    "game_type": "COPPER",
+    "topic_id": "rogue_5",
+    "topic_name": "岁的界园志异",
+    "sub_type": "衡钱",
+    "description": "...",
+    "usage": "普通又空白，什么也没有",
+    "variant_count": 11,
+    "variants": [
+      {"id": "rogue_5_copper_B_01_a", "variant_name": "基础", "usage": "...", "variant_effect": "无额外品相效果"},
+      {"id": "rogue_5_copper_B_01_b", "variant_name": "锈色", "usage": "...", "variant_effect": "投出时，每经过一个节点，获得源石锭+1"}
+    ]
+  },
+  "card_image_url": "https://...",
+  "data_url": "https://..."
+}
+```
+
+`card_image_url`、`data_url` 和本地模式的 `image_path` 均为可选字段；卡片或
+图标生成失败时，结构化 `data` 仍会返回。
+
+**失败**：
+
+```json
+{"message": "item_id 不能为空"}
+```
+```json
+{"message": "未找到集成战略物品ID: xxx"}
+```
+
+## 12. get_integrated_strategy_collectible_detail — 藏品详情（兼容）
+
+旧客户端兼容入口，仅接受 `search` 返回的「集成战略藏品」ID。新客户端
+统一使用 `get_integrated_strategy_item_detail`。
 
 ---
 
