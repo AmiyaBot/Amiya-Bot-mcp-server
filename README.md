@@ -229,6 +229,37 @@ docker run -d \
   hsyhhssyy/amiyabot-mcp:v1.0.8
 ```
 
+## 图片与静态资源接口
+
+图片与 MCP 同源同端口，按以下路径挂载：
+
+| 挂载路径 | 内容 | `Cache-Control` |
+|---|---|---|
+| `/cards` | 各类图片卡片（PNG） | `public, max-age=86400, immutable` |
+| `/char-skins` | 干员立绘（WEBP） | `public, max-age=86400, immutable` |
+| `/integrated-strategy-collectible-icons` | 藏品图标 | `public, max-age=86400, immutable` |
+| `/game-assets` | 游戏原始素材 | `public, max-age=3600` |
+
+响应 `Content-Type` 按文件扩展名给出（`.webp → image/webp`、`.png → image/png`、`.jpg → image/jpeg`），
+不依赖宿主机的 MIME 数据库。非 2xx 响应不会被缓存，404 返回真实状态码与 JSON body。
+
+### 按需缩放
+
+`/cards` 与 `/char-skins` 支持在 URL 后追加查询参数，按需返回等比缩放的 WEBP：
+
+```text
+http://127.0.0.1:9000/cards/<template>/<payload_key>/artifact.png?w=1080&q=85
+http://127.0.0.1:9000/char-skins/char_1035_wisdel%231.webp?w=720
+```
+
+- `w`：目标宽度，16–2048，等比缩放且不会放大；缺省或非法时不缩放。
+- `q`：WEBP 质量，1–100，默认 85。
+- 产物缓存在 `resources/cache/image_thumbs`，同一张图只在首次请求时解码一次；
+  源文件变更后按 mtime 自动失效。
+- 不带参数时行为与直接静态文件完全一致（含 Range 与 304）。
+
+`get_operator_skins` 返回的 `立绘URL` 默认就是 `?w=720` 的展示图，`原图URL` 为未缩放原图。
+
 ## 接入 MCP 服务
 
 新客户端建议通过 Streamable HTTP 连接单一 `/mcp` 端点。本机默认地址为：

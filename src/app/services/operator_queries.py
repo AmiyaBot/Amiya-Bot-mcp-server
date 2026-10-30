@@ -627,6 +627,7 @@ async def query_operator_skins(
             entry["序号"] = index
             entry["card_url"] = ""
             entry["立绘URL"] = ""
+            entry["原图URL"] = ""
             skin_artifact = None
             try:
                 skin_artifact = await resolve_skin_artifact_by_id(
@@ -637,7 +638,9 @@ async def query_operator_skins(
                 if skin_artifact is None:
                     logger.debug("皮肤立绘索引缺失，跳过卡片渲染: skin_id=%s", skin.skin_id)
                 else:
+                    # 立绘URL 为 720p 展示图，原图另给 原图URL（REQ-mcp-image-serving P1-2）。
                     entry["立绘URL"] = skin_artifact.url or ""
+                    entry["原图URL"] = skin_artifact.original_url or ""
                     entry["card_url"] = await _render_operator_skin_card(
                         context,
                         resolved,

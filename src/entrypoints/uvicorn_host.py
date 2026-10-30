@@ -23,6 +23,7 @@ from src.adapters.cmd.web_client import resolve_service_git_sha
 from src.adapters.mcp.app import register_asgi
 from src.adapters.cmd.app import execute_registered_command
 from src.app.card_fileservier import register_cardserver_asgi
+from src.app.static_media import StaticCacheControlMiddleware
 from src.app.context import AppContext
 from src.app.config import load_from_disk
 from src.app.runtime_state import resource_update_status_path
@@ -383,6 +384,9 @@ def uvicorn_main():
         expose_headers=["Content-Length", "Content-Type", "Mcp-Session-Id"],
         max_age=86400,
     )
+
+    # REQ-mcp-image-serving P0-3：静态媒体响应补 Cache-Control（StaticFiles 自身不设置）。
+    app.add_middleware(StaticCacheControlMiddleware)
 
     register_cardserver_asgi(app, cfg=cfg)
 
