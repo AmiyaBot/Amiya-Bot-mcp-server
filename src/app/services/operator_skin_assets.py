@@ -26,6 +26,9 @@ SKIN_URLS_INDEX_PATH = Path("assets") / "indexes" / "skinUrls.json"
 SKIN_CACHE_PATH = Path("cache") / "char_skin"
 DOWNLOAD_TIMEOUT_SECONDS = 60
 DOWNLOAD_MAX_BYTES = 50 * 1024 * 1024
+# REQ-mcp-image-serving P1-2：群聊场景用不到 1MB 级原图，默认给 720p 展示图，
+# 原图通过独立字段提供。
+SKIN_DISPLAY_WIDTH = 720
 PRTS_ASSET_HOSTS = frozenset({"media.prts.wiki"})
 SKIN_CONTENT_TYPES = frozenset(
     {"image/png", "image/webp", "image/jpeg", "application/octet-stream"}
@@ -44,6 +47,8 @@ class OperatorSkinArtifact:
     skin_id: str
     path: Path
     url: str | None
+    # 原图直链；`url` 为 720p 展示图（?w=720），见 REQ-mcp-image-serving P1-2。
+    original_url: str | None = None
 
     def to_data_uri(self) -> str:
         suffix = self.path.suffix.lower()
@@ -137,16 +142,23 @@ async def _resolve_and_download(
                 )
 
     image_url = None
+    display_url = None
     try:
         image_url = build_static_url(
             cfg=context.cfg,
             relative_path=cached_path.name,
             mount_path=CHAR_SKIN_MOUNT_PATH,
         )
+        display_url = f"{image_url}?w={SKIN_DISPLAY_WIDTH}"
     except Exception:
         logger.info("构建皮肤立绘 URL 失败，已仅返回本地缓存路径", exc_info=True)
 
-    return OperatorSkinArtifact(skin_id=skin_id, path=cached_path, url=image_url)
+    return OperatorSkinArtifact(
+        skin_id=skin_id,
+        path=cached_path,
+        url=display_url,
+        original_url=image_url,
+    )
 
 
 def _load_skin_index(resource_root: Path) -> dict[str, dict[str, str]]:

@@ -7,7 +7,9 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from src.app.config import Config
+from src.app.image_transform import TRANSFORM_CACHE_DIRNAME, TransformableStaticFiles
 from src.app.resource_releases import read_active_release
+from src.app.static_media import install_static_mime_types
 from src.helpers.card_urls import (
     CHAR_SKIN_MOUNT_PATH,
     DEFAULT_MOUNT_PATH,
@@ -21,6 +23,28 @@ def _mount_static_dir(app: FastAPI, *, mount_path: str, root: Path, name: str) -
     app.mount(
         mount_path,
         StaticFiles(directory=str(root), html=False),
+        name=name,
+    )
+
+
+def _mount_transformable_dir(
+    app: FastAPI,
+    *,
+    mount_path: str,
+    root: Path,
+    cache_root: Path,
+    name: str,
+) -> None:
+    """图片目录挂载：支持 `?w=&q=` 按需缩放，见 image_transform 模块。"""
+    root.mkdir(parents=True, exist_ok=True)
+    cache_root.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        mount_path,
+        TransformableStaticFiles(
+            directory=str(root),
+            cache_directory=cache_root,
+            html=False,
+        ),
         name=name,
     )
 
@@ -54,6 +78,10 @@ def register_cardserver_asgi(app: FastAPI, *, cfg: Config) -> None:
       GET {mount_path}/{template}/{payload_key}/artifact.html
       ...
     """
+    # REQ-mcp-image-serving P0-1：必须在任何 StaticFiles 挂载前补齐 MIME 映射，
+    # 否则 .webp 会被 Starlette 回落成 text/plain，导致客户端判 not_image 丢图。
+    install_static_mime_types()
+
     card_cache_root: Path = cfg.ResourcePath / "cache" / "cards"
     skin_cache_root: Path = cfg.ResourcePath / "cache" / "char_skin"
     collectible_icon_cache_root: Path = (
@@ -70,16 +98,18 @@ def register_cardserver_asgi(app: FastAPI, *, cfg: Config) -> None:
     # Original code:
     # game_assets_root: Path = cfg.ResourcePath / "assets"
 
-    _mount_static_dir(
+    _mount_transformable_dir(
         app,
         mount_path=DEFAULT_MOUNT_PATH,
         root=card_cache_root,
+        cache_root=cfg.ResourcePath / TRANSFORM_CACHE_DIRNAME / "cards",
         name="cards",
     )
-    _mount_static_dir(
+    _mount_transformable_dir(
         app,
         mount_path=CHAR_SKIN_MOUNT_PATH,
         root=skin_cache_root,
+        cache_root=cfg.ResourcePath / TRANSFORM_CACHE_DIRNAME / "char_skin",
         name="char-skins",
     )
     _mount_static_dir(

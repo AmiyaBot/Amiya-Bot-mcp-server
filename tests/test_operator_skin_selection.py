@@ -10,7 +10,9 @@ from src.domain.models.skin import Skin
 
 class _Artifact:
     def __init__(self, skin_id: str) -> None:
-        self.url = f"https://example.test/char-skins/{skin_id}.webp"
+        self.original_url = f"https://example.test/char-skins/{skin_id}.webp"
+        # 立绘URL 默认给 720p 展示图，原图走 原图URL。
+        self.url = f"{self.original_url}?w=720"
 
     def to_data_uri(self) -> str:
         return "data:image/webp;base64,cHJldmlldw=="
@@ -91,7 +93,9 @@ def test_query_operator_skins_returns_selection_card_and_numbered_urls(
     assert response["data"]["selection_card_url"] == response["card_image_url"]
     assert [item["序号"] for item in response["data"]["skins"]] == [1, 2]
     assert response["data"]["skins"][0]["card_url"].endswith("char_test#1.png")
-    assert response["data"]["skins"][0]["立绘URL"].endswith("char_test#1.webp")
+    assert response["data"]["skins"][0]["立绘URL"].endswith("char_test#1.webp?w=720")
+    assert response["data"]["skins"][0]["原图URL"].endswith("char_test#1.webp")
     assert response["data"]["skins"][1]["card_url"] == ""
     assert response["data"]["skins"][1]["立绘URL"] == ""
+    assert response["data"]["skins"][1]["原图URL"] == ""
     assert [item["index"] for item in captured_selection_items] == [1, 2]
