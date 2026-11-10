@@ -29,6 +29,8 @@ _LOCK_STRIPES = 64
 
 def build_search_result_cache_key(items: Iterable[Mapping[str, object]]) -> str:
     """按统一搜索的原始顺序，对全部结果 ID 做稳定编码并生成缓存键。"""
+    # AI-CORRECTION 2026-11-10: 输入现为 agent 筛选后的候选，遵循组装工具
+    # 的传入顺序；不包含搜索词或别名，相同 ID 序列可跨搜索复用。
     ordered_ids = [str(item.get("id") or "") for item in items]
     canonical = json.dumps(
         ordered_ids,

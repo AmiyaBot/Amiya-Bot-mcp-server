@@ -206,6 +206,7 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
             }
             assert {
                 "search",
+                "build_search_card",
                 "get_operator_basic_data",
                 "get_operator_skill",
                 "get_glossary",
@@ -221,6 +222,18 @@ async def test_streamable_http_initialize_and_list_tools(tmp_path: Path) -> None
                 "get_integrated_strategy_item_detail",
             } <= tool_names
             assert "recruit" not in tool_names
+
+            search_tool = next(tool for tool in tools if tool["name"] == "search")
+            assert "build_search_card" in search_tool["description"]
+            assert "上下文" in search_tool["description"]
+            search_card_tool = next(tool for tool in tools if tool["name"] == "build_search_card")
+            assert set(search_card_tool["inputSchema"]["properties"]) == {"ids"}
+            assert search_card_tool["inputSchema"]["required"] == ["ids"]
+            ids_schema = search_card_tool["inputSchema"]["properties"]["ids"]
+            assert ids_schema["type"] == "array"
+            assert ids_schema["items"]["type"] == "string"
+            assert ids_schema["minItems"] == 1
+            assert ids_schema["maxItems"] == 20
 
             recruit_with_tag_tool = next(
                 tool for tool in tools if tool["name"] == "recruit_with_tag"

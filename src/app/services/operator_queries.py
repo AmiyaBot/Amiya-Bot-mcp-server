@@ -42,7 +42,7 @@ from src.domain.services.material import build_material_query_result
 from src.domain.types import QueryResult
 from src.helpers.bundle import get_table
 from src.helpers.card_urls import build_card_url
-from src.helpers.gamedata.search import build_sources, search_source_spec
+from src.helpers.gamedata.search import MatchResult, build_sources, search_source_spec
 
 logger = logging.getLogger(__name__)
 OPERATOR_INFO_CARD_REVISION = "card-v21"
@@ -287,6 +287,42 @@ def _build_search_items(
                         build_integrated_strategy_item_payload(strategy_item)
                     )
 
+    return items
+
+
+def resolve_search_items_by_ids(bundle, ids: list[str]) -> list[dict[str, object]]:
+    """按指定 ID 顺序读取资源，复用搜索候选的序列化规则，不执行模糊搜索。"""
+    sources = [
+        ("name", "operators"),
+        ("token_name", "tokens"),
+        ("skin", "skins"),
+        ("material", "materials"),
+        ("stage", "stages"),
+        ("enemy", "enemies"),
+        ("integrated_strategy_item", "integrated_strategy_items"),
+    ]
+    matches = []
+    for index, item_id in enumerate(ids):
+        for source_order, (key, attribute) in enumerate(sources):
+            value = (getattr(bundle, attribute, {}) or {}).get(item_id)
+            if value is None:
+                continue
+            matches.append(MatchResult(
+                key=key,
+                matched_text=item_id,
+                value=value,
+                kind="exact",
+                score=1.0,
+                source_order=source_order,
+                query_order=index,
+            ))
+            break
+
+    items = _build_search_items(matches, _build_token_owner_map(bundle))
+    resolved_ids = {item["id"] for item in items}
+    missing_ids = [item_id for item_id in ids if item_id not in resolved_ids]
+    if missing_ids:
+        raise ValueError(f"未找到可组装的搜索结果 ID: {', '.join(missing_ids)}")
     return items
 
 

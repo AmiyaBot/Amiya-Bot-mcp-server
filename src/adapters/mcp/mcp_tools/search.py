@@ -12,13 +12,15 @@ from src.adapters.mcp.tool_logging import log_tool_exception
 from src.adapters.mcp.tool_logging import log_tool_not_ready
 from src.adapters.mcp.tool_logging import log_tool_start
 from src.app.context import AppContext
-from src.app.services.search_queries import query_search
+from src.app.services.search_card import SEARCH_SELECTION_CARD_MAX_ITEMS
+from src.app.services.search_queries import query_search, query_search_card
 
 logger = logging.getLogger(__name__)
 
 _SEARCH_TOOL_DESC = """本工具是资源统一搜索入口，任何查询都应先调用本工具。
 支持按名称、代号或定期同步的常用别名模糊搜索「干员」「干员的召唤物」「干员皮肤」「材料」「关卡」「敌人」、集成战略藏品及主题机制道具（剧目、骰子、密文板、构想、通宝、零件），返回候选的 id、name、type；别名命中的干员、材料或敌人仍返回其真实类型，并附带 from_alias；其他条目会附带用于区分候选的字段。
-存在多个候选时还会返回 card_image_url 分类选择卡；卡片序号与 items 原始顺序一致，应优先展示该卡并让用户回复序号或名称。单个明确候选不生成搜索选择卡。
+搜索只返回候选数据，不生成搜索卡。收到结果后必须结合用户当前问题和对话上下文筛选候选，排除明显无关的模糊匹配；无法确定的相关候选应保留给用户选择。
+需要向用户展示搜索结果或让用户选择时，应调用 build_search_card(ids=[筛选后的候选ID...])，并展示返回的 card_image_url 图片，让用户回复序号或名称；不要直接把全部模糊命中展示给用户。卡片序号从 1 开始，对应组装工具返回的 data.items 顺序，不再对应原搜索列表。上下文已能确定唯一目标时可直接调用相应详情工具；筛选后无相关候选时，应说明未找到相关结果或调整关键词继续搜索。
 - 干员：用返回的 id 调用 get_operator_basic_data（推荐，返回结构化数据 + card_image_url 卡片图片）；需要完整技能列表及所有技能等级数据时调用 get_operator_skill；培养材料和模组分别调用 get_operator_material / get_operator_modules；
 - 召唤物：用返回的 id 调用 get_token_detail 查看召唤物详情；也可以用 operator_id 查看所属干员。
 - 皮肤：用返回的 operator_id 调用 get_operator_skins 查看所属干员的皮肤。
@@ -28,6 +30,13 @@ _SEARCH_TOOL_DESC = """本工具是资源统一搜索入口，任何查询都应
 - 集成战略物品：不同主题或不同效果的同名物品会分别返回；剧目的普通/猩红版本、骰子的使用场景及通宝品相会合并在 variants。通宝通过 sub_type 区分花钱/衡钱/厉钱，黑流树海零件通过 sub_type 区分加工品/自然物/概念体。用候选 id 调用 get_integrated_strategy_item_detail 获取详情卡片；不要把名称传给详情工具。搜索结果也会直接附带描述、效果、稀有度、子类型、变体及按需缓存的 icon_url。
 
 提示：服务会每小时同步一次官方旧版全局别名表；若某个新外号尚未收录，再联网确认其正式名称。
+"""
+
+
+_BUILD_SEARCH_CARD_TOOL_DESC = """将 search 搜索结果中经上下文筛选的候选组装为一张分类搜索卡。
+先根据用户意图筛除明显无关项，再传入选中条目的真实 id；可合并多次搜索的候选，不传名称、序号或自行编造的 ID。
+ids 必须包含 1~20 个不重复 ID，传入顺序决定卡片序号（从 1 开始）；返回 data.items 与该顺序一致，供用户回复序号后定位对应详情工具。
+应向用户展示 card_image_url 指向的图片；卡片生成失败时才使用 data.items 展示文字候选。无效 ID 会返回错误，不会静默忽略或重新模糊搜索。
 """
 
 
@@ -92,4 +101,30 @@ def register_search_tool(mcp, app):
                 started_at,
                 query=query,
             )
+            raise
+
+    @mcp.tool(description=_BUILD_SEARCH_CARD_TOOL_DESC)
+    async def build_search_card(
+        ids: Annotated[
+            list[str],
+            Field(
+                description="根据对话上下文从 search 候选中筛选的 ID 列表，按期望的卡片编号顺序传入，不可重复",
+                min_length=1,
+                max_length=SEARCH_SELECTION_CARD_MAX_ITEMS,
+            ),
+        ],
+    ) -> dict:
+        tool_name = "build_search_card"
+        started_at = log_tool_start(logger, tool_name, ids=ids)
+        try:
+            if not getattr(app.state, "ctx", None):
+                log_tool_not_ready(logger, tool_name)
+                result_payload = {"message": "未初始化数据上下文"}
+            else:
+                result = await query_search_card(app.state.ctx, ids=ids)
+                result_payload = result.to_response()
+            log_tool_end(logger, tool_name, started_at, result_payload)
+            return result_payload
+        except Exception:
+            log_tool_exception(logger, tool_name, started_at, ids=ids)
             raise

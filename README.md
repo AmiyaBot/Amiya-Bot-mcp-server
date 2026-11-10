@@ -5,7 +5,14 @@
 
 AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它基于本地游戏资源提供结构化数据和图片卡片，并附带命令行工具 `amiyabot-cli`。
 
-1.0.8 版本支持查询干员、技能、精英化与技能升级材料、模组、召唤物、皮肤、材料、关卡、敌人、公开招募、集成战略藏品与主题机制道具和游戏术语。
+1.0.9 版本支持查询干员、技能、精英化与技能升级材料、模组、召唤物、皮肤、材料、关卡、敌人、公开招募、集成战略藏品与主题机制道具和游戏术语。
+
+## v1.0.9 更新
+
+- 搜索与卡片生成解耦，`search` 不再自动渲染选择卡，减少搜索等待时间。
+- 新增 `build_search_card(ids=[...])`，由 agent 根据上下文筛选候选后组装并展示卡片。
+- 按选中 ID 的传入顺序计算 SHA-256 缓存键，相同候选序列可跨搜索复用。
+- 客户端展示搜索候选时需调用新工具；卡片序号对应组装结果的 `data.items`。
 
 ## 功能
 
@@ -15,11 +22,12 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 - 提供 CLI、Docker 和 Helm 三种使用方式
 - 支持资源首次初始化、后台更新和版本查询
 
-当前提供 14 个 MCP 工具：
+当前提供 15 个 MCP 工具：
 
 | 工具 | 用途 |
 | --- | --- |
-| `search` | 统一搜索入口，支持每小时同步的干员、敌人和材料常用别名；返回资源 ID 和真实类型，多候选时附带按类型展示的选择卡 |
+| `search` | 统一搜索入口，支持每小时同步的干员、敌人和材料常用别名；返回资源 ID 和真实类型，由 agent 根据上下文筛选候选 |
+| `build_search_card` | 将筛选后的候选 ID 按传入顺序组装为分类选择卡 |
 | `get_operator_basic_data` | 查询干员详情和干员卡片 |
 | `get_operator_skill` | 查询干员完整技能列表及所有等级数据 |
 | `get_operator_material` | 查询干员培养材料和材料卡片 |
@@ -41,10 +49,14 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 对应的干员、敌人或材料，并额外返回 `from_alias` 表示实际命中的别名。
 同步失败时继续使用上一次成功的内存快照，不影响正式名称搜索。
 
-统一搜索存在多个候选时会按类型生成选择卡，图片中的序号与结构化
-`items` 顺序一致。选择卡使用全部有序结果 ID 的 SHA-256 作为缓存键，
-因此返回相同候选和顺序的别名查询可以复用卡片；缓存按条目数和字节数
-双重限制执行 LRU 淘汰。
+统一搜索只返回候选数据，不自动生成选择卡。agent 应根据用户问题和对话
+上下文排除明显无关的模糊匹配；需要展示候选或让用户选择时，调用
+`build_search_card(ids=[...])` 并展示返回的 `card_image_url`。
+上下文已能确定唯一目标时可直接查询详情，无相关候选时应调整关键词或说明未找到。
+组装工具接受 1~20 个不重复 ID，图片中的序号从 1 开始，与组装结果的
+`data.items` 顺序一致。选择卡使用选中 ID 按传入顺序编码为 JSON 数组后的
+SHA-256 作为缓存键，不包含搜索词；相同 ID 和顺序可跨搜索复用卡片，
+顺序不同则生成不同卡片。缓存保留内容指纹校验，并按条目数和字节数执行 LRU 淘汰。
 
 ## 运行 MCP 服务
 
@@ -52,7 +64,7 @@ AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它�
 
 ### Docker（推荐）
 
-准备一个持久化目录并启动 1.0.8：
+准备一个持久化目录并启动 1.0.9：
 
 ```bash
 mkdir -p ./amiyabot-resources
@@ -61,7 +73,7 @@ docker run -d \
   --name amiyabot-mcp \
   -p 9000:9000 \
   -v "$(pwd)/amiyabot-resources:/app/resources" \
-  hsyhhssyy/amiyabot-mcp:v1.0.8
+  hsyhhssyy/amiyabot-mcp:v1.0.9
 ```
 
 首次启动时，容器会自动把游戏资源下载到挂载目录；所需时间取决于网络和磁盘性能。建议为资源、缓存和日志预留至少 20 GiB 空间。
@@ -90,13 +102,13 @@ ingress:
     secretName: amiyabot-example-tls
 ```
 
-安装 1.0.8：
+安装 1.0.9：
 
 ```bash
 helm repo add amiyabot https://AmiyaBot.github.io/Amiya-Bot-mcp-server
 helm repo update
 helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp \
-  --version 1.0.8 \
+  --version 1.0.9 \
   -f values.yaml
 ```
 
@@ -110,11 +122,11 @@ Chart 默认创建 PVC 并将其挂载到 `/app/resources`。已有 PVC 可以�
 
 #### 一键安装
 
-下面的命令会将 1.0.8 安装到 `~/.local/share/amiyabot-cli/venv`，并在 `~/.local/bin` 创建 `amiyabot-cli`：
+下面的命令会将 1.0.9 安装到 `~/.local/share/amiyabot-cli/venv`，并在 `~/.local/bin` 创建 `amiyabot-cli`：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.8/install.sh \
-  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.8" sh
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.9/install.sh \
+  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.9" sh
 ```
 
 如果 `~/.local/bin` 不在 `PATH` 中，安装脚本会显示需要加入 shell 配置的内容。
@@ -122,14 +134,14 @@ curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.
 不需要图片渲染时，可以跳过 Chromium 安装：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.8/install.sh \
-  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.8" sh -s -- --no-playwright
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.0.9/install.sh \
+  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.0.9" sh -s -- --no-playwright
 ```
 
 #### 从源码安装
 
 ```bash
-git clone --branch v1.0.8 --depth 1 https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git
+git clone --branch v1.0.9 --depth 1 https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git
 cd Amiya-Bot-mcp-server
 
 python3 -m venv .venv
@@ -226,7 +238,7 @@ docker run -d \
   -p 9000:9000 \
   -v "$(pwd)/amiyabot-resources:/app/resources" \
   -v "$(pwd)/config.json:/app/config.json:ro" \
-  hsyhhssyy/amiyabot-mcp:v1.0.8
+  hsyhhssyy/amiyabot-mcp:v1.0.9
 ```
 
 ## 接入 MCP 服务

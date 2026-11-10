@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from src.app.card_service import CardArtifact
 from src.app.renderers.jinja_html_renderer import JinjaHtmlRenderer
@@ -279,6 +282,8 @@ def test_query_search_reuses_card_for_aliases_with_same_ordered_results(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
+    # AI-CORRECTION 2026-11-10: 搜索与组装已解耦；同别名候选的卡片复用
+    # 现通过显式调用 query_search_card 验证，同时确认搜索本身不渲染。
     _write_asset(tmp_path, "assets/enemy/enemy_a.png")
     _write_asset(tmp_path, "assets/enemy/enemy_b.png")
     items = [
@@ -348,6 +353,15 @@ def test_query_search_reuses_card_for_aliases_with_same_ordered_results(
                 version="v1",
                 operators={},
                 materials={},
+                enemies={
+                    item["id"]: SimpleNamespace(
+                        id=item["id"],
+                        name=item["name"],
+                        index=item["enemy_index"],
+                        enemy_level=item["enemy_level"],
+                    )
+                    for item in items
+                },
             )
         ),
         card_service=card_service,
@@ -357,9 +371,226 @@ def test_query_search_reuses_card_for_aliases_with_same_ordered_results(
     first = asyncio.run(search_queries.query_search(context, "别名甲"))
     second = asyncio.run(search_queries.query_search(context, "别名乙"))
 
+    assert first.image_url is None and first.image_path is None
+    assert second.image_url is None and second.image_path is None
+    assert first.data["items"] == items
+    assert card_service.calls == 0
+
+    first = asyncio.run(search_queries.query_search_card(
+        context, [item["id"] for item in first.data["items"]]
+    ))
+    second = asyncio.run(search_queries.query_search_card(
+        context, [item["id"] for item in second.data["items"]]
+    ))
     assert first.image_url == second.image_url
+    assert first.image_url is not None
     assert card_service.calls == 1
     assert first.image_path and Path(first.image_path).is_file()
+
+    reordered = asyncio.run(search_queries.query_search_card(
+        context, ["enemy_b", "enemy_a"]
+    ))
+    assert [item["id"] for item in reordered.data["items"]] == ["enemy_b", "enemy_a"]
+    assert reordered.image_url != first.image_url
+    assert card_service.calls == 2
+
+    selected = asyncio.run(search_queries.query_search_card(context, ["enemy_b"]))
+    assert selected.data["items"] == [items[1]]
+    assert selected.image_url is not None
+    assert card_service.calls == 3
+
+
+@pytest.mark.parametrize("ids, message", [
+    ([], "1~20"),
+    ([f"item-{index}" for index in range(21)], "1~20"),
+    ("enemy_a", "1~20"),
+    ([""], "非空字符串"),
+    (["   "], "非空字符串"),
+    ([None], "非空字符串"),
+    ([123], "非空字符串"),
+    (["enemy_a", " enemy_a "], "重复"),
+])
+def test_search_card_rejects_invalid_selection_before_loading_data(ids, message):
+    result = asyncio.run(search_queries.query_search_card(SimpleNamespace(), ids))
+    assert message in result.message
+    assert result.data is None
+    assert result.image_url is None
+
+
+def _selection_context(tmp_path: Path):
+    context, _ = _card_context(tmp_path)
+    bundle = context.data_repository.get_bundle()
+    bundle.operators["char_test"].id = "char_test"
+    bundle.operators["char_test"].name = "测试干员"
+    bundle.operators["char_test"].token_ids = ["token_test"]
+    bundle.tokens = {
+        "token_test": SimpleNamespace(id="token_test", name="测试召唤物"),
+        "token_orphan": SimpleNamespace(id="token_orphan", name="无主召唤物"),
+    }
+    bundle.skins = {
+        "char_test@skin#1": SimpleNamespace(
+            skin_id="char_test@skin#1", name="测试皮肤",
+            operator_id="char_test", operator_name="测试干员",
+        ),
+    }
+    bundle.materials["material_test"].update(id="material_test", name="测试材料")
+    bundle.stages = {
+        "stage_test": SimpleNamespace(
+            id="stage_test", name="测试关卡", code="T-1",
+            difficulty="FOUR_STAR", stage_type="ACTIVITY",
+        ),
+    }
+    bundle.enemies = {
+        "enemy_test": SimpleNamespace(
+            id="enemy_test", name="测试敌人", index="X1", enemy_level="ELITE",
+        ),
+    }
+    bundle.integrated_strategy_items = {
+        "relic_test": {
+            "id": "relic_test", "name": "测试藏品", "game_type": "RELIC",
+            "topic_name": "测试主题", "usage": "测试效果",
+        },
+        "totem_test": {
+            "id": "totem_test", "name": "测试密文板", "game_type": "TOTEM",
+            "display_type": "密文板", "sub_type_name": "上半板",
+            "topic_name": "测试主题", "usage": "测试机制效果",
+        },
+    }
+    bundle.operator_name_to_id = {"测试干员": "char_test"}
+    bundle.token_name_to_id = {"测试召唤物": "token_test"}
+    bundle.skin_name_to_id = {"测试皮肤": "char_test@skin#1"}
+    bundle.material_name_to_id = {"测试材料": "material_test"}
+    bundle.stage_alias_to_ids = {"测试关卡": ["stage_test"]}
+    bundle.enemy_alias_to_ids = {"测试敌人": ["enemy_test"]}
+    bundle.integrated_strategy_item_alias_to_ids = {
+        "测试藏品": ["relic_test"], "测试密文板": ["totem_test"],
+    }
+    context.data_repository.is_ready = lambda: True
+    context.prefer_local_artifact_path = True
+
+    class FakeCardService:
+        def __init__(self):
+            self.payloads = []
+
+        async def get(self, *, template, payload_key, payload, format):
+            self.payloads.append(payload)
+            path = tmp_path / "cache" / "cards" / template / payload_key / f"artifact.{format}"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(PNG_BYTES)
+            return CardArtifact(template, payload_key, format, path)
+
+    context.card_service = FakeCardService()
+    return context
+
+
+def test_search_card_resolves_mixed_ids_without_prior_search_and_numbers_selection(tmp_path):
+    context = _selection_context(tmp_path)
+    ids = [
+        "totem_test", "char_test", "stage_test", "relic_test", "token_test",
+        "char_test@skin#1", "enemy_test", "material_test",
+    ]
+    result = asyncio.run(search_queries.query_search_card(context, ids))
+    items = result.data["items"]
+    assert [item["id"] for item in items] == ids
+    assert [item["type"] for item in items] == [
+        "密文板", "干员", "关卡", "集成战略藏品", "召唤物", "皮肤", "敌人", "材料",
+    ]
+    assert items[0]["usage"] == "测试机制效果"
+    assert items[0]["sub_type"] == "上半板"
+    assert items[2]["difficulty"] == "突袭"
+    assert items[3]["usage"] == "测试效果"
+    assert items[4]["operator_id"] == "char_test"
+    assert items[5]["operator_name"] == "测试干员"
+    assert items[6]["enemy_level"] == "精英"
+    assert result.image_url is not None
+    card = context.card_service.payloads[0]
+    displayed = [item for group in card.data["groups"] for item in group["items"]]
+    assert [(item["index"], item["id"]) for item in displayed] == list(enumerate(ids, 1))
+    assert card.data["remaining"] == 0
+
+    normalized = asyncio.run(search_queries.query_search_card(
+        context, [f" {item_id} " for item_id in ids]
+    ))
+    assert normalized.image_url == result.image_url
+    assert len(context.card_service.payloads) == 1
+
+
+def test_mcp_search_then_build_card_shows_only_context_selected_ids(tmp_path):
+    from mcp.server.fastmcp import FastMCP
+
+    from src.adapters.mcp.mcp_tools.search import register_search_tool
+
+    context = _selection_context(tmp_path)
+    app = SimpleNamespace(state=SimpleNamespace())
+    mcp = FastMCP("search-card-test")
+    register_search_tool(mcp, app)
+
+    async def call_tool(name, arguments):
+        content = await mcp.call_tool(name, arguments)
+        return json.loads(content[0].text)
+
+    async def scenario():
+        unavailable = await call_tool("build_search_card", {"ids": ["enemy_test"]})
+        assert unavailable == {"message": "未初始化数据上下文"}
+
+        app.state.ctx = context
+        candidates = await call_tool("search", {"query": "测试"})
+        assert len(candidates["data"]["items"]) > 2
+        assert "card_image_url" not in candidates
+        assert "image_path" not in candidates
+        assert context.card_service.payloads == []
+
+        ids = ["enemy_test", "char_test"]
+        assert set(ids) <= {item["id"] for item in candidates["data"]["items"]}
+        card = await call_tool("build_search_card", {"ids": ids})
+        assert [item["id"] for item in card["data"]["items"]] == ids
+        assert card["card_image_url"].endswith("/artifact.png")
+        displayed = context.card_service.payloads[0].data["groups"]
+        assert [(group["items"][0]["index"], group["items"][0]["id"]) for group in displayed] == list(enumerate(ids, 1))
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("unknown_id", ["missing", "token_orphan", "../../escape"])
+def test_search_card_rejects_unknown_id_without_rendering_partial_card(tmp_path, unknown_id):
+    context = _selection_context(tmp_path)
+    result = asyncio.run(search_queries.query_search_card(context, ["char_test", unknown_id]))
+    assert unknown_id in result.message
+    assert result.data is None
+    assert result.image_url is None
+    assert context.card_service.payloads == []
+
+
+def test_search_card_render_failure_preserves_only_selected_items(tmp_path):
+    context = _selection_context(tmp_path)
+
+    async def fail_render(**_kwargs):
+        raise RuntimeError("renderer unavailable")
+
+    context.card_service.get = fail_render
+    result = asyncio.run(search_queries.query_search_card(context, ["enemy_test"]))
+    assert [item["id"] for item in result.data["items"]] == ["enemy_test"]
+    assert result.image_url is None
+    assert "生成搜索卡片失败" in result.message
+
+
+def test_search_without_matches_or_with_unavailable_icons_never_builds_card(tmp_path, monkeypatch):
+    context = _selection_context(tmp_path)
+
+    async def fail_icons(*_args, **_kwargs):
+        raise OSError("icon unavailable")
+
+    monkeypatch.setattr(search_queries, "attach_collectible_icon_artifacts", fail_icons)
+    for result in (
+        QueryExecutionResult(message="query 不能为空"),
+        QueryExecutionResult(message="未找到匹配"),
+        QueryExecutionResult(data={"items": []}),
+        QueryExecutionResult(data={"items": [{"id": "relic_test"}]}),
+    ):
+        monkeypatch.setattr(search_queries, "search", lambda *_args, **_kwargs: result)
+        assert asyncio.run(search_queries.query_search(context, "测试")) is result
+        assert result.image_url is None
+    assert context.card_service.payloads == []
 
 
 def test_oversized_search_card_is_removed_and_not_returned(tmp_path: Path) -> None:

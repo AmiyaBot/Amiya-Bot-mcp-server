@@ -1,6 +1,6 @@
 # MCP 工具说明
 
-本服务对外暴露 14 个 MCP 工具，主要通过 Streamable HTTP 提供，并保留旧 SSE 入口。除公开招募外，`search` 是资源统一搜索入口；干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material` / `get_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`，关卡查询流程为 `search` → `get_stage_data`，敌人查询流程为 `search` → `get_enemy_data`，集成战略物品查询流程为 `search` → `get_integrated_strategy_item_detail`。旧工具 `get_integrated_strategy_collectible_detail` 仅保留藏品查询兼容性。公开招募直接调用 `recruit_with_tag`。
+本服务对外暴露 15 个 MCP 工具，主要通过 Streamable HTTP 提供，并保留旧 SSE 入口。除公开招募外，`search` 是资源统一搜索入口；需要展示候选时，由 agent 根据上下文筛选后调用 `build_search_card` 生成搜索卡，再由用户选择。干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material` / `get_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`，关卡查询流程为 `search` → `get_stage_data`，敌人查询流程为 `search` → `get_enemy_data`，集成战略物品查询流程为 `search` → `get_integrated_strategy_item_detail`。旧工具 `get_integrated_strategy_collectible_detail` 仅保留藏品查询兼容性。公开招募直接调用 `recruit_with_tag`。
 
 ---
 
@@ -53,6 +53,15 @@
 ```
 
 > 提示：若搜不到结果，可能是新外号尚未进入远端别名表，此时可联网确认正式名称后重新搜索。
+
+### 上下文筛选与展示
+
+`search` 不生成搜索卡，也不返回顶层 `card_image_url` / `image_path`；集成战略物品仍可附带单项 `icon_url` / `icon_path`。agent 收到候选后应结合用户问题与对话上下文，排除明显无关的模糊匹配，保留仍可能相关的候选供用户选择。
+
+- 需要展示搜索结果或请用户选择时，调用 `build_search_card(ids=[...])`，展示其返回的 `card_image_url` 图片；不得直接展示全部未筛选的模糊命中。
+- 卡片序号从 1 开始，对应 **组装工具返回的** `data.items` 顺序，不能沿用原搜索列表序号。
+- 上下文已经确定唯一目标时，可以直接调用对应详情工具。
+- 没有相关候选时，说明未找到相关结果或调整关键词继续搜索，不组装空卡片。
 
 ### 排序规则
 
@@ -603,6 +612,51 @@ Base64 头像仅供服务端内部渲染，不包含在 MCP 响应中；`groups[
 
 ---
 
+## 13. build_search_card — 组装筛选后的搜索结果卡
+
+根据 agent 筛选后的资源 ID 组装一张分类选择卡。复用现有搜索候选序列化、
+`search_selection` 模板和有界缓存；按 ID 直接读取游戏数据，不重做模糊搜索，
+也不依赖此前搜索请求的临时状态，可合并多次搜索的候选。
+
+### 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `ids` | `list[str]` | 是 | 从 `search` 候选中选出的 1~20 个不重复 ID，按期望的卡片编号顺序排列；不接受名称或序号 |
+
+### 返回值
+
+```json
+{
+  "data": {
+    "items": [
+      {"id": "char_172_svrash", "name": "银灰", "type": "干员"},
+      {"id": "char_1045_svash2", "name": "凛御银灰", "type": "干员"}
+    ]
+  },
+  "card_image_url": "https://.../cards/search_selection/r_<sha256>/artifact.png"
+}
+```
+
+- 返回条目使用与搜索相同的资源字段，保留所属干员、关卡难度、敌人编号、集成战略效果及变体等信息；不包含与搜索词有关的 `from_alias`。
+- `data.items` 顺序与去除首尾空白后的 `ids` 顺序一致，序号为数组下标加 1。卡片按类型分组，仍保留这些序号；不会静默忽略 ID 或截断候选。
+- agent 应展示 `card_image_url` 图片，让用户回复序号或名称。单个 ID 也可以组装卡片。
+- 缓存键为有序 ID 列表经紧凑 JSON 编码后的 SHA-256，避免直接拼接歧义，不包含搜索词或别名。同一 ID 序列跨查询复用，改变顺序则使用不同缓存；资源版本或卡片内容变化时通过内容指纹重建。
+- 本地模式可附带 `image_path`；未配置 `BaseUrl` 时 `card_image_url` 缺省。渲染失败或超过缓存容量限制时，返回选中候选与 `message`，不返回卡片 URL，可回退为文字候选。
+- 空列表、超过 20 项、空白 ID、重复 ID 或不存在/不可组装的 ID 均被拒绝，不返回部分卡片。MCP 列表类型与长度校验失败通过协议层报告；其余参数业务校验通过 `message` 返回。
+
+业务错误示例：
+
+```json
+{"message": "ids 不能包含重复的搜索结果 ID"}
+```
+
+```json
+{"message": "未找到可组装的搜索结果 ID: unknown_id"}
+```
+
+---
+
 ## 调用流程
 
 ```
@@ -614,6 +668,11 @@ search(query="银灰")
          {"id": "char_172_svrash", "name": "银灰", "type": "干员"},
          {"id": "char_1045_svash2", "name": "凛御银灰", "type": "干员"}
        ]}}
+    │
+    ▼
+agent 根据上下文筛选，仍需用户选择时：
+build_search_card(ids=["char_172_svrash", "char_1045_svash2"])
+    → 展示 card_image_url，按返回 data.items 的顺序解释用户回复的序号
     │
     ├── 用户选择 "银灰" → get_operator_basic_data(operator_id="char_172_svrash")   ← 推荐
     │       → {"data": {"名称": {...}, "分类": {...}, ...}, "card_image_url": "https://..."}
