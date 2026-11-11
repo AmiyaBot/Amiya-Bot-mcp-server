@@ -10,6 +10,7 @@ from src.app.context import get_bundle_resource_root
 from src.app.services.operator_queries import QueryExecutionResult
 from src.domain.services.autochess_bond import current_bonds, bond_detail
 from src.domain.services.operator import build_operator_template_font_url
+from src.domain.services.operator_autochess import build_operator_autochess
 from src.domain.types import QueryResult
 from src.helpers.card_urls import build_card_url
 
@@ -31,7 +32,8 @@ async def query_autochess_bond_detail(context, bond_id):
         return QueryExecutionResult(message='未找到当期盟约，请先通过 search 获取盟约 ID')
     detail = bond_detail(bundle, entry)
     root = get_bundle_resource_root(bundle, context)
-    members = [{**member, 'avatar': image_uri(root / 'assets/avatar' / f"{member['干员ID']}#1.png")}
+    members = [{**member, 'avatar': image_uri(root / 'assets/avatar' / f"{member['干员ID']}#1.png"),
+                'traits': (build_operator_autochess(bundle, member['干员ID'], context.cfg.ProjectRoot) or {}).get('variants', [])}
                for member in detail['所属棋子']]
     payload = QueryResult(type='autochess_bond', key=entry['id'], title=entry['name'], data={
         'detail': detail, 'members': members,
@@ -39,7 +41,7 @@ async def query_autochess_bond_detail(context, bond_id):
         'template_font_url': build_operator_template_font_url(context.cfg.ProjectRoot),
     })
     digest = hashlib.sha256(json.dumps(payload.data, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]
-    key = f"bond-v4:{digest}"
+    key = f"bond-v5:{digest}"
     result = QueryExecutionResult(data=detail)
     try:
         artifact = await context.card_service.get(template='autochess_bond', payload_key=key, payload=payload,
