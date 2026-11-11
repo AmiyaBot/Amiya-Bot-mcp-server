@@ -302,6 +302,44 @@
     .skill-type > .t4 {
       background: #ec7e4c !important;
     }
+
+    .has-autochess .profile-meta {
+      display: grid; grid-template-columns: 230px 290px;
+      column-gap: 12px; align-items: start;
+    }
+    .has-autochess .profile-meta > :first-child { grid-row: 1 / 3; }
+    .has-autochess .operator-name { margin-top: 10px; display: grid; grid-template-columns: 1fr 140px; }
+    .has-autochess .operator-name > .range { grid-column: 2; grid-row: 1; margin: 0 !important; align-self: center; justify-self: end; }
+    .has-autochess .class-info { height: 48px; grid-column: 1; grid-row: 1; }
+    .has-autochess .operator-name > .tags,
+    .has-autochess .operator-name > .trait,
+    .has-autochess .operator-name > .name,
+    .has-autochess .operator-name > .chess-panel { grid-column: 1 / -1; }
+    .has-autochess .tags { margin: 8px 0; }
+    .chess-panel {
+      min-width: 0; margin: 0 0 6px; padding: 6px 14px 6px;
+      border: 1px solid #6ca49a; border-left: 4px solid #8dd8bd;
+      background: linear-gradient(115deg,rgba(15,32,36,.97),rgba(28,49,52,.94));
+      color: #f1f5f2; box-shadow: 0 3px 10px #0002;
+    }
+    .chess-panel legend {
+      padding: 3px 12px; color: #c1efdb; background: #183235;
+      border: 1px solid #639d90; font-size: 18px; font-weight: bold;
+      letter-spacing: 1px;
+    }
+    .chess-header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+    .chess-bonds { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+    .chess-bond { display: flex; align-items: center; gap: 7px; padding: 2px 10px 2px 4px; background: #ffffff0c; border: 1px solid #ffffff20; }
+    .chess-bond img { width: 30px; height: 30px; object-fit: contain; }
+    .chess-tier { display: flex; align-items: center; gap: 6px; color: #ebd29b; white-space: nowrap; }
+    .chess-tier svg { width: 30px; height: 30px; }
+    .chess-variant { display: grid; grid-template-columns: 108px 1fr; gap: 12px; padding-top: 7px; border-top: 1px solid #ffffff24; }
+    .chess-variant + .chess-variant { margin-top: 7px; }
+    .chess-state { color: #acd7c8; font-size: 15px; line-height: 1.5; }
+    .chess-price { display: flex; align-items: center; gap: 5px; color: #e8ca87; font-size: 16px; }
+    .chess-price img { width: 20px; height: 20px; object-fit: contain; }
+    .chess-price svg { width: 20px; height: 20px; flex: none; }
+    .chess-trait { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.45; }
   </style>
 </head>
 <body>
@@ -333,7 +371,8 @@
   {%- endmacro %}
 
   {% set real_names = op.origin_names if op.origin_names else ([op.origin_name] if op.origin_name and op.origin_name != "未知" else []) %}
-  <div class="background"{% if skin_url %} style="background-image: url('{{ skin_url }}');"{% endif %}>
+  {% macro chess_coin() -%}<svg viewBox="0 0 24 24" role="img" aria-label="资金"><circle cx="12" cy="12" r="9" fill="#e8ca8720" stroke="#e8ca87" stroke-width="1.6"/><circle cx="12" cy="12" r="6" fill="none" stroke="#e8ca87" stroke-width=".8"/><path d="m12 7 4 5-4 5-4-5Z" fill="#e8ca87"/></svg>{%- endmacro %}
+  <div class="background{% if autochess %} has-autochess{% endif %}"{% if skin_url %} style="background-image: url('{{ skin_url }}');"{% endif %}>
     <div class="left">
       <div>
         <div class="operator-attr">
@@ -353,6 +392,7 @@
           <div class="attr" title="画师"><div>{{ op.drawer or "未知" }}</div></div>
           <div class="attr" title="生日"><div>{{ op.birthday or "未知" }}</div></div>
         </div>
+        <div class="profile-meta">
         <div>
           <div class="title" style="width: 120px">潜能提升</div>
           {% for item in potential_list %}
@@ -392,6 +432,7 @@
           {% endif %}
         </div>
       </div>
+      </div>
       <div class="operator-name" style="margin-bottom: 6px">
         <div class="range" style="margin: 15px 0">{{ render_range_blocks(op.range or "") }}</div>
         <div class="class-info">
@@ -412,6 +453,24 @@
           {% for tag in (op.tags or []) %}<span>{{ tag }}</span>{% endfor %}
         </div>
         <div class="trait">{{ (op.operator_trait or "") | safe }}</div>
+        {% if autochess %}
+        <fieldset class="chess-panel">
+          <legend>{{ autochess.title | e }}</legend>
+          <div class="chess-header">
+            <div class="chess-bonds">{% for bond in autochess.bonds %}
+              <div class="chess-bond">{% if bond.icon %}<img src="{{ bond.icon }}" alt="{{ bond.name | e }}盟约图标">{% endif %}<span>{{ bond.name | e }}</span></div>
+            {% endfor %}</div>
+            <div class="chess-tier"><svg viewBox="0 0 32 32" role="img" aria-label="棋子等阶图标"><path d="M16 2 29 9v14L16 30 3 23V9Z" fill="#e8ca8720" stroke="#e8ca87" stroke-width="1.5"/><path d="m9 14 7-4 7 4m-14 5 7 4 7-4" fill="none" stroke="#e8ca87" stroke-width="2"/></svg><span>{{ autochess.tier }}阶</span></div>
+            {% if autochess.common_price %}<div class="chess-price">价格 {{ autochess.variants[0].price if autochess.variants[0].price is not none else '—' }}{{ chess_coin() }}</div>{% endif %}
+          </div>
+          {% for variant in autochess.variants %}
+          <div class="chess-variant">
+            <div><div class="chess-state">{{ variant.name | e }}</div>{% if not autochess.common_price %}<div class="chess-price">价格 {{ variant.price if variant.price is not none else '—' }}{{ chess_coin() }}</div>{% endif %}</div>
+            <div class="chess-trait">{{ variant.description | e }}</div>
+          </div>
+          {% endfor %}
+        </fieldset>
+        {% endif %}
         <div class="name" style="padding-top: 10px; font-size: 50px">{{ op.name }}</div>
         <div class="name" style="padding-bottom: 10px; font-size: 30px">
           <span>{{ op.number or "-" }}</span>

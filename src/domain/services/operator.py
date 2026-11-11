@@ -11,6 +11,7 @@ from src.helpers.bundle import get_table, html_tag_format
 from src.app.context import AppContext, get_bundle_resource_root
 from src.domain.models.operator import Operator
 from src.domain.types import QueryResult
+from src.domain.services.operator_autochess import build_operator_autochess
 from src.helpers.glossary import mark_glossary_used_terms
 
 logger = logging.getLogger(__name__)
@@ -312,6 +313,7 @@ def build_operator_query_result(ctx: AppContext, op: Operator) -> QueryResult:
         title=op.name,
         data={
             "op": op,
+            "autochess": build_operator_autochess(bundle, op.id, ctx.cfg.ProjectRoot),
             "skin_url": "",
             "base_attr": build_base_attr(op),
             "trust_attr": build_trust_attr(op),

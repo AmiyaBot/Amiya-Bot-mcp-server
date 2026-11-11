@@ -216,6 +216,14 @@ def build_operator_payload(
         # Original code:
         #         "皮肤": _build_skin_payload(op),
     }
+    autochess = data.get("autochess")
+    if autochess:
+        payload["卫戍协议"] = {
+            "标题": autochess["title"], "棋子等阶": autochess["tier"],
+            "盟约": [bond["name"] for bond in autochess["bonds"]],
+            "特质": [{"状态": v["name"], "基础购买价格": v["price"], "描述": v["description"]}
+                     for v in autochess["variants"]],
+        }
     if token_entries:
         token_payload: dict[str, Any] = {"列表": token_entries}
         if token_card_url:

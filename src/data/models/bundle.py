@@ -60,3 +60,8 @@ class DataBundle:
 
     tables: Dict[str, Dict[str,Any]]
     """保留一些表，方便详情方法内部使用（避免再读磁盘）"""
+
+    autochess_entries: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    """卫戍协议盟约、棋子、策略资料；ID 隔离活动、版本和教程规则。"""
+    autochess_alias_to_ids: Dict[str, list[str]] = field(default_factory=dict)
+    """卫戍协议名称、原始 ID 和干员 ID 到资料 ID 的映射。"""

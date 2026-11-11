@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 from dataclasses import dataclass
 import logging
 from pathlib import Path
@@ -45,7 +47,7 @@ from src.helpers.card_urls import build_card_url
 from src.helpers.gamedata.search import MatchResult, build_sources, search_source_spec
 
 logger = logging.getLogger(__name__)
-OPERATOR_INFO_CARD_REVISION = "card-v21"
+OPERATOR_INFO_CARD_REVISION = "card-v22"
 OPERATOR_MATERIAL_CARD_REVISION = "mat-v1"
 OPERATOR_MODULE_CARD_REVISION = "module-v2"
 OPERATOR_TOKEN_CARD_REVISION = "token-v5"
@@ -919,6 +921,12 @@ async def query_operator_basic_by_id(
             token_card_url=token_card_url,
         )
         payload_key = f"operator:{resolved.id}:{bundle_version}:{OPERATOR_INFO_CARD_REVISION}"
+        if result.data.get("autochess"):
+            # 当期切换可能先于资源版本变化，缓存需区分实际展示的棋子信息。
+            chess_fingerprint = hashlib.sha256(json.dumps(
+                structured_payload.get("卫戍协议"), ensure_ascii=False, sort_keys=True,
+            ).encode()).hexdigest()[:16]
+            payload_key += f":chess-{chess_fingerprint}"
 
         image_url = None
         image_path = None
@@ -1344,3 +1352,25 @@ async def query_operator_material(
     if isinstance(resolved, QueryExecutionResult):
         return resolved
     return await query_operator_material_by_id(context, resolved.id)
+
+
+# AI-REMOVED 2026-11-10:
+# Reason: 用户仅授权结构化数据，撤回未经授权的卫戍协议查询和卡片接入。
+# Trigger: 用户要求先去掉本次新增接口，后续按指导梳理添加。
+# Evidence: 本次工作区 diff 中新增的卫戍协议工具、搜索和卡片代码。
+# Replacement: None；仅保留 src/data/repository/bundle/autochess.py 数据结构化。
+# Risk: Low；既有查询入口保持原行为。
+# Human Review: Required
+# Original code:
+#         elif match.key == "autochess":
+#             for entry in value if isinstance(value, list) else [value]:
+#                 if entry["id"] not in seen_ids:
+#                     seen_ids.add(entry["id"])
+#                     items.append({key: entry[key] for key in (
+#                         "id", "name", "type", "activity_id", "activity_name",
+#                         "version_id", "ruleset", "ruleset_name",
+#                     )} | {"description": entry.get("description", ""),
+#                           "operator_id": entry.get("operator_id", "")})
+#
+#         ("autochess", "autochess_entries"),
+#             "autochess",

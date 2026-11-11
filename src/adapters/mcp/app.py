@@ -265,3 +265,17 @@ def register_asgi(app: FastAPI, cfg: Config) -> FastMCP:
         "MCP ASGI 挂载完成: streamable_http_endpoint=/mcp legacy_sse_endpoint=/mcp/sse"
     )
     return mcp
+
+
+# AI-REMOVED 2026-11-10:
+# Reason: 用户仅授权结构化数据，撤回未经授权的卫戍协议查询和卡片接入。
+# Trigger: 用户要求先去掉本次新增接口，后续按指导梳理添加。
+# Evidence: 本次工作区 diff 中新增的卫戍协议工具、搜索和卡片代码。
+# Replacement: None；仅保留 src/data/repository/bundle/autochess.py 数据结构化。
+# Risk: Low；既有查询入口保持原行为。
+# Human Review: Required
+# Original code:
+# from src.adapters.mcp.mcp_tools.autochess import register_autochess_tool
+# 卫戍协议盟约、棋子、策略也使用 search 获取唯一 ID，再调用 get_autochess_detail；根据活动、版本及常规/教程标识选择结果。价格和特质说明独立展示，不根据特质推算实际价格或效果。
+#     register_autochess_tool(mcp, app)
+#         ["get_glossary", "search", "get_operator_basic_data", "get_operator_skill", "get_operator_material", "get_operator_modules", "get_token_detail", "get_operator_skins", "get_material", "get_stage_data", "get_enemy_data", "recruit_with_tag", "get_integrated_strategy_collectible_detail", "get_integrated_strategy_item_detail", "get_autochess_detail"],

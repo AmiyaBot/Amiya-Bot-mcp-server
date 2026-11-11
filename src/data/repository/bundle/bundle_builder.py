@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 
 from src.app.config import Config
 from src.data.models.bundle import DataBundle
+from src.data.repository.bundle.autochess import build_autochess_entries
 from src.data.repository.bundle.bundle_validation import GAMEDATA_TABLE_SPECS
 from src.data.repository.bundle.bundle_validation import ResourceDataError
 from src.data.models._operator_impl import OperatorImpl
@@ -110,6 +111,7 @@ def load_bundle_from_disk(
         integrated_strategy_item_alias_to_ids,
     ) = _build_integrated_strategy_items(tables)
 
+    autochess_entries, autochess_alias_to_ids = build_autochess_entries(tables)
     return DataBundle(
         version=version,
         resource_root=resolved_resource_root,
@@ -131,6 +133,8 @@ def load_bundle_from_disk(
         integrated_strategy_items=integrated_strategy_items,
         integrated_strategy_item_alias_to_ids=integrated_strategy_item_alias_to_ids,
         tables=tables,
+        autochess_entries=autochess_entries,
+        autochess_alias_to_ids=autochess_alias_to_ids,
     )
 
 

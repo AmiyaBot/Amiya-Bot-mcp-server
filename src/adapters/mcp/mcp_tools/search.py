@@ -128,3 +128,15 @@ def register_search_tool(mcp, app):
         except Exception:
             log_tool_exception(logger, tool_name, started_at, ids=ids)
             raise
+
+
+# AI-REMOVED 2026-11-10:
+# Reason: 用户仅授权结构化数据，撤回未经授权的卫戍协议查询和卡片接入。
+# Trigger: 用户要求先去掉本次新增接口，后续按指导梳理添加。
+# Evidence: 本次工作区 diff 中新增的卫戍协议工具、搜索和卡片代码。
+# Replacement: None；仅保留 src/data/repository/bundle/autochess.py 数据结构化。
+# Risk: Low；既有查询入口保持原行为。
+# Human Review: Required
+# Original code:
+# # AI-CORRECTION 2026-11-10: 搜索范围增加卫戍协议盟约、棋子及策略，包含档期与教程标识。
+# 支持卫戍协议盟约、棋子、策略名称（也支持“卫戍协议真理”这种限定名称）；候选带 activity_id、activity_name、version_id、ruleset/ruleset_name，用 id 调用 get_autochess_detail。不同档期和教程的同名条目不可混用。

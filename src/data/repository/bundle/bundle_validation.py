@@ -8,6 +8,7 @@ from src.data.models.bundle import DataBundle
 
 GAMEDATA_TABLE_SPECS: tuple[tuple[str, str], ...] = (
     ("character_table", "excel"),
+    ("activity_table", "excel"),
     ("uniequip_table", "excel"),
     ("battle_equip_table", "excel"),
     ("favor_table", "excel"),

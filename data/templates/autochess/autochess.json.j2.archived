@@ -1,0 +1,12 @@
+{#
+AI-REMOVED 2026-11-10:
+Reason: 用户仅授权结构化数据，撤回未经授权的卫戍协议查询和卡片接入。
+Trigger: 用户要求先去掉本次新增接口，后续按指导梳理添加。
+Evidence: 本次工作区 diff 中新增的卫戍协议工具、搜索和卡片代码。
+Replacement: None；仅保留 src/data/repository/bundle/autochess.py 数据结构化。
+Risk: Low；既有查询入口保持原行为。
+Human Review: Required
+Original code:
+{{ entry | tojson }}
+
+#}

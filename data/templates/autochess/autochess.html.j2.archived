@@ -1,0 +1,46 @@
+{#
+AI-REMOVED 2026-11-10:
+Reason: 用户仅授权结构化数据，撤回未经授权的卫戍协议查询和卡片接入。
+Trigger: 用户要求先去掉本次新增接口，后续按指导梳理添加。
+Evidence: 本次工作区 diff 中新增的卫戍协议工具、搜索和卡片代码。
+Replacement: None；仅保留 src/data/repository/bundle/autochess.py 数据结构化。
+Risk: Low；既有查询入口保持原行为。
+Human Review: Required
+Original code:
+{% autoescape true %}
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><style>
+{% if template_font_url %}@font-face {font-family:GameFont;src:url('{{ template_font_url }}');}{% endif %}
+*{box-sizing:border-box}body{margin:0;width:1000px;padding:36px;background:#101c22;color:#eef5f5;font-family:GameFont,sans-serif}
+.eyebrow{color:#7de1c4;font-size:18px}h1{font-size:38px;margin:12px 0}h2{font-size:25px;color:#7de1c4;margin:0 0 16px}h3{margin:12px 0;font-size:21px}
+.meta{color:#b4c4ca;font-size:18px;line-height:1.7}.panel{background:#1d2d35;border:1px solid #34505a;border-radius:12px;padding:24px;margin-top:22px}
+.text{white-space:pre-wrap;line-height:1.8;font-size:20px;overflow-wrap:anywhere}.tag{display:inline-block;background:#304b52;padding:6px 12px;border-radius:6px;margin:6px 6px 6px 0;font-size:18px}
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 18px}
+</style></head><body>
+<div class="eyebrow">{{ entry.type }}</div><h1>{{ entry.name }}</h1>
+<div class="meta">{{ entry.activity_name }} · {{ entry.version_id }} · {{ entry.ruleset_name }}</div>
+{% if entry.description %}<div class="panel text">{{ entry.description }}</div>{% endif %}
+{% if entry.kind == 'bond' %}
+<div class="panel"><h2>激活条件</h2><div class="text">人数：{{ entry.activation_count if entry.activation_count is not none else '未提供' }}
+范围：{{ {'BOARD':'场上','BOARD_AND_DECK':'场上及整备区'}.get(entry.activation_condition, entry.activation_condition) }}</div></div>
+<div class="panel"><h2>所属棋子</h2>{% for member in entry.members %}<span class="tag">{{ member.name }}</span>{% endfor %}</div>
+{% endif %}
+{% if entry.kind == 'chess' %}
+<div class="meta">棋子等阶：{{ entry.tier }}</div>
+{% for variant in entry.variants %}<div class="panel"><h2>{{ variant.name }}</h2>
+<div class="meta">基础购买价格：{{ variant.purchase_price if variant.purchase_price is not none else '未提供' }} · 基础售出价格：{{ variant.sale_price if variant.sale_price is not none else '未提供' }} · 装备槽：{{ variant.equipment_slots }}</div>
+<h3>所属盟约</h3>{% for bond in variant.bonds %}<span class="tag">{{ bond.name }}</span>{% else %}<div class="meta">无</div>{% endfor %}
+<h3>特质</h3><div class="text">{{ variant.description or '未提供特质说明' }}</div>
+{% for trait in variant.traits %}{% if trait.description and trait.description != variant.description %}<div class="text">{{ trait.description }}</div>{% endif %}{% endfor %}
+</div>{% endfor %}
+{% endif %}
+{% if entry.kind == 'strategy' %}
+<div class="panel"><div class="meta">策略角色：{{ entry.owner_name }} · 初始目标生命值：{{ entry.initial_hp }}</div>
+{% if entry.unlock_description %}<div class="text">解锁：{{ entry.unlock_description }}</div>{% endif %}</div>
+{% for skill in entry.skills %}<div class="panel"><h2>{{ skill.type_name }}技能</h2><div class="meta">消耗：{{ skill.cost }}</div><div class="text">{{ skill.description }}</div></div>{% endfor %}
+{% endif %}
+{% if entry.modes %}<div class="panel"><h2>模式范围</h2><div class="modes">{% for mode in entry.modes %}<div class="meta">{{ mode.name }}{% if entry.kind == 'bond' %} · {{ '禁用' if entry.source_id in mode.inactive_bond_ids else ('启用' if entry.source_id in mode.active_bond_ids else '未标明') }}{% elif entry.kind == 'strategy' and mode.id in entry.inactive_mode_ids %} · 禁用{% endif %}</div>{% endfor %}</div></div>{% endif %}
+</body></html>
+{% endautoescape %}
+
+#}
