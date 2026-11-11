@@ -20,7 +20,7 @@ from src.domain.services.operator import build_operator_template_font_url
 from src.domain.types import QueryResult
 
 
-SEARCH_SELECTION_CARD_REVISION = "search-selection-v4"
+SEARCH_SELECTION_CARD_REVISION = "search-selection-v5"
 SEARCH_SELECTION_CARD_TEMPLATE = "search_selection"
 SEARCH_SELECTION_CARD_MAX_ITEMS = 20
 

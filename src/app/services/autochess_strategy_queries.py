@@ -29,7 +29,7 @@ async def query_autochess_strategy_detail(context, strategy_id):
         'template_font_url': build_operator_template_font_url(context.cfg.ProjectRoot),
     })
     digest = hashlib.sha256(json.dumps(payload.data, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]
-    key = f'strategy-v2:{digest}'
+    key = f'strategy-v3:{digest}'
     result = QueryExecutionResult(data=detail)
     try:
         artifact = await context.card_service.get(template='autochess_strategy', payload_key=key, payload=payload,
