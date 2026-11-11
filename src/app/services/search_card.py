@@ -20,11 +20,13 @@ from src.domain.services.operator import build_operator_template_font_url
 from src.domain.types import QueryResult
 
 
-SEARCH_SELECTION_CARD_REVISION = "search-selection-v1"
+SEARCH_SELECTION_CARD_REVISION = "search-selection-v4"
 SEARCH_SELECTION_CARD_TEMPLATE = "search_selection"
 SEARCH_SELECTION_CARD_MAX_ITEMS = 20
 
 _GROUP_CONFIG = {
+    "卫戍协议策略": {"layout": "square", "css_class": "strategy"},
+    "卫戍协议盟约": {"layout": "square", "css_class": "bond"},
     "干员": {"layout": "portrait", "css_class": "operator"},
     "皮肤": {"layout": "portrait", "css_class": "skin"},
     "召唤物": {"layout": "square", "css_class": "token"},
@@ -139,6 +141,15 @@ def _build_display_item(
             subtitle = str(getattr(operator, "classes", "") or "").strip()
             rarity = int(getattr(operator, "rarity", 0) or 0)
             meta = f"{rarity}★" if rarity else ""
+    elif item_type == "卫戍协议盟约":
+        entry = bundle.autochess_entries[item_id]
+        image_path = context.cfg.ProjectRoot / "data/templates/operator_info/assets/autochess" / f"icon_{entry['source_id']}.png"
+        subtitle = str(item.get("activity_name") or "")
+    elif item_type == "卫戍协议策略":
+        from src.app.services.autochess_strategy_assets import strategy_portrait_path
+        image_path = strategy_portrait_path(context.cfg.ProjectRoot, bundle.autochess_entries[item_id])
+        subtitle = str(item.get("owner_name") or "")
+        meta = str(item.get("activity_name") or "")
     elif item_type == "皮肤":
         image_path = (
             resource_root

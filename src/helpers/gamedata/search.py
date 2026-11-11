@@ -605,6 +605,27 @@ def build_sources(
         ),
     ]
 
+    from src.domain.services.autochess_bond import current_bonds
+    bonds = current_bonds(bundle)
+    bond_aliases = {}
+    for entry in bonds.values():
+        for alias in (entry["name"], f"卫戍协议{entry['name']}", f"卫戍协议 {entry['name']}", f"盟约{entry['name']}"):
+            bond_aliases.setdefault(alias, []).append(entry)
+    all_source.append(SourceSpec(key="autochess_bond", candidates=lambda: list(bond_aliases),
+                                 resolve=lambda key: bond_aliases[key], allow_fuzzy=True))
+
+    from src.domain.services.autochess_strategy import current_strategies
+    strategies = current_strategies(bundle)
+    strategy_aliases = {}
+    for entry in strategies.values():
+        names = [entry["name"], f"卫戍协议{entry['name']}", f"卫戍协议 {entry['name']}", f"策略{entry['name']}"]
+        if entry.get("owner_name"):
+            names.extend([entry["owner_name"], f"卫戍协议 {entry['owner_name']}"])
+        for alias in dict.fromkeys(names):
+            strategy_aliases.setdefault(alias, []).append(entry)
+    all_source.append(SourceSpec(key="autochess_strategy", candidates=lambda: list(strategy_aliases),
+                                 resolve=lambda key: strategy_aliases[key], allow_fuzzy=True))
+
     if source_key:
         filtered = [s for s in all_source if s.key in source_key]
         return filtered

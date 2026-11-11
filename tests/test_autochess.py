@@ -150,11 +150,11 @@ def test_mcp_has_no_autochess_tool_or_instructions(tmp_path):
 
     mcp = register_asgi(FastAPI(), Config(ProjectRoot=ROOT, ResourcePath=tmp_path))
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 15
+    assert len(tools) == 17
     assert "get_autochess_detail" not in {tool.name for tool in tools}
-    assert "卫戍协议" not in server_instructions
+    assert "get_autochess_bond_detail" in server_instructions
     assert all("卫戍协议" not in (tool.description or "") for tool in tools
-               if tool.name != "get_operator_basic_data")
+               if tool.name not in {"get_operator_basic_data", "search", "get_autochess_bond_detail", "get_autochess_strategy_detail"})
 
 
 def card_bundle(data):
@@ -299,3 +299,107 @@ def test_card_prefers_complete_display_text_over_overlapping_event_text(data):
 #
 #     register_autochess_tool(MCP(), SimpleNamespace(state=SimpleNamespace()))
 #     assert asyncio.run(registered["get_autochess_detail"]("id")) == {"message": "未初始化数据上下文"}
+
+
+def test_current_bond_search_and_members(data, monkeypatch):
+    from datetime import datetime, timezone
+    from src.domain.services import autochess_bond
+    from src.app.services.operator_queries import _build_search_items
+    from src.helpers.gamedata.search import build_sources, search_source_spec
+
+    bundle = card_bundle(data)
+    now = datetime.fromtimestamp(50, timezone.utc)
+    bonds = autochess_bond.current_bonds(bundle, now=now)
+    assert len(bonds) == 1
+    entry = next(iter(bonds.values()))
+    detail = autochess_bond.bond_detail(bundle, entry)
+    assert len(detail['所属棋子']) == 1
+    assert detail['所属棋子'][0]['名称'] == '真理'
+    assert detail['效果'] == entry['description']
+    assert not autochess_bond.current_bonds(bundle, now=datetime.fromtimestamp(201, timezone.utc))
+    monkeypatch.setattr(autochess_bond, 'current_autochess_version', lambda *args, **kwargs: {
+        'activityId': 'act', 'versionId': 'v1'})
+    sources = build_sources(bundle, source_key=['autochess_bond'])
+    for query in [entry['name'], '卫戍协议 ' + entry['name']]:
+        matches = search_source_spec(query, sources=sources).matches
+        items = _build_search_items(matches, {})
+        assert [i['id'] for i in items] == [entry['id']]
+        assert 'ruleset' not in items[0] and 'version_id' not in items[0]
+    assert resolve_search_items_by_ids(bundle, [entry['id']])[0]['type'] == '卫戍协议盟约'
+    invalid = entry['id'].replace(':standard:', ':training:')
+    with pytest.raises(ValueError):
+        resolve_search_items_by_ids(bundle, [invalid])
+
+
+def test_bond_detail_invalid_id_does_not_render(data):
+    from src.app.services.autochess_bond_queries import query_autochess_bond_detail
+    context, _ = make_context(data)
+    result = asyncio.run(query_autochess_bond_detail(context, 'missing'))
+    assert result.data is None
+    assert '未找到当期盟约' in result.message
+
+
+def test_strategy_search_current_scope_and_unlock(data, monkeypatch):
+    from src.domain.services import autochess_strategy
+    from src.helpers.gamedata.search import build_sources, search_source_spec
+    from src.app.services.operator_queries import _build_search_items
+    bundle = card_bundle(data)
+    monkeypatch.setattr(autochess_strategy, 'current_autochess_version', lambda *a, **k: {'activityId': 'act', 'versionId': 'v1'})
+    entries = autochess_strategy.current_strategies(bundle)
+    assert len(entries) == 1
+    entry = next(iter(entries.values()))
+    entry['unlock_description'] = '累计消耗100资金解锁'
+    detail = autochess_strategy.strategy_detail(entry)
+    assert detail['解锁条件'] == '累计消耗100资金解锁'
+    assert {s['类型'] for s in detail['技能']} == {'主动', '被动'}
+    sources = build_sources(bundle, source_key=['autochess_strategy'])
+    for query in [entry['name'], entry['owner_name'], '卫戍协议 ' + entry['name']]:
+        items = _build_search_items(search_source_spec(query, sources=sources).matches, {})
+        assert [i['id'] for i in items] == [entry['id']]
+        assert 'ruleset' not in items[0]
+    assert resolve_search_items_by_ids(bundle, [entry['id']])[0]['type'] == '卫戍协议策略'
+    with pytest.raises(ValueError):
+        resolve_search_items_by_ids(bundle, [entry['id'].replace(':v1:', ':v2:')])
+    entry['unlock_description'] = ''
+    assert autochess_strategy.strategy_detail(entry)['解锁条件'] == '暂无解锁条件说明'
+
+
+def test_strategy_limits_preserve_zero_cost_and_do_not_guess_cooldown():
+    from src.domain.services.autochess_strategy import strategy_detail
+    entry = {'id': 's', 'name': '策略', 'activity_name': '卫戍协议:规程', 'skills': [
+        {'type': 'ACTIVE', 'description': '效果', 'cost': 0, 'usage_type': 'ROUND_RESET', 'usage_count': 2},
+        {'type': 'ACTIVE', 'description': '冷却效果', 'cost': 1, 'usage_type': 'COOLDOWN', 'usage_count': 3},
+        {'type': 'NONE', 'description': '解锁状态'}]}
+    skills = strategy_detail(entry)['技能']
+    assert skills[0]['费用'] == 0 and skills[0]['使用限制'] == '每回合限2次'
+    assert '使用限制' not in skills[1]
+    assert skills[2]['类型'] == '状态说明'
+
+
+def test_strategy_render_failure_keeps_unlock_and_full_text(data, monkeypatch):
+    from src.app.services import autochess_strategy_queries as queries
+    from src.domain.services.autochess_strategy import current_strategies
+    from src.domain.services import autochess_strategy
+    context, bundle = make_context(data)
+    monkeypatch.setattr(autochess_strategy, 'current_autochess_version', lambda *a, **k: {'activityId': 'act', 'versionId': 'v1'})
+    entry = next(iter(current_strategies(bundle).values()))
+    context.cfg = SimpleNamespace(ProjectRoot=ROOT, BaseUrl=None)
+    context.card_service = SimpleNamespace(get=AsyncMock(side_effect=RuntimeError('render failed')))
+    result = asyncio.run(queries.query_autochess_strategy_detail(context, entry['id']))
+    assert result.data['说明'] == entry['description']
+    assert result.data['解锁条件']
+    assert '卡片生成失败' in result.message
+    assert asyncio.run(queries.query_autochess_strategy_detail(context, 'invalid')).data is None
+
+
+def test_strategy_display_merges_repeated_effect_without_losing_conditions():
+    from src.domain.services.autochess_strategy import strategy_display
+    detail = {'说明': '【策略】\n在场6人时解锁\n拖拽使用（消耗1）：效果', '技能': [
+        {'类型': '状态说明', '描述': '【策略-未解锁】\n在场6人时解锁\n拖拽使用：效果'},
+        {'类型': '主动', '描述': '【策略】\n拖拽使用：效果', '费用': 1}]}
+    overview, skills = strategy_display(detail)
+    assert not overview and len(skills) == 1
+    assert skills[0]['描述'] == detail['说明'] and skills[0]['费用'] == 1
+    assert len(detail['技能']) == 2
+    detail['技能'][0]['描述'] += '\n独有条件'
+    assert len(strategy_display(detail)[1]) == 2

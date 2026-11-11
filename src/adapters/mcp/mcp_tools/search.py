@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 _SEARCH_TOOL_DESC = """本工具是资源统一搜索入口，任何查询都应先调用本工具。
 支持按名称、代号或定期同步的常用别名模糊搜索「干员」「干员的召唤物」「干员皮肤」「材料」「关卡」「敌人」、集成战略藏品及主题机制道具（剧目、骰子、密文板、构想、通宝、零件），返回候选的 id、name、type；别名命中的干员、材料或敌人仍返回其真实类型，并附带 from_alias；其他条目会附带用于区分候选的字段。
+卫戍协议盟约也支持模糊搜索，只返回当期盟约；用其 id 调用 get_autochess_bond_detail 查看效果与所属棋子大卡。
+卫戍协议策略支持按策略名或发起人名称模糊搜索，只返回当期策略；用其 id 调用 get_autochess_strategy_detail 查看主动/被动技能、解锁条件与大卡。
 搜索只返回候选数据，不生成搜索卡。收到结果后必须结合用户当前问题和对话上下文筛选候选，排除明显无关的模糊匹配；无法确定的相关候选应保留给用户选择。
 需要向用户展示搜索结果或让用户选择时，应调用 build_search_card(ids=[筛选后的候选ID...])，并展示返回的 card_image_url 图片，让用户回复序号或名称；不要直接把全部模糊命中展示给用户。卡片序号从 1 开始，对应组装工具返回的 data.items 顺序，不再对应原搜索列表。上下文已能确定唯一目标时可直接调用相应详情工具；筛选后无相关候选时，应说明未找到相关结果或调整关键词继续搜索。
 - 干员：用返回的 id 调用 get_operator_basic_data（推荐，返回结构化数据 + card_image_url 卡片图片）；需要完整技能列表及所有技能等级数据时调用 get_operator_skill；培养材料和模组分别调用 get_operator_material / get_operator_modules；
@@ -43,7 +45,7 @@ ids 必须包含 1~20 个不重复 ID，传入顺序决定卡片序号（从 1 �
 def register_search_tool(mcp, app):
     @mcp.tool(description=_SEARCH_TOOL_DESC)
     async def search(
-        query: Annotated[str, Field(description="搜索关键词（干员、召唤物、皮肤、材料、关卡、敌人、集成战略藏品或机制道具名称/代号/常用别名），支持模糊搜索")],
+        query: Annotated[str, Field(description="搜索关键词（干员、召唤物、皮肤、材料、关卡、敌人、集成战略藏品、机制道具或卫戍协议盟约、策略名称/代号/常用别名），支持模糊搜索")],
     ) -> dict:
         tool_name = "search"
         started_at = log_tool_start(

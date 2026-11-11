@@ -1,21 +1,18 @@
 """干员角色卡的当期棋子信息；不提供独立查询入口。"""
 from __future__ import annotations
 
+from src.domain.services.autochess_bond import current_autochess_version
+
 import base64
 from datetime import datetime, timezone
 from pathlib import Path
 
 
 def build_operator_autochess(bundle, operator_id: str, project_root: Path, *, now=None):
-    table = ((getattr(bundle, "tables", {}) or {}).get("gamedata") or {}).get("activity_table") or {}
-    versions = (table.get("autoChessData") or {}).get("versionInfoDict") or {}
-    timestamp = (now or datetime.now(timezone.utc)).timestamp()
-    active = [v for v in versions.values()
-              if v.get("startTime", 0) <= timestamp < v.get("endTime", 0)
-              and not v.get("isOffseason")]
-    if not active:
+    # 2026-11-11: 当期判定迁至 current_autochess_version，供角色卡与盟约查询共享。
+    current = current_autochess_version(bundle, now=now)
+    if not current:
         return None
-    current = max(active, key=lambda v: (v.get("startTime", 0), v.get("versionId", "")))
     entry = next((e for e in (getattr(bundle, "autochess_entries", {}) or {}).values()
                   if e.get("kind") == "chess" and e.get("ruleset") == "standard"
                   and e.get("operator_id") == operator_id
@@ -54,3 +51,17 @@ def build_operator_autochess(bundle, operator_id: str, project_root: Path, *, no
     return {"title": title, "tier": entry["tier"], "bonds": list(bonds.values()),
             "variants": variants, "coin_icon": icon("s_icon_gold.png"),
             "common_price": len({v["price"] for v in variants}) == 1}
+
+# AI-REMOVED 2026-11-11:
+# Reason: 提取共享当期判定。Trigger: 新增当期盟约查询。
+# Evidence: 两种卡片须采用同一档期。Replacement: autochess_bond.current_autochess_version。
+# Risk: Low。Human Review: Required
+#     table = ((getattr(bundle, "tables", {}) or {}).get("gamedata") or {}).get("activity_table") or {}
+#     versions = (table.get("autoChessData") or {}).get("versionInfoDict") or {}
+#     timestamp = (now or datetime.now(timezone.utc)).timestamp()
+#     active = [v for v in versions.values()
+#               if v.get("startTime", 0) <= timestamp < v.get("endTime", 0)
+#               and not v.get("isOffseason")]
+#     if not active:
+#         return None
+#     current = max(active, key=lambda v: (v.get("startTime", 0), v.get("versionId", "")))

@@ -333,6 +333,7 @@
     .chess-bond img { width: 30px; height: 30px; object-fit: contain; }
     .chess-tier { display: flex; align-items: center; gap: 6px; color: #ebd29b; white-space: nowrap; }
     .chess-tier svg { width: 30px; height: 30px; }
+    .chess-roman { font-family: Georgia, serif; font-size: 30px; font-weight: bold; line-height: 30px; min-width: 40px; text-align: center; }
     .chess-variant { display: grid; grid-template-columns: 108px 1fr; gap: 12px; padding-top: 7px; border-top: 1px solid #ffffff24; }
     .chess-variant + .chess-variant { margin-top: 7px; }
     .chess-state { color: #acd7c8; font-size: 15px; line-height: 1.5; }
@@ -460,7 +461,7 @@
             <div class="chess-bonds">{% for bond in autochess.bonds %}
               <div class="chess-bond">{% if bond.icon %}<img src="{{ bond.icon }}" alt="{{ bond.name | e }}盟约图标">{% endif %}<span>{{ bond.name | e }}</span></div>
             {% endfor %}</div>
-            <div class="chess-tier"><svg viewBox="0 0 32 32" role="img" aria-label="棋子等阶图标"><path d="M16 2 29 9v14L16 30 3 23V9Z" fill="#e8ca8720" stroke="#e8ca87" stroke-width="1.5"/><path d="m9 14 7-4 7 4m-14 5 7 4 7-4" fill="none" stroke="#e8ca87" stroke-width="2"/></svg><span>{{ autochess.tier }}阶</span></div>
+            <div class="chess-tier"><span class="chess-roman" role="img" aria-label="棋子{{ autochess.tier }}阶">{{ {1:'I',2:'II',3:'III',4:'IV',5:'V',6:'VI'}.get(autochess.tier, autochess.tier) }}</span></div>
             {% if autochess.common_price %}<div class="chess-price">价格 {{ autochess.variants[0].price if autochess.variants[0].price is not none else '—' }}{{ chess_coin() }}</div>{% endif %}
           </div>
           {% for variant in autochess.variants %}
@@ -551,3 +552,7 @@
 </div>
 </body>
 </html>
+
+{# AI-REMOVED 2026-11-11: Reason: 自绘徽标不是游戏罗马数字等阶。Trigger: 用户纠正。Evidence: 原输出为六边形及X阶。Replacement: chess-roman。Risk: Low。Human Review: Required。
+            <div class="chess-tier"><svg viewBox="0 0 32 32" role="img" aria-label="棋子等阶图标"><path d="M16 2 29 9v14L16 30 3 23V9Z" fill="#e8ca8720" stroke="#e8ca87" stroke-width="1.5"/><path d="m9 14 7-4 7 4m-14 5 7 4 7-4" fill="none" stroke="#e8ca87" stroke-width="2"/></svg><span>{{ autochess.tier }}阶</span></div>
+#}

@@ -1,6 +1,6 @@
 # MCP 工具说明
 
-本服务对外暴露 15 个 MCP 工具，主要通过 Streamable HTTP 提供，并保留旧 SSE 入口。除公开招募外，`search` 是资源统一搜索入口；需要展示候选时，由 agent 根据上下文筛选后调用 `build_search_card` 生成搜索卡，再由用户选择。干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material` / `get_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`，关卡查询流程为 `search` → `get_stage_data`，敌人查询流程为 `search` → `get_enemy_data`，集成战略物品查询流程为 `search` → `get_integrated_strategy_item_detail`。旧工具 `get_integrated_strategy_collectible_detail` 仅保留藏品查询兼容性。公开招募直接调用 `recruit_with_tag`。
+本服务对外暴露 17 个 MCP 工具，主要通过 Streamable HTTP 提供，并保留旧 SSE 入口。除公开招募外，`search` 是资源统一搜索入口；需要展示候选时，由 agent 根据上下文筛选后调用 `build_search_card` 生成搜索卡，再由用户选择。干员查询流程为 `search` → `get_operator_basic_data`（推荐），技能查询流程为 `search` → `get_operator_skill`，材料查询流程为 `search` → `get_operator_material` / `get_material`，模组查询流程为 `search` → `get_operator_modules`，召唤物查询流程为 `search` → `get_token_detail`，皮肤查询流程为 `search` → `get_operator_skins`，关卡查询流程为 `search` → `get_stage_data`，敌人查询流程为 `search` → `get_enemy_data`，集成战略物品查询流程为 `search` → `get_integrated_strategy_item_detail`。旧工具 `get_integrated_strategy_collectible_detail` 仅保留藏品查询兼容性。公开招募直接调用 `recruit_with_tag`。
 
 ---
 
@@ -732,3 +732,23 @@ search(query="报童")
 | 工具不存在 | MCP 协议层报错 | — |
 
 所有业务错误均通过 `message` 字段返回，不会抛出 HTTP 5xx。
+
+
+## get_autochess_bond_detail — 当期卫戍协议盟约
+
+`search(query)` 支持当期盟约名称及“卫戍协议 名称”模糊匹配，候选包含 `id`、`name`、`type: 卫戍协议盟约`、`activity_name`。不搜索历史档期、教程或独立棋子；策略使用下述专用详情工具。`build_search_card(ids)` 使用盟约徽章方形预览，支持和其他类型混排。
+
+参数：`bond_id: str`，必填，使用搜索返回的盟约 ID。
+
+返回 `data`（ID、卫戍协议、名称、激活条件、效果、所属棋子）及 `card_image_url`。所属棋子包含干员ID、名称、等阶，按等阶升序，同一干员去重。大卡展示盟约图标、完整效果、所属棋子方形头像与等阶徽标；不推算效果参数。不属于当期的 ID 返回 message，卡片失败保留文字资料。
+
+
+## get_autochess_strategy_detail — 当期卫戍协议策略
+
+参数：`strategy_id: str`，必填，使用 `search` 返回的策略 ID。
+
+`search` 支持策略名、发起人名称及“卫戍协议 名称”模糊匹配。候选包含 `id`、`name`、`type: 卫戍协议策略`、`activity_name`、`owner_name`。`build_search_card` 展示发起人头像、策略角标、策略名、发起人及当期名称，可与其他类型混排。
+
+返回 `data`（ID、卫戍协议、名称、发起人、说明、技能、解锁条件）及 `card_image_url`。技能包含类型和完整描述；主动技能在明确时附带费用、每回合或整局使用限制。无类型的中间状态文案标注“状态说明”。大卡保留完整说明与技能，合并被总述完整覆盖的重复技能正文，保留条件变化，底部独立展示解锁条件。解锁文案为空时显示“暂无解锁条件说明”，不推断默认解锁。仅提供当期常规策略，不提供历史档期或教程参数；非当期 ID 返回 message，卡片失败保留文字资料。
+
+实现复用现有当期判定、结构化策略数据、统一搜索和卡片渲染服务；头像素材随模板保存，并记录 PRTS 来源。

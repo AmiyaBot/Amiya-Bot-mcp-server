@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from src.domain.services.autochess_bond import current_bonds, bond_search_item
+
+from src.domain.services.autochess_strategy import current_strategies, strategy_search_item
+
 import base64
 import hashlib
 import json
@@ -47,7 +51,7 @@ from src.helpers.card_urls import build_card_url
 from src.helpers.gamedata.search import MatchResult, build_sources, search_source_spec
 
 logger = logging.getLogger(__name__)
-OPERATOR_INFO_CARD_REVISION = "card-v22"
+OPERATOR_INFO_CARD_REVISION = "card-v23"
 OPERATOR_MATERIAL_CARD_REVISION = "mat-v1"
 OPERATOR_MODULE_CARD_REVISION = "module-v2"
 OPERATOR_TOKEN_CARD_REVISION = "token-v5"
@@ -163,6 +167,16 @@ def _build_search_items(
                 "operator_id": owner.id,
                 "operator_name": owner.name,
             })
+        elif match.key == "autochess_bond":
+            for entry in value if isinstance(value, list) else [value]:
+                if entry["id"] not in seen_ids:
+                    seen_ids.add(entry["id"])
+                    items.append(bond_search_item(entry))
+        elif match.key == "autochess_strategy":
+            for entry in value if isinstance(value, list) else [value]:
+                if entry["id"] not in seen_ids:
+                    seen_ids.add(entry["id"])
+                    items.append(strategy_search_item(entry))
         elif match.key == "skin":
             # 皮肤：附带归属干员信息（皮肤立绘可通过所属干员查询）
             skin_id = str(getattr(value, "skin_id", "") or "").strip()
@@ -304,9 +318,13 @@ def resolve_search_items_by_ids(bundle, ids: list[str]) -> list[dict[str, object
         ("integrated_strategy_item", "integrated_strategy_items"),
     ]
     matches = []
+    bonds = current_bonds(bundle)
+    strategies = current_strategies(bundle)
+    sources.append(("autochess_strategy", "autochess_entries"))
+    sources.append(("autochess_bond", "autochess_entries"))
     for index, item_id in enumerate(ids):
         for source_order, (key, attribute) in enumerate(sources):
-            value = (getattr(bundle, attribute, {}) or {}).get(item_id)
+            value = (bonds if key == "autochess_bond" else strategies if key == "autochess_strategy" else (getattr(bundle, attribute, {}) or {})).get(item_id)
             if value is None:
                 continue
             matches.append(MatchResult(
@@ -836,6 +854,8 @@ def search(
             "stage",
             "enemy",
             "integrated_strategy_item",
+            "autochess_bond",
+            "autochess_strategy",
         ],
         alias_to_origins=alias_to_origins,
     )
@@ -873,7 +893,7 @@ def search(
         return QueryExecutionResult(
             message=(
                 "未找到匹配的干员、召唤物、皮肤、材料、关卡、敌人或"
-                f"集成战略物品: {normalized_query}"
+                f"集成战略物品、卫戍协议盟约或策略: {normalized_query}"
             )
         )
 
