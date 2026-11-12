@@ -18,6 +18,7 @@ CONFIG_FIELDS = (
     "SearchCardCacheMaxEntries",
     "SearchCardCacheMaxBytes",
     "SearchCardCacheMaxEntryBytes",
+    "PortraitAttributeCardEnabled",
 )
 
 @dataclass
@@ -32,6 +33,7 @@ class Config:
     SearchCardCacheMaxEntries: int = 128
     SearchCardCacheMaxBytes: int = 256 * 1024 * 1024
     SearchCardCacheMaxEntryBytes: int = 16 * 1024 * 1024
+    PortraitAttributeCardEnabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -174,6 +176,10 @@ def inspect_config_state() -> ConfigState:
         SearchCardCacheMaxEntryBytes=_coerce_positive_int(
             merged_config.get("SearchCardCacheMaxEntryBytes", 16 * 1024 * 1024),
             default=16 * 1024 * 1024,
+        ),
+        PortraitAttributeCardEnabled=_coerce_bool(
+            merged_config.get("PortraitAttributeCardEnabled", False),
+            default=False,
         ),
     )
 

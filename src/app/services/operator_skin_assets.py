@@ -66,13 +66,18 @@ async def resolve_operator_skin_artifact(
     tables: dict,
     *,
     resource_root: Path | None = None,
+    prefer_elite_two: bool = False,
 ) -> OperatorSkinArtifact | None:
     skin_index = _load_skin_index(resource_root or get_context_resource_root(context))
     operator_urls = skin_index.get(operator.id)
     if not isinstance(operator_urls, dict) or not operator_urls:
         return None
 
-    selected = _select_skin_entry(operator.id, operator_urls, tables)
+    selected = (
+        _select_portrait_skin_entry(operator.id, operator_urls, tables)
+        if prefer_elite_two
+        else _select_skin_entry(operator.id, operator_urls, tables)
+    )
     if selected is None:
         return None
 
@@ -194,6 +199,24 @@ def _load_skin_index(resource_root: Path) -> dict[str, dict[str, str]]:
     _index_cache_mtime_ns = mtime_ns
     _index_cache_payload = normalized
     return normalized
+
+
+def _select_portrait_skin_entry(
+    operator_id: str,
+    operator_urls: dict[str, str],
+    tables: dict,
+) -> tuple[str, str] | None:
+    """竖版角色卡只选精二或初始默认立绘，不使用具名时装兜底。"""
+    skin_table = get_table(tables, "skin_table", source="gamedata", default={})
+    evolve_map = (skin_table.get("buildinEvolveMap") or {}).get(operator_id) or {}
+    candidates = (evolve_map.get("2"), evolve_map.get("0"), f"{operator_id}#1")
+    for skin_id in candidates:
+        if not isinstance(skin_id, str) or not skin_id.startswith(f"{operator_id}#") or "@" in skin_id:
+            continue
+        url = operator_urls.get(skin_id)
+        if url:
+            return skin_id, url
+    return None
 
 
 def _select_skin_entry(

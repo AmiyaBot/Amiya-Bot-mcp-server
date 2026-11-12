@@ -5,7 +5,14 @@
 
 AmiyaBot MCP Server 是面向《明日方舟》数据查询的 MCP 服务。它基于本地游戏资源提供结构化数据和图片卡片，并附带命令行工具 `amiyabot-cli`。
 
-1.1.1 版本支持查询干员、技能、精英化与技能升级材料、模组、召唤物、皮肤、材料、关卡、敌人、公开招募、集成战略藏品与主题机制道具、卫戍协议盟约与策略和游戏术语。
+1.1.2 版本支持查询干员、技能、精英化与技能升级材料、模组、召唤物、皮肤、材料、关卡、敌人、公开招募、集成战略藏品与主题机制道具、卫戍协议盟约与策略和游戏术语。
+
+## v1.1.2 更新
+
+- 新增可选竖版干员角色卡，采用罗德岛档案风格与手机长图排版。
+- 全局配置 `PortraitAttributeCardEnabled` 默认关闭，支持 Docker 配置挂载与 Helm values 设置。
+- 新版卡片优先精二默认立绘，缺少时回退初始立绘，不选择具名时装。
+- 技能范围右对齐、潜能按等级单列展示，优化卫戍协议图标、价格与条件标签。
 
 ## v1.1.1 更新
 
@@ -79,7 +86,7 @@ SHA-256 作为缓存键，不包含搜索词；相同 ID 和顺序可跨搜索�
 
 ### Docker（推荐）
 
-准备一个持久化目录并启动 1.1.1：
+准备一个持久化目录并启动 1.1.2：
 
 ```bash
 mkdir -p ./amiyabot-resources
@@ -88,7 +95,7 @@ docker run -d \
   --name amiyabot-mcp \
   -p 9000:9000 \
   -v "$(pwd)/amiyabot-resources:/app/resources" \
-  hsyhhssyy/amiyabot-mcp:v1.1.1
+  hsyhhssyy/amiyabot-mcp:v1.1.2
 ```
 
 首次启动时，容器会自动把游戏资源下载到挂载目录；所需时间取决于网络和磁盘性能。建议为资源、缓存和日志预留至少 20 GiB 空间。
@@ -117,13 +124,13 @@ ingress:
     secretName: amiyabot-example-tls
 ```
 
-安装 1.1.1：
+安装 1.1.2：
 
 ```bash
 helm repo add amiyabot https://AmiyaBot.github.io/Amiya-Bot-mcp-server
 helm repo update
 helm upgrade --install amiyabot-mcp amiyabot/amiyabot-mcp \
-  --version 1.1.1 \
+  --version 1.1.2 \
   -f values.yaml
 ```
 
@@ -137,11 +144,11 @@ Chart 默认创建 PVC 并将其挂载到 `/app/resources`。已有 PVC 可以�
 
 #### 一键安装
 
-下面的命令会将 1.1.1 安装到 `~/.local/share/amiyabot-cli/venv`，并在 `~/.local/bin` 创建 `amiyabot-cli`：
+下面的命令会将 1.1.2 安装到 `~/.local/share/amiyabot-cli/venv`，并在 `~/.local/bin` 创建 `amiyabot-cli`：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.1.1/install.sh \
-  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.1.1" sh
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.1.2/install.sh \
+  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.1.2" sh
 ```
 
 如果 `~/.local/bin` 不在 `PATH` 中，安装脚本会显示需要加入 shell 配置的内容。
@@ -149,14 +156,14 @@ curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.1.
 不需要图片渲染时，可以跳过 Chromium 安装：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.1.1/install.sh \
-  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.1.1" sh -s -- --no-playwright
+curl -fsSL https://raw.githubusercontent.com/AmiyaBot/Amiya-Bot-mcp-server/v1.1.2/install.sh \
+  | AMIYABOT_PIP_SOURCE="git+https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git@v1.1.2" sh -s -- --no-playwright
 ```
 
 #### 从源码安装
 
 ```bash
-git clone --branch v1.1.1 --depth 1 https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git
+git clone --branch v1.1.2 --depth 1 https://github.com/AmiyaBot/Amiya-Bot-mcp-server.git
 cd Amiya-Bot-mcp-server
 
 python3 -m venv .venv
@@ -204,10 +211,25 @@ Linux 全局配置默认位于 `~/.config/amiyabot-cli/config.json`；设置了 
 | `ResourcePath` | 游戏资源、缓存和日志所在目录 |
 | `GameDataRepo` | 资源仓库地址 |
 | `McpDnsRebindingProtectionEnabled` | 是否启用 MCP DNS rebinding protection |
+| `PortraitAttributeCardEnabled` | 竖屏属性卡开关，默认 `false`；供支持竖屏排版的元素选择布局，`false` 表示使用旧版。已接入干员基础信息卡，其他卡片保持原布局 |
 | `RemoteAssetDownloadConcurrency` | PRTS 等远程素材下载任务共享的最大并发数，默认 `3` |
 | `SearchCardCacheMaxEntries` | 统一搜索选择卡最多缓存的结果集合数，默认 `128` |
 | `SearchCardCacheMaxBytes` | 统一搜索选择卡缓存的总字节上限，默认 `268435456`（256 MiB） |
 | `SearchCardCacheMaxEntryBytes` | 单个统一搜索选择卡缓存目录的字节上限，默认 `16777216`（16 MiB） |
+
+新版干员角色卡优先使用游戏精英化映射中的精二默认立绘，映射或图片索引缺失时回退初始默认立绘，不使用商店或活动时装兜底。此规则仅作用于新版角色卡，旧版及其他卡片沿用原有立绘选择。
+
+各模块通过应用上下文的 `context.cfg.PortraitAttributeCardEnabled` 查询开关；接收 `Config` 的模块直接读取 `cfg.PortraitAttributeCardEnabled`。应用入口使用 `src.app.config.load_from_disk()` 加载合并后的配置并共享给各模块，业务模块无需重复读文件。配置在启动时加载，修改后需重启进程。
+
+例如，在全局配置文件中关闭竖屏属性卡：
+
+```json
+{
+  "PortraitAttributeCardEnabled": false
+}
+```
+
+Helm 部署对应 `config.portraitAttributeCardEnabled`，默认 `false`。后续新增全局配置项时，统一在 `src/app/config.py` 的 `Config`、`CONFIG_FIELDS` 和加载逻辑中声明，并同步内置配置与部署配置。
 
 需要下载远程素材的任务应复用应用上下文中的下载管理器；单个请求可以独立设置超时、响应大小、允许主机和内容类型，所有请求共同受上述并发数限制：
 
@@ -253,7 +275,7 @@ docker run -d \
   -p 9000:9000 \
   -v "$(pwd)/amiyabot-resources:/app/resources" \
   -v "$(pwd)/config.json:/app/config.json:ro" \
-  hsyhhssyy/amiyabot-mcp:v1.1.1
+  hsyhhssyy/amiyabot-mcp:v1.1.2
 ```
 
 ## 接入 MCP 服务

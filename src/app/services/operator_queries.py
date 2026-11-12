@@ -52,6 +52,7 @@ from src.helpers.gamedata.search import MatchResult, build_sources, search_sourc
 
 logger = logging.getLogger(__name__)
 OPERATOR_INFO_CARD_REVISION = "card-v23"
+OPERATOR_PORTRAIT_CARD_REVISION = "portrait-v5"
 OPERATOR_MATERIAL_CARD_REVISION = "mat-v1"
 OPERATOR_MODULE_CARD_REVISION = "module-v2"
 OPERATOR_TOKEN_CARD_REVISION = "token-v5"
@@ -940,7 +941,10 @@ async def query_operator_basic_by_id(
             token_entries=token_entries,
             token_card_url=token_card_url,
         )
-        payload_key = f"operator:{resolved.id}:{bundle_version}:{OPERATOR_INFO_CARD_REVISION}"
+        portrait = context.cfg.PortraitAttributeCardEnabled
+        card_template = "operator_info_portrait" if portrait else "operator_info"
+        card_revision = OPERATOR_PORTRAIT_CARD_REVISION if portrait else OPERATOR_INFO_CARD_REVISION
+        payload_key = f"operator:{resolved.id}:{bundle_version}:{card_revision}"
         if result.data.get("autochess"):
             # 当期切换可能先于资源版本变化，缓存需区分实际展示的棋子信息。
             chess_fingerprint = hashlib.sha256(json.dumps(
@@ -958,6 +962,7 @@ async def query_operator_basic_by_id(
                     resolved,
                     bundle.tables,
                     resource_root=get_bundle_resource_root(bundle, context),
+                    prefer_elite_two=portrait,
                 )
             except Exception:
                 logger.warning(
@@ -972,7 +977,7 @@ async def query_operator_basic_by_id(
                 result.data["skin_public_url"] = skin_artifact.url or ""
 
             card_artifact = await context.card_service.get(
-                template="operator_info",
+                template=card_template,
                 payload_key=payload_key,
                 payload=result,
                 format="png",
@@ -981,7 +986,7 @@ async def query_operator_basic_by_id(
 
             image_url = build_card_url(
                 cfg=context.cfg,
-                template="operator_info",
+                template=card_template,
                 payload_key=payload_key,
                 format="png",
             )
@@ -992,10 +997,11 @@ async def query_operator_basic_by_id(
             )
         except Exception:
             logger.warning(
-                "准备干员角色卡失败，已降级为立绘直链或文本结果: operator_id=%s operator=%s payload_key=%s template=operator_info",
+                "准备干员角色卡失败，已降级为立绘直链或文本结果: operator_id=%s operator=%s payload_key=%s template=%s",
                 resolved.id,
                 resolved.name,
                 payload_key,
+                card_template,
                 exc_info=True,
             )
             try:
@@ -1005,6 +1011,7 @@ async def query_operator_basic_by_id(
                         resolved,
                         bundle.tables,
                         resource_root=get_bundle_resource_root(bundle, context),
+                        prefer_elite_two=portrait,
                     )
                 if skin_artifact is not None:
                     image_url = skin_artifact.url

@@ -40,3 +40,7 @@ data/local/resource-update.lock
 .nfs*
 
 .temp/
+
+!tests/test_config.py
+!tests/test_operator_portrait.py
+!tests/test_operator_portrait_skin.py

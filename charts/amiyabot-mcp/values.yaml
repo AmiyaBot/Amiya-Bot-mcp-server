@@ -44,6 +44,7 @@ config:
   gameDataRepo: "https://gitee.com/amiya-bot/amiya-bot-assets.git"
   commandServiceUrl: ""
   mcpDnsRebindingProtectionEnabled: false
+  portraitAttributeCardEnabled: false
   remoteAssetDownloadConcurrency: 3
   searchCardCacheMaxEntries: 128
   searchCardCacheMaxBytes: 268435456

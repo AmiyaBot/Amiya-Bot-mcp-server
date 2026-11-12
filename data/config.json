@@ -7,5 +7,6 @@
     "RemoteAssetDownloadConcurrency": 3,
     "SearchCardCacheMaxEntries": 128,
     "SearchCardCacheMaxBytes": 268435456,
-    "SearchCardCacheMaxEntryBytes": 16777216
+    "SearchCardCacheMaxEntryBytes": 16777216,
+    "PortraitAttributeCardEnabled": false
 }
